@@ -514,28 +514,26 @@ export default function Nomad() {
   const [walletStartBal, setWalletStartBal] = useState({ upi_lite: 0, bank: 0 });
 
   useEffect(() => {
-    (async () => {
-      try {
-        const r = await window.storage.get("nomad-v3");
-        if (r?.value) {
-          const d = JSON.parse(r.value);
-          if (d.expenses) setExpenses(d.expenses);
-          if (d.incomes) setIncomes(d.incomes);
-          if (d.categories?.length) setCategories(d.categories);
-          if (d.incomeSources?.length) setIncomeSources(d.incomeSources);
-          if (d.splits) setSplits(d.splits);
-          if (d.darkMode !== undefined) setDarkMode(d.darkMode);
-          if (d.weeklyTarget) setWeeklyTarget(d.weeklyTarget);
-          if (d.walletStartBal) setWalletStartBal(d.walletStartBal);
-        }
-      } catch {}
-      setLoaded(true);
-    })();
+    try {
+      const raw = localStorage.getItem("nomad-v3");
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d.expenses) setExpenses(d.expenses);
+        if (d.incomes) setIncomes(d.incomes);
+        if (d.categories?.length) setCategories(d.categories);
+        if (d.incomeSources?.length) setIncomeSources(d.incomeSources);
+        if (d.splits) setSplits(d.splits);
+        if (d.darkMode !== undefined) setDarkMode(d.darkMode);
+        if (d.weeklyTarget) setWeeklyTarget(d.weeklyTarget);
+        if (d.walletStartBal) setWalletStartBal(d.walletStartBal);
+      }
+    } catch {}
+    setLoaded(true);
   }, []);
 
   useEffect(() => {
     if (!loaded) return;
-    (async () => { try { await window.storage.set("nomad-v3", JSON.stringify({ expenses, incomes, categories, incomeSources, splits, darkMode, weeklyTarget, walletStartBal })); } catch {} })();
+    try { localStorage.setItem("nomad-v3", JSON.stringify({ expenses, incomes, categories, incomeSources, splits, darkMode, weeklyTarget, walletStartBal })); } catch {}
   }, [expenses, incomes, categories, incomeSources, splits, darkMode, weeklyTarget, walletStartBal, loaded]);
 
   const allMonths = useMemo(() => { const s = new Set(); expenses.forEach((e) => s.add(monthKey(e.date))); incomes.forEach((i) => s.add(monthKey(i.date))); return [...s].sort(); }, [expenses, incomes]);
