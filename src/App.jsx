@@ -167,7 +167,8 @@ function SpendingHeatmap({ expenses }) {
 }
 
 /* ─── WEEKLY REPORT CARD ─── */
-function WeeklyReport({ expenses, weeklyTarget }) {
+/* PATCH 1: Auto-average grading — no manual weeklyTarget needed */
+function WeeklyReport({ expenses }) {
   const today = new Date();
   const dayOfWeek = today.getDay();
   const weekStart = new Date(today); weekStart.setDate(today.getDate() - dayOfWeek);
@@ -177,7 +178,16 @@ function WeeklyReport({ expenses, weeklyTarget }) {
   const lastWeek = expenses.filter((e) => inRange(e, lastWeekStart, 7));
   const thisTotal = thisWeek.reduce((s, e) => s + e.amount, 0);
   const lastTotal = lastWeek.reduce((s, e) => s + e.amount, 0);
-  const targetScore = weeklyTarget > 0 ? Math.max(0, 40 - (thisTotal / weeklyTarget) * 40) : 20;
+  // Auto-average: rolling 12-week history
+  const pastWeeklyTotals = [];
+  for (let w = 1; w <= 12; w++) {
+    const s = new Date(weekStart); s.setDate(weekStart.getDate() - w * 7);
+    const wTotal = expenses.filter((e) => inRange(e, s, 7)).reduce((sum, e) => sum + e.amount, 0);
+    if (wTotal > 0) pastWeeklyTotals.push(wTotal);
+  }
+  const avgWeekly = pastWeeklyTotals.length > 0 ? pastWeeklyTotals.reduce((s, v) => s + v, 0) / pastWeeklyTotals.length : 0;
+  const autoTarget = avgWeekly > 0 ? avgWeekly : (thisTotal > 0 ? thisTotal * 1.2 : 1000);
+  const targetScore = Math.max(0, 40 - (thisTotal / autoTarget) * 40);
   const trendScore = lastTotal > 0 ? (thisTotal <= lastTotal ? 30 : Math.max(0, 30 - ((thisTotal - lastTotal) / lastTotal) * 30)) : 15;
   const catTotals = {}; thisWeek.forEach((e) => { catTotals[e.categoryId] = (catTotals[e.categoryId] || 0) + e.amount; });
   const catValues = Object.values(catTotals);
@@ -279,6 +289,7 @@ function SplitExpenses({ splits, onAdd, onSettle, onDelete, expanded, onToggle }
 }
 
 /* ─── SWIPEABLE ADD ─── */
+/* PATCH 2: Fixed swipe direction — LEFT = forward, RIGHT = back */
 function SwipeableAdd({ categories, incomeSources, onAddExpense, onAddIncome, onAddTransfer }) {
   const [type, setType] = useState("expense");
   const [amount, setAmount] = useState("0");
@@ -295,8 +306,9 @@ function SwipeableAdd({ categories, incomeSources, onAddExpense, onAddIncome, on
   const handleTE = (e) => {
     if (!touchStart.current) return;
     const d = e.changedTouches[0].clientX - touchStart.current;
-    if (d > 60) setType(type === "expense" ? "income" : type === "income" ? "transfer" : "expense");
-    if (d < -60) setType(type === "transfer" ? "income" : type === "income" ? "expense" : "transfer");
+    // Swipe LEFT (negative) = go forward; Swipe RIGHT (positive) = go back
+    if (d < -60) setType(type === "expense" ? "income" : type === "income" ? "transfer" : "expense");
+    if (d > 60) setType(type === "transfer" ? "income" : type === "income" ? "expense" : "transfer");
     touchStart.current = null;
   };
 
@@ -316,13 +328,8 @@ function SwipeableAdd({ categories, incomeSources, onAddExpense, onAddIncome, on
 
   return (
     <div onTouchStart={handleTS} onTouchEnd={handleTE} style={{ padding: "0 0 20px" }}>
-      {/* Type Switcher */}
       <div style={{ display: "flex", background: "var(--card)", borderRadius: 12, padding: 4, border: "1px solid var(--border)", marginBottom: 20 }}>
-        {[
-          { id: "expense", label: "Expense" },
-          { id: "income", label: "Income" },
-          { id: "transfer", label: "🔄 Transfer" },
-        ].map((t) => (
+        {[{ id: "expense", label: "Expense" }, { id: "income", label: "Income" }, { id: "transfer", label: "🔄 Transfer" }].map((t) => (
           <button key={t.id} onClick={() => setType(t.id)} style={{
             flex: 1, padding: "10px 0", border: "none", borderRadius: 9,
             background: type === t.id ? (t.id === "expense" ? "#d97757" : t.id === "income" ? "#788c5d" : "#6a9bcc") : "transparent",
@@ -333,24 +340,18 @@ function SwipeableAdd({ categories, incomeSources, onAddExpense, onAddIncome, on
       </div>
       <p style={{ textAlign: "center", fontSize: 11, color: "var(--muted)", marginTop: -14, marginBottom: 14, fontFamily: "var(--font-body)", fontStyle: "italic" }}>Swipe left / right to switch</p>
 
-      {/* Amount */}
       <div style={{ marginBottom: 16 }}>
         <label style={labelStyle}>Amount ({CURRENCY})</label>
         <input type="number" value={amount === "0" ? "" : amount} onChange={(e) => setAmount(e.target.value || "0")} placeholder="0" autoFocus
           style={{ ...inputStyle, fontSize: 32, fontWeight: 600, fontFamily: "var(--font-heading)", textAlign: "center", padding: "18px 14px", color: typeColor, borderColor: typeColor }}/>
       </div>
 
-      {/* EXPENSE — wallet picker + category */}
       {type === "expense" && (
         <>
           <label style={labelStyle}>Pay From</label>
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
             {WALLETS.map((w) => (
-              <button key={w.id} onClick={() => setWalletId(w.id)} style={{
-                flex: 1, padding: "10px 12px", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                border: `2px solid ${walletId === w.id ? w.color : "var(--border)"}`,
-                background: walletId === w.id ? w.color + "15" : "var(--card)", cursor: "pointer", transition: "all 0.15s",
-              }}>
+              <button key={w.id} onClick={() => setWalletId(w.id)} style={{ flex: 1, padding: "10px 12px", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, border: `2px solid ${walletId === w.id ? w.color : "var(--border)"}`, background: walletId === w.id ? w.color + "15" : "var(--card)", cursor: "pointer", transition: "all 0.15s" }}>
                 <span style={{ fontSize: 16 }}>{w.emoji}</span>
                 <span style={{ fontSize: 12, fontFamily: "var(--font-heading)", fontWeight: walletId === w.id ? 700 : 500, color: walletId === w.id ? w.color : "var(--muted)" }}>{w.name}</span>
               </button>
@@ -363,7 +364,6 @@ function SwipeableAdd({ categories, incomeSources, onAddExpense, onAddIncome, on
         </>
       )}
 
-      {/* INCOME — no wallet picker, goes to Bank automatically */}
       {type === "income" && (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "#788c5d12", borderRadius: 10, border: "1px solid #788c5d30", marginBottom: 16 }}>
@@ -380,17 +380,12 @@ function SwipeableAdd({ categories, incomeSources, onAddExpense, onAddIncome, on
         </>
       )}
 
-      {/* TRANSFER — from / to wallet */}
       {type === "transfer" && (
         <>
           <label style={labelStyle}>From</label>
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             {WALLETS.map((w) => (
-              <button key={w.id} onClick={() => setTransferFrom(w.id)} style={{
-                flex: 1, padding: "10px 12px", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                border: `2px solid ${transferFrom === w.id ? w.color : "var(--border)"}`,
-                background: transferFrom === w.id ? w.color + "15" : "var(--card)", cursor: "pointer", transition: "all 0.15s",
-              }}>
+              <button key={w.id} onClick={() => setTransferFrom(w.id)} style={{ flex: 1, padding: "10px 12px", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, border: `2px solid ${transferFrom === w.id ? w.color : "var(--border)"}`, background: transferFrom === w.id ? w.color + "15" : "var(--card)", cursor: "pointer", transition: "all 0.15s" }}>
                 <span style={{ fontSize: 16 }}>{w.emoji}</span>
                 <span style={{ fontSize: 12, fontFamily: "var(--font-heading)", fontWeight: transferFrom === w.id ? 700 : 500, color: transferFrom === w.id ? w.color : "var(--muted)" }}>{w.name}</span>
               </button>
@@ -400,12 +395,7 @@ function SwipeableAdd({ categories, incomeSources, onAddExpense, onAddIncome, on
           <label style={labelStyle}>To</label>
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
             {WALLETS.map((w) => (
-              <button key={w.id} onClick={() => setTransferTo(w.id)} style={{
-                flex: 1, padding: "10px 12px", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                border: `2px solid ${transferTo === w.id ? w.color : "var(--border)"}`,
-                background: transferTo === w.id ? w.color + "15" : "var(--card)", cursor: "pointer", transition: "all 0.15s",
-                opacity: transferFrom === w.id ? 0.4 : 1,
-              }}>
+              <button key={w.id} onClick={() => setTransferTo(w.id)} style={{ flex: 1, padding: "10px 12px", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, border: `2px solid ${transferTo === w.id ? w.color : "var(--border)"}`, background: transferTo === w.id ? w.color + "15" : "var(--card)", cursor: "pointer", transition: "all 0.15s", opacity: transferFrom === w.id ? 0.4 : 1 }}>
                 <span style={{ fontSize: 16 }}>{w.emoji}</span>
                 <span style={{ fontSize: 12, fontFamily: "var(--font-heading)", fontWeight: transferTo === w.id ? 700 : 500, color: transferTo === w.id ? w.color : "var(--muted)" }}>{w.name}</span>
               </button>
@@ -497,7 +487,7 @@ function CalibrateModal({ wallet, currentBal, onSave, onClose }) {
 
 /* ─── EVENTS TAB ─── */
 function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAddEventSplit, onSettleEventSplit, onDeleteEventSplit, onMarkDone, onDeleteEvent }) {
-  const [view, setView] = useState("list"); // list | create | detail
+  const [view, setView] = useState("list");
   const [selectedId, setSelectedId] = useState(null);
   const [newName, setNewName] = useState("");
   const [newEmoji, setNewEmoji] = useState("🎬");
@@ -569,7 +559,6 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
           {!selected.done && <button onClick={() => { onMarkDone(selected.id); setView("list"); }} style={{ padding: "8px 14px", border: "1.5px solid #788c5d", borderRadius: 8, background: "#788c5d18", color: "#788c5d", fontFamily: "var(--font-heading)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Mark Done ✓</button>}
         </div>
 
-        {/* Header */}
         <div style={{ background: "var(--card)", borderRadius: 16, padding: 20, border: "1px solid var(--border)", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
             <span style={{ fontSize: 36 }}>{selected.emoji}</span>
@@ -578,7 +567,6 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
               <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-body)" }}>{selected.createdAt} · {selected.done ? "✅ Done" : "🟡 Active"}</div>
             </div>
           </div>
-          {/* Budget bar */}
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
             <span style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-heading)", fontWeight: 600 }}>SPENT</span>
             <span style={{ fontSize: 12, fontFamily: "var(--font-heading)", fontWeight: 600, color: remaining < 0 ? "#c4736e" : "var(--text-secondary)" }}>{fmt(totalSpent)} / {fmt(selected.budget)}</span>
@@ -589,7 +577,6 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
           <div style={{ fontSize: 13, fontFamily: "var(--font-heading)", color: remaining < 0 ? "#c4736e" : "#788c5d", fontWeight: 600 }}>{remaining >= 0 ? `${fmt(remaining)} remaining` : `${fmt(Math.abs(remaining))} over budget!`}</div>
         </div>
 
-        {/* Splits summary */}
         {selected.splits.length > 0 && (
           <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
             <div style={{ flex: 1, background: "#d9775712", borderRadius: 10, padding: "10px 14px", textAlign: "center" }}>
@@ -603,7 +590,6 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
           </div>
         )}
 
-        {/* Expenses list */}
         {selected.expenses.length > 0 && (
           <div style={{ background: "var(--card)", borderRadius: 14, padding: 14, border: "1px solid var(--border)", marginBottom: 14 }}>
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 10, letterSpacing: "0.5px" }}>EXPENSES</div>
@@ -623,7 +609,6 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
           </div>
         )}
 
-        {/* Splits list */}
         {selected.splits.length > 0 && (
           <div style={{ background: "var(--card)", borderRadius: 14, padding: 14, border: "1px solid var(--border)", marginBottom: 14 }}>
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 10, letterSpacing: "0.5px" }}>SPLITS</div>
@@ -642,7 +627,6 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
           </div>
         )}
 
-        {/* Add expense */}
         {!selected.done && (
           <div style={{ background: "var(--card)", borderRadius: 14, padding: 16, border: "1px solid var(--border)", marginBottom: 14 }}>
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 12, letterSpacing: "0.5px" }}>ADD EXPENSE</div>
@@ -657,7 +641,6 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
           </div>
         )}
 
-        {/* Add split */}
         {!selected.done && (
           <div style={{ background: "var(--card)", borderRadius: 14, padding: 16, border: "1px solid var(--border)", marginBottom: 14 }}>
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 12, letterSpacing: "0.5px" }}>ADD SPLIT</div>
@@ -675,15 +658,12 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
     );
   }
 
-  // LIST VIEW
   return (
     <div style={{ paddingTop: 8 }}>
       <button onClick={() => setView("create")} style={{ width: "100%", padding: 14, border: "2px dashed var(--border)", borderRadius: 14, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: 20, letterSpacing: "0.3px" }}>+ New Event</button>
 
       {active.length === 0 && done.length === 0 && (
-        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--muted)", fontFamily: "var(--font-body)", fontSize: 14, lineHeight: 2 }}>
-          No events yet.<br/>Create one for your next outing! 🎬
-        </div>
+        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--muted)", fontFamily: "var(--font-body)", fontSize: 14, lineHeight: 2 }}>No events yet.<br/>Create one for your next outing! 🎬</div>
       )}
 
       {active.map((ev) => {
@@ -747,7 +727,6 @@ function NavIcon({ type, active }) {
   if (type === "add") return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
   if (type === "history") return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>;
   if (type === "settings") return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06-.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
-  if (type === "report") return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
   if (type === "events") return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="16" r="2"/></svg>;
   return null;
 }
@@ -773,7 +752,7 @@ export default function Nomad() {
   const [managerType, setManagerType] = useState("expense");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [splitExpanded, setSplitExpanded] = useState(false);
-  const [calibrateWallet, setCalibrateWallet] = useState(null); // wallet object
+  const [calibrateWallet, setCalibrateWallet] = useState(null);
   const [walletStartBal, setWalletStartBal] = useState({ upi_lite: 0, bank: 0 });
 
   useEffect(() => {
@@ -808,16 +787,11 @@ export default function Nomad() {
   const totalExpense = filtered.expenses.reduce((s, e) => s + e.amount, 0);
   const balance = totalIncome - totalExpense;
 
-  // Wallet balances
   const walletBal = useMemo(() => {
     const bal = { upi_lite: walletStartBal.upi_lite || 0, bank: walletStartBal.bank || 0 };
-    // Income always goes to bank
     incomes.forEach((i) => { bal.bank += i.amount; });
-    // Expenses deduct from respective wallet
     expenses.forEach((e) => { const w = e.walletId || "upi_lite"; if (bal[w] !== undefined) bal[w] -= e.amount; });
-    // Transfers move between wallets
     transfers.forEach((t) => { if (bal[t.fromWallet] !== undefined) bal[t.fromWallet] -= t.amount; if (bal[t.toWallet] !== undefined) bal[t.toWallet] += t.amount; });
-    // Event budgets deduct from bank
     events.forEach((ev) => { bal.bank -= ev.budget; });
     return bal;
   }, [expenses, incomes, transfers, events, walletStartBal]);
@@ -842,7 +816,6 @@ export default function Nomad() {
     setNewName(""); setNewEmoji("📁"); setNewColor("#d97757");
   };
 
-  // Calibrate: back-calculate starting balance so current displayed balance = entered value
   const handleCalibrate = (walletId, desiredBal) => {
     const currentComputed = walletBal[walletId];
     const currentStart = walletStartBal[walletId] || 0;
@@ -850,7 +823,6 @@ export default function Nomad() {
     setWalletStartBal((prev) => ({ ...prev, [walletId]: currentStart + diff }));
   };
 
-  // Events handlers
   const createEvent = (ev) => { setEvents((p) => [...p, ev]); };
   const addEventExpense = (evId, exp) => { setEvents((p) => p.map((e) => e.id === evId ? { ...e, expenses: [...e.expenses, exp] } : e)); };
   const addEventSplit = (evId, split) => { setEvents((p) => p.map((e) => e.id === evId ? { ...e, splits: [...e.splits, split] } : e)); };
@@ -877,6 +849,15 @@ export default function Nomad() {
     "--text-secondary": "#4a4940", "--muted": "#b0aea5", "--nav-bg": "rgba(250,249,245,0.96)",
   };
 
+  const catBreakdown = useMemo(() => {
+    const totals = {};
+    filtered.expenses.forEach((e) => { totals[e.categoryId] = (totals[e.categoryId] || 0) + e.amount; });
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([id, total]) => {
+      const c = categories.find((x) => x.id === id) || { name: id, emoji: "❓", color: "#999" };
+      return { ...c, total };
+    });
+  }, [filtered.expenses, categories]);
+
   return (
     <div style={{ ...theme, fontFamily: "var(--font-body)", background: "var(--bg)", color: "var(--text)", minHeight: "100vh", maxWidth: 430, margin: "0 auto", padding: "0 16px 90px" }}>
       <style>{`
@@ -899,7 +880,7 @@ export default function Nomad() {
           <span style={{ fontSize: 20 }}>🦁</span>
           <span style={{ fontFamily: "var(--font-heading)", fontSize: 20, fontWeight: 700, color: "var(--text)", letterSpacing: "1px" }}>{APP_NAME}</span>
         </div>
-        <span style={{ fontFamily: "var(--font-heading)", fontSize: 10, color: "var(--muted)", background: "var(--card)", padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", fontWeight: 500 }}>v3.0</span>
+        <span style={{ fontFamily: "var(--font-heading)", fontSize: 10, color: "var(--muted)", background: "var(--card)", padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", fontWeight: 500 }}>v4.0</span>
       </div>
 
       {/* MONTH FILTER */}
@@ -913,6 +894,7 @@ export default function Nomad() {
       {/* DASHBOARD */}
       {tab === "dashboard" && (
         <div className="page-enter">
+          {/* Balance card */}
           <div style={{ background: "var(--card)", borderRadius: 20, padding: "28px 24px", border: "1px solid var(--border)", marginBottom: 16, textAlign: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 11, color: "var(--muted)", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 500 }}>Balance</div>
             <div style={{ fontSize: 36, fontWeight: 700, fontFamily: "var(--font-heading)", color: balance >= 0 ? "#788c5d" : "#d97757", marginTop: 8, lineHeight: 1.2 }}>{balance >= 0 ? "+" : ""}{fmt(balance)}</div>
@@ -923,7 +905,7 @@ export default function Nomad() {
             </div>
           </div>
 
-          {/* Wallet Cards with Calibrate */}
+          {/* Wallet Cards */}
           <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
             {WALLETS.map((w) => {
               const bal = walletBal[w.id] || 0;
@@ -944,26 +926,39 @@ export default function Nomad() {
 
           <LionMascot balance={balance} dancing={lionDancing}/>
 
+          {/* Split Expenses */}
           <SplitExpenses splits={splits} expanded={splitExpanded} onToggle={() => setSplitExpanded(!splitExpanded)}
             onAdd={(s) => setSplits((p) => [...p, s])}
             onSettle={(id) => setSplits((p) => p.map((s) => s.id === id ? { ...s, settled: true } : s))}
             onDelete={(id) => setSplits((p) => p.filter((s) => s.id !== id))}/>
 
+          {/* Trend chart */}
           <div style={{ background: "var(--card)", borderRadius: 16, padding: "18px 14px", border: "1px solid var(--border)", marginBottom: 16, boxShadow: "0 1px 6px rgba(0,0,0,0.03)" }}>
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 12, color: "var(--muted)", marginBottom: 8, letterSpacing: "0.5px", fontWeight: 600 }}>Trend</div>
             <LineChart expenses={expenses} incomes={incomes} months={allMonths}/>
           </div>
 
+          {/* Category breakdown */}
           <div style={{ background: "var(--card)", borderRadius: 16, padding: 18, border: "1px solid var(--border)", marginBottom: 16, boxShadow: "0 1px 6px rgba(0,0,0,0.03)" }}>
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 12, color: "var(--muted)", marginBottom: 16, letterSpacing: "0.5px", fontWeight: 600 }}>Spending by Category</div>
-            {filtered.expenses.length === 0 ? <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 20, fontFamily: "var(--font-body)" }}>No expenses yet</p> : (() => {
-              const totals = {}; filtered.expenses.forEach((e) => { totals[e.categoryId] = (totals[e.categoryId] || 0) + e.amount; });
-              const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1]); const maxC = sorted[0]?.[1] || 1;
-              return sorted.map(([cid, total]) => { const c = categories.find((x) => x.id === cid) || { name: cid, emoji: "❓", color: "#999" };
-                return (<div key={cid} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}><span style={{ fontSize: 20, width: 30, textAlign: "center" }}>{c.emoji}</span><div style={{ flex: 1 }}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}><span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-heading)" }}>{c.name}</span><span style={{ fontSize: 13, fontFamily: "var(--font-heading)", color: "var(--text-secondary)", fontWeight: 500 }}>{fmt(total)}</span></div><div style={{ height: 5, borderRadius: 3, background: "var(--border)", overflow: "hidden" }}><div style={{ height: "100%", width: `${(total / maxC) * 100}%`, background: c.color, borderRadius: 3, transition: "width 0.4s" }}/></div></div></div>);
-              });
-            })()}
+            {filtered.expenses.length === 0 ? <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 20, fontFamily: "var(--font-body)" }}>No expenses yet</p> : catBreakdown.map((c) => (
+              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                <span style={{ fontSize: 20, width: 30, textAlign: "center" }}>{c.emoji}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-heading)" }}>{c.name}</span>
+                    <span style={{ fontSize: 13, fontFamily: "var(--font-heading)", color: "var(--text-secondary)", fontWeight: 500 }}>{fmt(c.total)}</span>
+                  </div>
+                  <div style={{ height: 5, borderRadius: 3, background: "var(--border)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${(c.total / catBreakdown[0].total) * 100}%`, background: c.color, borderRadius: 3, transition: "width 0.4s" }}/>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
+
+          {/* PATCH: Weekly Report Card now lives here on Home, auto-average grading */}
+          <WeeklyReport expenses={expenses}/>
         </div>
       )}
 
@@ -974,7 +969,18 @@ export default function Nomad() {
         </div>
       )}
 
-      {/* HISTORY */}
+      {/* EVENTS */}
+      {tab === "events" && (
+        <div className="page-enter">
+          <EventsTab
+            events={events} categories={categories}
+            onCreateEvent={createEvent} onAddEventExpense={addEventExpense}
+            onAddEventSplit={addEventSplit} onSettleEventSplit={settleEventSplit}
+            onDeleteEventSplit={deleteEventSplit} onMarkDone={markEventDone} onDeleteEvent={deleteEvent}/>
+        </div>
+      )}
+
+      {/* HISTORY — heatmap + transactions */}
       {tab === "history" && (
         <div className="page-enter">
           <SpendingHeatmap expenses={expenses}/>
@@ -988,32 +994,6 @@ export default function Nomad() {
           {filtered.expenses.length === 0 && filtered.incomes.length === 0 && (
             <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--muted)", fontFamily: "var(--font-body)", fontSize: 14, lineHeight: 1.8 }}>No transactions yet.<br/>Add your first one!</div>
           )}
-        </div>
-      )}
-
-      {/* REPORT */}
-      {tab === "report" && (
-        <div className="page-enter" style={{ paddingTop: 8 }}>
-          <WeeklyReport expenses={expenses} weeklyTarget={weeklyTarget}/>
-          <div style={{ background: "var(--card)", borderRadius: 16, padding: 18, border: "1px solid var(--border)", marginBottom: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.03)" }}>
-            <div style={{ fontFamily: "var(--font-heading)", fontSize: 12, color: "var(--muted)", marginBottom: 10, letterSpacing: "0.5px", fontWeight: 600 }}>Weekly Target</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <input type="number" value={weeklyTarget} onChange={(e) => setWeeklyTarget(Number(e.target.value) || 0)} style={{ ...inputStyle, flex: 1, fontSize: 18, fontWeight: 600, fontFamily: "var(--font-heading)", textAlign: "center" }}/>
-              <span style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-body)" }}>per week</span>
-            </div>
-            <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 8, fontFamily: "var(--font-body)", fontStyle: "italic" }}>This target is used to calculate your weekly grade.</p>
-          </div>
-        </div>
-      )}
-
-      {/* EVENTS */}
-      {tab === "events" && (
-        <div className="page-enter">
-          <EventsTab
-            events={events} categories={categories}
-            onCreateEvent={createEvent} onAddEventExpense={addEventExpense}
-            onAddEventSplit={addEventSplit} onSettleEventSplit={settleEventSplit}
-            onDeleteEventSplit={deleteEventSplit} onMarkDone={markEventDone} onDeleteEvent={deleteEvent}/>
         </div>
       )}
 
@@ -1033,7 +1013,7 @@ export default function Nomad() {
           <div style={{ background: "var(--card)", borderRadius: 16, padding: 20, border: "1px solid var(--border)", marginBottom: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.03)" }}>
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Export</div>
             <button onClick={exportCSV} style={{ width: "100%", padding: "13px", border: "none", borderRadius: 10, background: "#d97757", color: "#fff", fontFamily: "var(--font-heading)", fontSize: 14, cursor: "pointer", fontWeight: 600 }}>Download CSV</button>
-            <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 10, lineHeight: 1.6, fontFamily: "var(--font-body)", fontStyle: "italic" }}>Export all data as CSV — upload to ChatGPT for spending analysis.</p>
+            <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 10, lineHeight: 1.6, fontFamily: "var(--font-body)", fontStyle: "italic" }}>Export all data as CSV — upload to ChatGPT or Claude for spending analysis.</p>
           </div>
 
           <div style={{ background: "var(--card)", borderRadius: 16, padding: 20, border: "1px solid var(--border)", marginBottom: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.03)" }}>
@@ -1075,17 +1055,16 @@ export default function Nomad() {
             )}
           </div>
 
-          <div style={{ textAlign: "center", padding: "24px 20px", color: "var(--muted)", fontFamily: "var(--font-body)", fontSize: 12, lineHeight: 1.8, fontStyle: "italic" }}>NOMAD v3.0 — Built for college students.<br/>Track smart. Spend wise. 🦁</div>
+          <div style={{ textAlign: "center", padding: "24px 20px", color: "var(--muted)", fontFamily: "var(--font-body)", fontSize: 12, lineHeight: 1.8, fontStyle: "italic" }}>NOMAD v4.0 — Built for college students.<br/>Track smart. Spend wise. 🦁</div>
         </div>
       )}
 
-      {/* BOTTOM NAV */}
+      {/* BOTTOM NAV — 5 tabs, Report removed */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--nav-bg)", backdropFilter: "blur(12px)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "center", maxWidth: 430, margin: "0 auto", zIndex: 50, paddingBottom: "env(safe-area-inset-bottom)" }}>
         {[
           { id: "dashboard", label: "Home" },
           { id: "add", label: "Add" },
           { id: "events", label: "Events" },
-          { id: "report", label: "Report" },
           { id: "history", label: "History" },
           { id: "settings", label: "Settings" },
         ].map((n) => (
