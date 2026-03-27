@@ -485,8 +485,175 @@ function CalibrateModal({ wallet, currentBal, onSave, onClose }) {
   );
 }
 
+/* ─── BILL SPLITTER SECTION ─── */
+// mode "owed": I paid full → logs full as expense + each person owes me their share
+// mode "owe": someone else paid → logs only my share as expense + I owe each person
+function BillSplitterSection({ onAddSplit, onAddExpense, categories }) {
+  const [mode, setMode] = useState("owed");
+  const [total, setTotal] = useState("");
+  const [myShare, setMyShare] = useState("");
+  const [people, setPeople] = useState([{ name: "", amount: "" }]);
+  const [logCat, setLogCat] = useState(categories[0]?.id || "");
+  const [showCats, setShowCats] = useState(false);
+  const [step, setStep] = useState(1); // 1=setup 2=confirm 3=done
+
+  const addPerson = () => setPeople((p) => [...p, { name: "", amount: "" }]);
+  const updatePerson = (i, field, val) => setPeople((p) => p.map((x, idx) => idx === i ? { ...x, [field]: val } : x));
+  const removePerson = (i) => setPeople((p) => p.filter((_, idx) => idx !== i));
+
+  const totalNum = parseFloat(total) || 0;
+  const myShareNum = parseFloat(myShare) || 0;
+  const othersTotal = people.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+  const remainder = totalNum - othersTotal - (mode === "owed" ? myShareNum : 0);
+  const validPeople = people.filter((p) => p.name.trim() && parseFloat(p.amount) > 0);
+  const expenseAmount = mode === "owed" ? totalNum : myShareNum;
+  const cat = categories.find((c) => c.id === logCat) || categories[0];
+
+  const goConfirm = () => { if (!totalNum || validPeople.length === 0) return; if (mode === "owe" && !myShareNum) return; setStep(2); };
+  const submit = () => {
+    if (expenseAmount > 0) onAddExpense({ id: uid(), amount: expenseAmount, categoryId: logCat, note: mode === "owed" ? "Paid for group" : "My share", date: new Date().toISOString().slice(0, 10) });
+    validPeople.forEach((p) => onAddSplit({ id: uid(), name: p.name.trim(), amount: parseFloat(p.amount), direction: mode === "owed" ? "owed" : "owe", settled: false }));
+    setStep(3);
+    setTimeout(() => { setStep(1); setTotal(""); setMyShare(""); setPeople([{ name: "", amount: "" }]); setShowCats(false); }, 2000);
+  };
+
+  if (step === 3) return (
+    <div style={{ background: "var(--card)", borderRadius: 14, padding: 24, border: "1px solid #788c5d40", marginBottom: 14, textAlign: "center" }}>
+      <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
+      <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, color: "#788c5d", fontWeight: 600 }}>Split recorded!</div>
+      <div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-body)", marginTop: 4 }}>{mode === "owed" ? `${fmt(expenseAmount)} logged as your expense` : `Your share of ${fmt(expenseAmount)} logged`}</div>
+    </div>
+  );
+
+  if (step === 2) return (
+    <div style={{ background: "var(--card)", borderRadius: 14, padding: 16, border: "1px solid var(--border)", marginBottom: 14 }}>
+      <div style={{ fontFamily: "var(--font-heading)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 14, letterSpacing: "0.5px" }}>🧾 CONFIRM SPLIT</div>
+      <div style={{ background: mode === "owed" ? "#d9775712" : "#6a9bcc12", borderRadius: 12, padding: "12px 14px", marginBottom: 14, border: `1px solid ${mode === "owed" ? "#d9775730" : "#6a9bcc30"}` }}>
+        <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-heading)", fontWeight: 600, marginBottom: 6 }}>EXPENSE TO LOG</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 20 }}>{cat?.emoji}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontFamily: "var(--font-heading)", fontWeight: 600, color: "var(--text)" }}>{mode === "owed" ? "You paid full bill" : "Your share"}</div>
+            <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-body)" }}>{cat?.name}</div>
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-heading)", color: "#d97757" }}>−{fmt(expenseAmount)}</div>
+        </div>
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-heading)", fontWeight: 600, marginBottom: 8 }}>{mode === "owed" ? "THEY OWE YOU" : "YOU OWE THEM"}</div>
+        {validPeople.map((p, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 13, fontFamily: "var(--font-heading)", color: "var(--text)" }}>{p.name}</span>
+            <span style={{ fontSize: 13, fontFamily: "var(--font-heading)", fontWeight: 600, color: mode === "owed" ? "#788c5d" : "#d97757" }}>{fmt(parseFloat(p.amount))}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setStep(1)} style={{ flex: 1, padding: "12px", border: "1.5px solid var(--border)", borderRadius: 10, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-heading)", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>← Edit</button>
+        <button onClick={submit} style={{ flex: 2, padding: "12px", border: "none", borderRadius: 10, background: mode === "owed" ? "#788c5d" : "#d97757", color: "#fff", fontFamily: "var(--font-heading)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Confirm & Log ✓</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ background: "var(--card)", borderRadius: 14, padding: 16, border: "1px solid var(--border)", marginBottom: 14 }}>
+      <div style={{ fontFamily: "var(--font-heading)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 12, letterSpacing: "0.5px" }}>🧾 BILL SPLITTER</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {[{ id: "owed", label: "I paid for everyone", sub: "they owe me", color: "#788c5d" }, { id: "owe", label: "Someone else paid", sub: "I owe them", color: "#d97757" }].map((m) => (
+          <button key={m.id} onClick={() => setMode(m.id)} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: `2px solid ${mode === m.id ? m.color : "var(--border)"}`, background: mode === m.id ? m.color + "18" : "var(--card)", cursor: "pointer", textAlign: "center" }}>
+            <div style={{ fontSize: 12, fontFamily: "var(--font-heading)", fontWeight: 700, color: mode === m.id ? m.color : "var(--muted)" }}>{m.label}</div>
+            <div style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-body)", marginTop: 2 }}>{m.sub}</div>
+          </button>
+        ))}
+      </div>
+      <label style={labelStyle}>Total Bill (₹)</label>
+      <input type="number" value={total} onChange={(e) => setTotal(e.target.value)} placeholder="0" style={{ ...inputStyle, marginBottom: 12, fontSize: 20, fontWeight: 700, fontFamily: "var(--font-heading)", textAlign: "center" }}/>
+      {mode === "owe" && (<><label style={labelStyle}>My Share (₹)</label><input type="number" value={myShare} onChange={(e) => setMyShare(e.target.value)} placeholder="0" style={{ ...inputStyle, marginBottom: 12 }}/></>)}
+      <label style={labelStyle}>{mode === "owed" ? "Each person's share" : "Who paid & their share"}</label>
+      {people.map((p, i) => (
+        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
+          <input value={p.name} onChange={(e) => updatePerson(i, "name", e.target.value)} placeholder="Name" style={{ ...inputStyle, flex: 1 }}/>
+          <input type="number" value={p.amount} onChange={(e) => updatePerson(i, "amount", e.target.value)} placeholder="₹" style={{ ...inputStyle, width: 78 }}/>
+          {people.length > 1 && <button onClick={() => removePerson(i)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 16, padding: "0 4px", opacity: 0.4 }}>✕</button>}
+        </div>
+      ))}
+      <button onClick={addPerson} style={{ background: "none", border: "1px dashed var(--border)", borderRadius: 8, padding: "7px 14px", fontSize: 12, color: "var(--muted)", cursor: "pointer", fontFamily: "var(--font-heading)", marginBottom: 12, width: "100%" }}>+ Add person</button>
+      {total && (
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: Math.abs(remainder) < 0.5 ? "#788c5d12" : "var(--bg)", borderRadius: 8, marginBottom: 12, border: `1px solid ${Math.abs(remainder) < 0.5 ? "#788c5d40" : "var(--border)"}` }}>
+          <span style={{ fontSize: 12, fontFamily: "var(--font-heading)", color: "var(--muted)" }}>Others assigned</span>
+          <span style={{ fontSize: 12, fontFamily: "var(--font-heading)", fontWeight: 600, color: Math.abs(remainder) < 0.5 ? "#788c5d" : remainder < 0 ? "#c4736e" : "var(--text-secondary)" }}>{fmt(othersTotal)} / {fmt(totalNum)} {Math.abs(remainder) < 0.5 ? "✓" : remainder > 0 ? `(${fmt(remainder)} left)` : "(over!)"}</span>
+        </div>
+      )}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showCats ? 10 : 14 }}>
+        <label style={{ ...labelStyle, margin: 0 }}>Log under</label>
+        <button onClick={() => setShowCats(!showCats)} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontFamily: "var(--font-heading)", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>{cat?.emoji} {cat?.name} {showCats ? "▴" : "▾"}</button>
+      </div>
+      {showCats && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>{categories.map((c) => (<button key={c.id} onClick={() => { setLogCat(c.id); setShowCats(false); }} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontFamily: "var(--font-body)", border: `1.5px solid ${logCat === c.id ? c.color : "var(--border)"}`, background: logCat === c.id ? c.color + "18" : "var(--card)", color: logCat === c.id ? c.color : "var(--text-secondary)", cursor: "pointer", fontWeight: logCat === c.id ? 600 : 400 }}>{c.emoji} {c.name}</button>))}</div>}
+      <button onClick={goConfirm} disabled={!totalNum || validPeople.length === 0 || (mode === "owe" && !myShareNum)}
+        style={{ width: "100%", padding: "13px", border: "none", borderRadius: 10, background: (!totalNum || validPeople.length === 0 || (mode === "owe" && !myShareNum)) ? "var(--border)" : mode === "owed" ? "#788c5d" : "#d97757", color: "#fff", fontFamily: "var(--font-heading)", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: (!totalNum || validPeople.length === 0 || (mode === "owe" && !myShareNum)) ? 0.5 : 1 }}>
+        Review Split →
+      </button>
+    </div>
+  );
+}
+
+/* ─── EVENT DONE MODAL ─── */
+function EventDoneModal({ event, walletBal, onConfirm, onClose }) {
+  const totalSpent = event.expenses.reduce((s, e) => s + e.amount, 0);
+  const hasBudget = event.budget > 0;
+  const [selectedWallet, setSelectedWallet] = useState("bank");
+
+  if (hasBudget) {
+    const diff = event.budget - totalSpent; // positive = refund, negative = overspent
+    const isOver = diff < 0;
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--card)", borderRadius: "20px 20px 0 0", padding: 28, width: "100%", maxWidth: 430, boxShadow: "0 -4px 30px rgba(0,0,0,0.15)" }}>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{event.emoji} Wrap up "{event.name}"?</div>
+          <div style={{ background: isOver ? "#c4736e12" : "#788c5d12", borderRadius: 12, padding: "14px 16px", marginBottom: 20, border: `1px solid ${isOver ? "#c4736e40" : "#788c5d40"}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-heading)", fontWeight: 600 }}>Budget</span><span style={{ fontSize: 13, fontFamily: "var(--font-heading)", fontWeight: 600 }}>{fmt(event.budget)}</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-heading)", fontWeight: 600 }}>Spent</span><span style={{ fontSize: 13, fontFamily: "var(--font-heading)", fontWeight: 600, color: "#d97757" }}>{fmt(totalSpent)}</span></div>
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 12, fontFamily: "var(--font-heading)", fontWeight: 700, color: isOver ? "#c4736e" : "#788c5d" }}>{isOver ? "Extra deducted from Bank" : "Refund to Bank"}</span>
+              <span style={{ fontSize: 15, fontFamily: "var(--font-heading)", fontWeight: 700, color: isOver ? "#c4736e" : "#788c5d" }}>{fmt(Math.abs(diff))}</span>
+            </div>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-body)", marginBottom: 20, lineHeight: 1.5 }}>{isOver ? `You went ${fmt(Math.abs(diff))} over budget. The extra will be deducted from your Bank Account.` : `You saved ${fmt(diff)}! It'll be refunded back to your Bank Account.`}</p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={onClose} style={{ flex: 1, padding: 14, border: "1.5px solid var(--border)", borderRadius: 12, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-heading)", fontSize: 14, cursor: "pointer", fontWeight: 500 }}>Cancel</button>
+            <button onClick={() => onConfirm({ walletId: "bank", refund: diff })} style={{ flex: 2, padding: 14, border: "none", borderRadius: 12, background: isOver ? "#c4736e" : "#788c5d", color: "#fff", fontFamily: "var(--font-heading)", fontSize: 14, cursor: "pointer", fontWeight: 700 }}>Mark Done ✓</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // No budget — ask which wallet to deduct from
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--card)", borderRadius: "20px 20px 0 0", padding: 28, width: "100%", maxWidth: 430, boxShadow: "0 -4px 30px rgba(0,0,0,0.15)" }}>
+        <div style={{ fontFamily: "var(--font-heading)", fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{event.emoji} Wrap up "{event.name}"?</div>
+        <p style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-body)", marginBottom: 16, lineHeight: 1.5 }}>Total spent: <strong style={{ color: "#d97757" }}>{fmt(totalSpent)}</strong>. Which wallet should these expenses come from?</p>
+        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+          {WALLETS.map((w) => (
+            <button key={w.id} onClick={() => setSelectedWallet(w.id)} style={{ flex: 1, padding: "12px", borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: `2px solid ${selectedWallet === w.id ? w.color : "var(--border)"}`, background: selectedWallet === w.id ? w.color + "15" : "var(--card)", cursor: "pointer" }}>
+              <span style={{ fontSize: 22 }}>{w.emoji}</span>
+              <span style={{ fontSize: 11, fontFamily: "var(--font-heading)", fontWeight: 600, color: selectedWallet === w.id ? w.color : "var(--muted)" }}>{w.name}</span>
+              <span style={{ fontSize: 10, fontFamily: "var(--font-body)", color: "var(--muted)" }}>{fmt(walletBal[w.id] || 0)}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: 14, border: "1.5px solid var(--border)", borderRadius: 12, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-heading)", fontSize: 14, cursor: "pointer", fontWeight: 500 }}>Cancel</button>
+          <button onClick={() => onConfirm({ walletId: selectedWallet, refund: null })} style={{ flex: 2, padding: 14, border: "none", borderRadius: 12, background: "#788c5d", color: "#fff", fontFamily: "var(--font-heading)", fontSize: 14, cursor: "pointer", fontWeight: 700 }}>Mark Done ✓</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── EVENTS TAB ─── */
-function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAddEventSplit, onSettleEventSplit, onDeleteEventSplit, onMarkDone, onDeleteEvent }) {
+function EventsTab({ events, categories, walletBal, onCreateEvent, onAddEventExpense, onAddEventSplit, onSettleEventSplit, onDeleteEventSplit, onMarkDone, onDeleteEvent }) {
   const [view, setView] = useState("list");
   const [selectedId, setSelectedId] = useState(null);
   const [newName, setNewName] = useState("");
@@ -499,6 +666,7 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
   const [splitAmount, setSplitAmount] = useState("");
   const [splitDir, setSplitDir] = useState("owe");
   const [showDone, setShowDone] = useState(false);
+  const [doneModal, setDoneModal] = useState(null); // event object when confirming done
 
   const active = events.filter((e) => !e.done);
   const done = events.filter((e) => e.done);
@@ -556,7 +724,7 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
       <div style={{ paddingTop: 8 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, fontFamily: "var(--font-heading)" }}>← Events</button>
-          {!selected.done && <button onClick={() => { onMarkDone(selected.id); setView("list"); }} style={{ padding: "8px 14px", border: "1.5px solid #788c5d", borderRadius: 8, background: "#788c5d18", color: "#788c5d", fontFamily: "var(--font-heading)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Mark Done ✓</button>}
+          {!selected.done && <button onClick={() => setDoneModal(selected)} style={{ padding: "8px 14px", border: "1.5px solid #788c5d", borderRadius: 8, background: "#788c5d18", color: "#788c5d", fontFamily: "var(--font-heading)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Mark Done ✓</button>}
         </div>
 
         <div style={{ background: "var(--card)", borderRadius: 16, padding: 20, border: "1px solid var(--border)", marginBottom: 14 }}>
@@ -641,6 +809,14 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
           </div>
         )}
 
+        {/* Bill Splitter */}
+        {!selected.done && (
+          <BillSplitterSection
+            categories={categories}
+            onAddExpense={(exp) => onAddEventExpense(selected.id, exp)}
+            onAddSplit={(sp) => onAddEventSplit(selected.id, sp)}/>
+        )}
+
         {!selected.done && (
           <div style={{ background: "var(--card)", borderRadius: 14, padding: 16, border: "1px solid var(--border)", marginBottom: 14 }}>
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 12, letterSpacing: "0.5px" }}>ADD SPLIT</div>
@@ -653,6 +829,15 @@ function EventsTab({ events, categories, onCreateEvent, onAddEventExpense, onAdd
               <button onClick={addSplit} style={{ padding: "10px 14px", border: "none", borderRadius: 10, background: "#788c5d", color: "#fff", fontFamily: "var(--font-heading)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+</button>
             </div>
           </div>
+        )}
+
+        {/* Event Done Modal */}
+        {doneModal && (
+          <EventDoneModal
+            event={doneModal}
+            walletBal={walletBal}
+            onConfirm={(result) => { onMarkDone(doneModal.id, result); setDoneModal(null); setView("list"); }}
+            onClose={() => setDoneModal(null)}/>
         )}
       </div>
     );
@@ -745,6 +930,8 @@ export default function Nomad() {
   const [loaded, setLoaded] = useState(false);
   const [lionDancing, setLionDancing] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = "info") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
   const [weeklyTarget, setWeeklyTarget] = useState(2000);
   const [newName, setNewName] = useState("");
   const [newEmoji, setNewEmoji] = useState("📁");
@@ -828,7 +1015,25 @@ export default function Nomad() {
   const addEventSplit = (evId, split) => { setEvents((p) => p.map((e) => e.id === evId ? { ...e, splits: [...e.splits, split] } : e)); };
   const settleEventSplit = (evId, splitId) => { setEvents((p) => p.map((e) => e.id === evId ? { ...e, splits: e.splits.map((s) => s.id === splitId ? { ...s, settled: true } : s) } : e)); };
   const deleteEventSplit = (evId, splitId) => { setEvents((p) => p.map((e) => e.id === evId ? { ...e, splits: e.splits.filter((s) => s.id !== splitId) } : e)); };
-  const markEventDone = (evId) => { setEvents((p) => p.map((e) => e.id === evId ? { ...e, done: true } : e)); };
+  const markEventDone = (evId, result) => {
+    setEvents((p) => p.map((e) => e.id === evId ? { ...e, done: true } : e));
+    if (!result) return;
+    const { walletId, refund } = result;
+    if (refund !== null) {
+      // Budget event: refund > 0 = add back, refund < 0 = extra deduct
+      // We adjust walletStartBal to reflect the delta
+      setWalletStartBal((prev) => ({ ...prev, bank: (prev.bank || 0) + refund }));
+      if (refund < 0) showToast(`⚠️ Over budget by ${fmt(Math.abs(refund))} — deducted from Bank`, "warn");
+      else if (refund > 0) showToast(`✅ ${fmt(refund)} refunded to Bank Account`, "success");
+    } else {
+      // No budget: deduct total event expenses from chosen wallet
+      const ev = events.find((e) => e.id === evId);
+      if (!ev) return;
+      const total = ev.expenses.reduce((s, e) => s + e.amount, 0);
+      setWalletStartBal((prev) => ({ ...prev, [walletId]: (prev[walletId] || 0) - total }));
+      showToast(`${fmt(total)} deducted from ${WALLETS.find((w) => w.id === walletId)?.name}`, "info");
+    }
+  };
   const deleteEvent = (evId) => { setEvents((p) => p.filter((e) => e.id !== evId)); };
 
   const exportCSV = () => {
@@ -973,7 +1178,7 @@ export default function Nomad() {
       {tab === "events" && (
         <div className="page-enter">
           <EventsTab
-            events={events} categories={categories}
+            events={events} categories={categories} walletBal={walletBal}
             onCreateEvent={createEvent} onAddEventExpense={addEventExpense}
             onAddEventSplit={addEventSplit} onSettleEventSplit={settleEventSplit}
             onDeleteEventSplit={deleteEventSplit} onMarkDone={markEventDone} onDeleteEvent={deleteEvent}/>
@@ -1074,6 +1279,13 @@ export default function Nomad() {
           </button>
         ))}
       </div>
+
+      {/* TOAST */}
+      {toast && (
+        <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", zIndex: 300, maxWidth: 360, width: "90%", background: toast.type === "warn" ? "#c4736e" : toast.type === "success" ? "#788c5d" : "#6a9bcc", color: "#fff", borderRadius: 12, padding: "12px 18px", fontFamily: "var(--font-heading)", fontSize: 13, fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", textAlign: "center", lineHeight: 1.5, animation: "fadeIn 0.2s ease" }}>
+          {toast.msg}
+        </div>
+      )}
 
       {/* CALIBRATE MODAL */}
       {calibrateWallet && (
