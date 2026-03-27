@@ -27,6 +27,9 @@ const DEFAULT_INCOME_SOURCES = [
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const fmt = (n) => CURRENCY + Number(n).toLocaleString("en-IN");
 const monthKey = (d) => d.slice(0, 7);
+
+const labelStyle = { fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 6, display: "block", fontFamily: "var(--font-heading)", fontWeight: 600 };
+const inputStyle = { background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "11px 14px", color: "var(--text)", fontSize: 14, fontFamily: "var(--font-body)", outline: "none", width: "100%", boxSizing: "border-box" };
 const monthLabel = (k) => { const [y, m] = k.split("-"); return new Date(y, m - 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" }); };
 const dayLabel = (d) => {
   const today = new Date().toISOString().slice(0, 10);
@@ -902,9 +905,6 @@ function EventsTab({ events, categories, walletBal, onCreateEvent, onAddEventExp
   );
 }
 
-/* ─── STYLES ─── */
-const labelStyle = { fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 6, display: "block", fontFamily: "var(--font-heading)", fontWeight: 600 };
-const inputStyle = { background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "11px 14px", color: "var(--text)", fontSize: 14, fontFamily: "var(--font-body)", outline: "none", width: "100%", boxSizing: "border-box" };
 
 function NavIcon({ type, active }) {
   const c = active ? "#d97757" : "var(--muted)";
@@ -1044,6 +1044,15 @@ export default function Nomad() {
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `nomad_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
   };
 
+  const catBreakdown = useMemo(() => {
+    const totals = {};
+    filtered.expenses.forEach((e) => { totals[e.categoryId] = (totals[e.categoryId] || 0) + e.amount; });
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([id, total]) => {
+      const c = categories.find((x) => x.id === id) || { name: id, emoji: "❓", color: "#999" };
+      return { ...c, total };
+    });
+  }, [filtered.expenses, categories]);
+
   if (!loaded) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#faf9f5", fontFamily: "Poppins, sans-serif", color: "#b0aea5" }}>Loading…</div>;
 
   const theme = darkMode ? {
@@ -1053,15 +1062,6 @@ export default function Nomad() {
     "--bg": "#faf9f5", "--card": "#ffffff", "--border": "#e8e6dc", "--text": "#141413",
     "--text-secondary": "#4a4940", "--muted": "#b0aea5", "--nav-bg": "rgba(250,249,245,0.96)",
   };
-
-  const catBreakdown = useMemo(() => {
-    const totals = {};
-    filtered.expenses.forEach((e) => { totals[e.categoryId] = (totals[e.categoryId] || 0) + e.amount; });
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([id, total]) => {
-      const c = categories.find((x) => x.id === id) || { name: id, emoji: "❓", color: "#999" };
-      return { ...c, total };
-    });
-  }, [filtered.expenses, categories]);
 
   return (
     <div style={{ ...theme, fontFamily: "var(--font-body)", background: "var(--bg)", color: "var(--text)", minHeight: "100vh", maxWidth: 430, margin: "0 auto", padding: "0 16px 90px" }}>
