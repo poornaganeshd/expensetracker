@@ -455,6 +455,159 @@ function CalibrateModal({ wallet, currentBal, onSave, onClose }) {
   );
 }
 
+/* ─── EVENT BILL SPLITTER ─── */
+function EventBillSplitter({ eventId, categories, onAddExpense, onAddSplit }) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("equal");
+  const [total, setTotal] = useState("");
+  const [catId, setCatId] = useState(categories[0]?.id || "");
+  const [walletId, setWalletId] = useState("upi_lite");
+  const [note, setNote] = useState("");
+  const [people, setPeople] = useState([{ name: "", amount: "" }]);
+  const [step, setStep] = useState(1);
+
+  const addPerson = () => setPeople(p => [...p, { name: "", amount: "" }]);
+  const updatePerson = (i, f, v) => setPeople(p => p.map((x, idx) => idx === i ? { ...x, [f]: v } : x));
+  const removePerson = (i) => setPeople(p => p.filter((_, idx) => idx !== i));
+
+  const totalNum = parseFloat(total) || 0;
+  const validPeople = people.filter(p => p.name.trim());
+  const headcount = validPeople.length + 1; // others + me
+
+  // Equal: everyone pays same
+  const equalPerPerson = headcount > 0 ? Math.round(totalNum / headcount) : 0;
+  const equalMyShare = totalNum - (equalPerPerson * validPeople.length);
+
+  // Custom: others enter amounts, my share = remainder
+  const customOthersTotal = people.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+  const customMyShare = Math.max(0, totalNum - customOthersTotal);
+
+  const myShare = mode === "equal" ? equalMyShare : customMyShare;
+  const canSubmit = totalNum > 0 && validPeople.length > 0 && (mode === "equal" || customOthersTotal <= totalNum);
+
+  const reset = () => { setTotal(""); setPeople([{ name: "", amount: "" }]); setNote(""); setStep(1); setOpen(false); };
+
+  const submit = () => {
+    if (!canSubmit) return;
+    // 1. Create expense for user's share only
+    if (myShare > 0) {
+      onAddExpense({ amount: myShare, categoryId: catId, walletId, note: note || "Bill split — my share", date: new Date().toISOString().slice(0, 10), eventId });
+    }
+    // 2. Create split entries for others (they owe me)
+    validPeople.forEach(p => {
+      const amt = mode === "equal" ? equalPerPerson : (parseFloat(p.amount) || 0);
+      if (amt > 0) {
+        onAddSplit({ id: uid(), name: p.name.trim(), amount: amt, direction: "owed", settled: false, eventId });
+      }
+    });
+    setStep(3);
+    setTimeout(reset, 2000);
+  };
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} style={{ width: "100%", padding: 14, border: "1.5px solid #6a9bcc", borderRadius: 14, background: "#6a9bcc12", color: "#6a9bcc", fontFamily: "var(--font-heading)", fontSize: 13, fontWeight: 600, cursor: "pointer", marginBottom: 14 }}>🧾 Bill Splitter</button>
+    );
+  }
+
+  if (step === 3) {
+    return (
+      <div style={{ background: "var(--card)", borderRadius: 14, padding: 24, border: "1px solid #788c5d40", marginBottom: 14, textAlign: "center" }}>
+        <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
+        <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, color: "#788c5d", fontWeight: 600 }}>Split recorded!</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-body)", marginTop: 4 }}>Your share ({fmt(myShare)}) logged as expense.</div>
+      </div>
+    );
+  }
+
+  if (step === 2) {
+    const cat = categories.find(c => c.id === catId) || categories[0];
+    return (
+      <div style={{ background: "var(--card)", borderRadius: 14, padding: 16, border: "1px solid var(--border)", marginBottom: 14 }}>
+        <div style={{ fontFamily: "var(--font-heading)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 14, letterSpacing: "0.5px" }}>🧾 CONFIRM SPLIT</div>
+        <div style={{ background: "#d9775712", borderRadius: 10, padding: "12px 14px", marginBottom: 14, border: "1px solid #d9775730" }}>
+          <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-heading)", fontWeight: 600, marginBottom: 6 }}>YOUR EXPENSE</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 20 }}>{cat?.emoji}</span>
+            <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontFamily: "var(--font-heading)", fontWeight: 600, color: "var(--text)" }}>Your share</div><div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-body)" }}>{cat?.name}</div></div>
+            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-heading)", color: "#d97757" }}>−{fmt(myShare)}</div>
+          </div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-heading)", fontWeight: 600, marginBottom: 8 }}>THEY OWE YOU</div>
+          {validPeople.map((p, i) => {
+            const amt = mode === "equal" ? equalPerPerson : (parseFloat(p.amount) || 0);
+            return (<div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid var(--border)" }}><span style={{ fontSize: 13, fontFamily: "var(--font-heading)", color: "var(--text)" }}>{p.name}</span><span style={{ fontSize: 13, fontFamily: "var(--font-heading)", fontWeight: 600, color: "#788c5d" }}>{fmt(amt)}</span></div>);
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setStep(1)} style={{ flex: 1, padding: 12, border: "1.5px solid var(--border)", borderRadius: 10, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-heading)", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>← Edit</button>
+          <button onClick={submit} style={{ flex: 2, padding: 12, border: "none", borderRadius: 10, background: "#788c5d", color: "#fff", fontFamily: "var(--font-heading)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Confirm ✓</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: "var(--card)", borderRadius: 14, padding: 16, border: "1px solid var(--border)", marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ fontFamily: "var(--font-heading)", fontSize: 11, color: "var(--muted)", fontWeight: 600, letterSpacing: "0.5px" }}>🧾 BILL SPLITTER</div>
+        <button onClick={reset} style={{ background: "none", border: "none", fontSize: 12, color: "var(--muted)", cursor: "pointer", fontFamily: "var(--font-heading)" }}>✕ Close</button>
+      </div>
+
+      {/* Mode toggle */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {[{ id: "equal", label: "Equal Split" }, { id: "custom", label: "Custom Split" }].map(m => (
+          <button key={m.id} onClick={() => setMode(m.id)} style={{ flex: 1, padding: "9px", borderRadius: 8, fontSize: 12, fontFamily: "var(--font-heading)", border: `1.5px solid ${mode === m.id ? "#6a9bcc" : "var(--border)"}`, background: mode === m.id ? "#6a9bcc18" : "var(--card)", color: mode === m.id ? "#6a9bcc" : "var(--muted)", cursor: "pointer", fontWeight: 600 }}>{m.label}</button>
+        ))}
+      </div>
+
+      <label style={labelStyle}>Total Bill (₹)</label>
+      <input type="number" value={total} onChange={e => setTotal(e.target.value)} placeholder="0" style={{ ...inputStyle, marginBottom: 14, fontSize: 20, fontWeight: 700, fontFamily: "var(--font-heading)", textAlign: "center" }}/>
+
+      <label style={labelStyle}>People (excluding you)</label>
+      {people.map((p, i) => (
+        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
+          <input value={p.name} onChange={e => updatePerson(i, "name", e.target.value)} placeholder="Name" style={{ ...inputStyle, flex: 1 }}/>
+          {mode === "custom" && <input type="number" value={p.amount} onChange={e => updatePerson(i, "amount", e.target.value)} placeholder="₹" style={{ ...inputStyle, width: 78 }}/>}
+          {people.length > 1 && <button onClick={() => removePerson(i)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 16, opacity: 0.4 }}>✕</button>}
+        </div>
+      ))}
+      <button onClick={addPerson} style={{ background: "none", border: "1px dashed var(--border)", borderRadius: 8, padding: "7px 14px", fontSize: 12, color: "var(--muted)", cursor: "pointer", fontFamily: "var(--font-heading)", marginBottom: 14, width: "100%" }}>+ Add person</button>
+
+      {/* Summary */}
+      {totalNum > 0 && validPeople.length > 0 && (
+        <div style={{ background: "var(--bg)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, border: "1px solid var(--border)" }}>
+          {mode === "equal" ? (
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: "var(--font-heading)", color: "var(--text-secondary)" }}>
+              <span>Per person ({headcount})</span><span style={{ fontWeight: 600 }}>{fmt(equalPerPerson)}</span>
+            </div>
+          ) : (
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: "var(--font-heading)", color: customOthersTotal > totalNum ? "#c4736e" : "var(--text-secondary)" }}>
+              <span>Others total</span><span style={{ fontWeight: 600 }}>{fmt(customOthersTotal)} / {fmt(totalNum)}{customOthersTotal > totalNum ? " (over!)" : ""}</span>
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontFamily: "var(--font-heading)", color: "#d97757", fontWeight: 700, marginTop: 6 }}>
+            <span>Your share</span><span>{fmt(myShare)}</span>
+          </div>
+        </div>
+      )}
+
+      <label style={labelStyle}>Category</label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+        {categories.map(c => (<button key={c.id} onClick={() => setCatId(c.id)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontFamily: "var(--font-body)", border: `1.5px solid ${catId === c.id ? c.color : "var(--border)"}`, background: catId === c.id ? c.color + "18" : "var(--card)", color: catId === c.id ? c.color : "var(--text-secondary)", cursor: "pointer", fontWeight: catId === c.id ? 600 : 400 }}>{c.emoji} {c.name}</button>))}
+      </div>
+
+      <label style={labelStyle}>Paid From</label>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {WALLETS.map(w => (<button key={w.id} onClick={() => setWalletId(w.id)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1.5px solid ${walletId === w.id ? w.color : "var(--border)"}`, background: walletId === w.id ? w.color + "15" : "var(--card)", fontSize: 12, fontWeight: walletId === w.id ? 600 : 500, fontFamily: "var(--font-heading)", color: walletId === w.id ? w.color : "var(--muted)", cursor: "pointer" }}>{w.emoji} {w.name}</button>))}
+      </div>
+
+      <button onClick={() => { if (canSubmit) setStep(2); }} disabled={!canSubmit} style={{ width: "100%", padding: 13, border: "none", borderRadius: 10, background: canSubmit ? "#788c5d" : "var(--border)", color: "#fff", fontFamily: "var(--font-heading)", fontSize: 13, fontWeight: 700, cursor: canSubmit ? "pointer" : "default", opacity: canSubmit ? 1 : 0.5 }}>Review Split →</button>
+    </div>
+  );
+}
+
 /* ─── EVENTS TAB ─── */
 function EventsTab({ events, expenses, splits, settlements, categories, onCreateEvent, onAddExpense, onAddSplit, onSettleSplit, onDeleteSplit, onMarkDone }) {
   const [view, setView] = useState("list");
@@ -594,6 +747,9 @@ function EventsTab({ events, expenses, splits, settlements, categories, onCreate
             </div>
           </div>
         )}
+
+        {/* Bill Splitter (only if active) */}
+        {selected.status === "active" && <EventBillSplitter eventId={selected.id} categories={categories} onAddExpense={onAddExpense} onAddSplit={onAddSplit}/>}
 
         {/* Add split (only if active) */}
         {selected.status === "active" && (
