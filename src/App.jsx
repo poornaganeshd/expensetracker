@@ -475,7 +475,7 @@ function EventBillSplitter({ eventId, categories, onAddExpense, onAddSplit }) {
   const headcount = validPeople.length + 1; // others + me
 
   // Equal: everyone pays same
-  const equalPerPerson = headcount > 0 ? Math.round(totalNum / headcount) : 0;
+  const equalPerPerson = headcount > 0 ? Math.floor(totalNum / headcount) : 0;
   const equalMyShare = totalNum - (equalPerPerson * validPeople.length);
 
   // Custom: others enter amounts, my share = remainder
@@ -483,7 +483,7 @@ function EventBillSplitter({ eventId, categories, onAddExpense, onAddSplit }) {
   const customMyShare = Math.max(0, totalNum - customOthersTotal);
 
   const myShare = mode === "equal" ? equalMyShare : customMyShare;
-  const canSubmit = totalNum > 0 && validPeople.length > 0 && (mode === "equal" || customOthersTotal <= totalNum);
+  const canSubmit = totalNum > 0 && validPeople.length > 0 && (mode === "equal" || (customOthersTotal > 0 && customOthersTotal <= totalNum));
 
   const reset = () => { setTotal(""); setPeople([{ name: "", amount: "" }]); setNote(""); setStep(1); setOpen(false); };
 
