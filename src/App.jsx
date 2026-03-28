@@ -205,7 +205,7 @@ function SettleModal({ split, onConfirm, onClose }) {
         </div>
         <label style={labelStyle}>{isOwed ? "Receive into" : "Pay from"}</label>
         <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-          {WALLETS.map(w => (
+          {WALLETS.filter(w => w.id !== "upi_lite").map(w => (
             <button key={w.id} onClick={() => setWalletId(w.id)} style={{
               flex: 1, padding: "10px 8px", borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
               border: `2px solid ${walletId === w.id ? w.color : "var(--border)"}`,
@@ -852,6 +852,8 @@ export default function Nomad() {
   const [splitExpanded, setSplitExpanded] = useState(false);
   const [calibrateWallet, setCalibrateWallet] = useState(null);
   const [walletStartBal, setWalletStartBal] = useState({ upi_lite: 0, bank: 0, cash: 0 });
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = "info") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2500); };
 
   // LOAD
   useEffect(() => {
@@ -910,17 +912,42 @@ export default function Nomad() {
   const mainBalance = Object.values(walletBal).reduce((s, v) => s + v, 0);
 
   const triggerDance = () => { setLionDancing(true); setTimeout(() => setLionDancing(false), 1800); };
-  const addExpense = (data) => { setExpenses(p => [{ id: uid(), type: "expense", ...data }, ...p]); triggerDance(); };
-  const addIncome = (data) => { setIncomes(p => [{ id: uid(), type: "income", ...data }, ...p]); triggerDance(); };
-  const addTransfer = (data) => { setTransfers(p => [{ id: uid(), type: "transfer", ...data }, ...p]); triggerDance(); };
+
+  const addExpense = (data) => {
+    const w = WALLETS.find(x => x.id === data.walletId);
+    const bal = walletBal[data.walletId] || 0;
+    if (bal < data.amount) { showToast(`Not enough balance in ${w?.name || "wallet"}`, "error"); return false; }
+    setExpenses(p => [{ id: uid(), type: "expense", ...data }, ...p]); triggerDance(); showToast("Expense added", "success"); return true;
+  };
+
+  const addIncome = (data) => {
+    if (data.walletId === "upi_lite") { showToast("UPI Lite is for spending only", "error"); return false; }
+    setIncomes(p => [{ id: uid(), type: "income", ...data }, ...p]); triggerDance(); showToast("Income added", "success"); return true;
+  };
+
+  const addTransfer = (data) => {
+    const w = WALLETS.find(x => x.id === data.fromWallet);
+    const bal = walletBal[data.fromWallet] || 0;
+    if (bal < data.amount) { showToast(`Insufficient balance in ${w?.name || "wallet"}`, "error"); return false; }
+    setTransfers(p => [{ id: uid(), type: "transfer", ...data }, ...p]); triggerDance(); showToast("Transfer successful", "success"); return true;
+  };
 
   const settleSplit = (splitId, walletId) => {
     const split = splits.find(s => s.id === splitId);
     if (!split) return;
+    // "owe" = I pay them → subtract from wallet
+    if (split.direction === "owe") {
+      if (walletId === "upi_lite") { showToast("UPI Lite is for spending only", "error"); return; }
+      const bal = walletBal[walletId] || 0;
+      if (bal < split.amount) { showToast("Not enough balance to settle", "error"); return; }
+    }
+    // "owed" = they pay me → add to wallet (block UPI Lite)
+    if (split.direction === "owed" && walletId === "upi_lite") { showToast("UPI Lite is for spending only", "error"); return; }
     // Create a settlement transaction (carry groupId + eventId if present)
     setSettlements(p => [...p, { id: uid(), type: "settlement", splitName: split.name, amount: split.amount, direction: split.direction, walletId, date: new Date().toISOString().slice(0, 10), ...(split.groupId && { groupId: split.groupId }), ...(split.eventId && { eventId: split.eventId }) }]);
     // Mark split as settled
     setSplits(p => p.map(s => s.id === splitId ? { ...s, settled: true } : s));
+    showToast("Settlement completed", "success");
   };
 
   const deleteItem = (id, type) => {
@@ -1138,6 +1165,12 @@ export default function Nomad() {
       </div>
 
       {calibrateWallet && <CalibrateModal wallet={calibrateWallet} currentBal={walletBal[calibrateWallet.id] || 0} onSave={val => handleCalibrate(calibrateWallet.id, val)} onClose={() => setCalibrateWallet(null)}/>}
+
+      {toast && (
+        <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", zIndex: 300, maxWidth: 340, width: "90%", background: toast.type === "error" ? "#c4736e" : toast.type === "success" ? "#788c5d" : "#6a9bcc", color: "#fff", borderRadius: 12, padding: "12px 18px", fontFamily: "var(--font-heading)", fontSize: 13, fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", textAlign: "center", animation: "fadeIn 0.2s ease" }}>
+          {toast.msg}
+        </div>
+      )}
     </div>
   );
 }
