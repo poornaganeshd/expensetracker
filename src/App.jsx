@@ -489,15 +489,16 @@ function EventBillSplitter({ eventId, categories, onAddExpense, onAddSplit }) {
 
   const submit = () => {
     if (!canSubmit) return;
+    const groupId = uid();
     // 1. Create expense for user's share only
     if (myShare > 0) {
-      onAddExpense({ amount: myShare, categoryId: catId, walletId, note: note || "Bill split — my share", date: new Date().toISOString().slice(0, 10), eventId });
+      onAddExpense({ amount: myShare, categoryId: catId, walletId, note: note || "Bill split — my share", date: new Date().toISOString().slice(0, 10), eventId, groupId });
     }
     // 2. Create split entries for others (they owe me)
     validPeople.forEach(p => {
       const amt = mode === "equal" ? equalPerPerson : (parseFloat(p.amount) || 0);
       if (amt > 0) {
-        onAddSplit({ id: uid(), name: p.name.trim(), amount: amt, direction: "owed", settled: false, eventId });
+        onAddSplit({ id: uid(), name: p.name.trim(), amount: amt, direction: "owed", settled: false, eventId, groupId });
       }
     });
     setStep(3);
@@ -916,8 +917,8 @@ export default function Nomad() {
   const settleSplit = (splitId, walletId) => {
     const split = splits.find(s => s.id === splitId);
     if (!split) return;
-    // Create a settlement transaction
-    setSettlements(p => [...p, { id: uid(), type: "settlement", splitName: split.name, amount: split.amount, direction: split.direction, walletId, date: new Date().toISOString().slice(0, 10) }]);
+    // Create a settlement transaction (carry groupId + eventId if present)
+    setSettlements(p => [...p, { id: uid(), type: "settlement", splitName: split.name, amount: split.amount, direction: split.direction, walletId, date: new Date().toISOString().slice(0, 10), ...(split.groupId && { groupId: split.groupId }), ...(split.eventId && { eventId: split.eventId }) }]);
     // Mark split as settled
     setSplits(p => p.map(s => s.id === splitId ? { ...s, settled: true } : s));
   };
