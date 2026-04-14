@@ -1,378 +1,2225 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import RoutineApp from "./Routine";
-const APP = "NOMAD", CUR = "₹", uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 
-// Supabase config
+/* ============================================================
+   FORM — Daily food & skincare ritual tracker  v6
+   Single-file React JSX. localStorage persistence. Mobile-first.
+   v1 → original
+   v2 → 13-fix rewrite (tab tinting, lion→panda, water+morning, toast,
+         egg cap, food log categories, snack simplify, notes confirm,
+         skin routine editor, log detail, xlsx export, settings reorg)
+   v3 → panda emoji restored, flat food log w/ tags, download DOM fix
+   v4 → export = xlsx only, backup = json only, nuke = single confirm
+   v5 → inline nuke confirmation UI (no confirm() dialog)
+   v6 → progress dots, streak badge, end-of-day card, AM/PM auto-expand,
+         haptic feedback, confirm btn filled, avg water stat, empty state
+   v7 → progress dots UI fix: column layout (dot + label + value), no wrap
+   ============================================================ */
+
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
+
+#nomad-routine {
+  --bg: #f7f5f0;
+  --bg2: #ede9e1;
+  --sf: #ffffff;
+  --bd: rgba(0,0,0,0.08);
+  --bde: rgba(0,0,0,0.14);
+  --tx: rgba(10,12,8,0.90);
+  --txm: rgba(10,12,8,0.55);
+  --txd: rgba(10,12,8,0.32);
+  --green: #639922;
+  --green-sf: #EAF3DE;
+  --green-deep: #3B6D11;
+  --amber: #EF9F27;
+  --amber-sf: #FAEEDA;
+  --amber-deep: #854F0B;
+  --teal: #1D9E75;
+  --teal-sf: #E1F5EE;
+  --teal-deep: #0F6E56;
+  --r: 16px;
+  --rsm: 10px;
+  --rpill: 100px;
+  --font: 'DM Sans', sans-serif;
+  --mono: 'DM Mono', monospace;
+  --food-bg: #FBF6EC;
+  --skin-bg: #F0F8F3;
+}
+#nomad-routine.dark {
+  --bg: #0d1a0f;
+  --bg2: #111f13;
+  --sf: #162019;
+  --bd: rgba(255,255,255,0.08);
+  --bde: rgba(255,255,255,0.14);
+  --tx: rgba(240,245,238,0.90);
+  --txm: rgba(240,245,238,0.50);
+  --txd: rgba(240,245,238,0.28);
+  --green-sf: rgba(99,153,34,0.15);
+  --amber-sf: rgba(239,159,39,0.12);
+  --teal-sf: rgba(29,158,117,0.12);
+  --food-bg: #0f1a0b;
+  --skin-bg: #0c1814;
+}
+
+#nomad-routine * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+#nomad-routine .hd { display: none !important; }
+#nomad-routine .skin-hd .date { display: none !important; }
+#nomad-routine .app {
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--bg);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 76px;
+}
+#nomad-routine .app[data-tab="food"] { background: var(--food-bg); }
+#nomad-routine .app[data-tab="skin"] { background: var(--skin-bg); }
+
+#nomad-routine .screen {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 18px 24px;
+  scrollbar-width: none;
+}
+#nomad-routine .screen::-webkit-scrollbar { display: none; }
+
+#nomad-routine .hd {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 18px;
+}
+#nomad-routine .hd h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+#nomad-routine .hd .sub {
+  font-size: 12px;
+  color: var(--txm);
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#nomad-routine .card {
+  background: var(--sf);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+#nomad-routine .card.done { background: var(--green-sf); border-color: transparent; }
+#nomad-routine .card.skin-done { background: var(--teal-sf); border-color: transparent; }
+#nomad-routine .card.confirmed { background: var(--bg2); }
+
+#nomad-routine .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#nomad-routine .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--txm);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+/* ---- Mascot bubble ---- */
+#nomad-routine .mascot {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--sf);
+  border: 1px solid var(--bd);
+  border-left: 3px solid var(--amber);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+#nomad-routine .mascot.skin { border-left-color: var(--teal); }
+#nomad-routine .mascot .av {
+  width: 28px; height: 28px;
+  background: var(--bg2);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+#nomad-routine .mascot .msg { font-size: 14px; color: var(--tx); line-height: 1.4; padding-top: 4px; }
+
+/* ---- Checkbox ---- */
+#nomad-routine .check {
+  width: 22px; height: 22px;
+  border-radius: 7px;
+  border: 1.5px solid var(--bde);
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+#nomad-routine .check.on {
+  background: var(--green);
+  border-color: var(--green);
+  animation: checkPop 0.25s ease;
+}
+#nomad-routine .check.on.teal { background: var(--teal); border-color: var(--teal); }
+#nomad-routine .check svg { stroke: #fff; stroke-width: 3; fill: none; }
+@keyframes checkPop {
+  0% { transform: scale(0.8); }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+/* ---- Morning water row ---- */
+#nomad-routine .mw-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 4px 2px;
+}
+#nomad-routine .mw-row .txt { flex: 1; font-size: 15px; font-weight: 500; }
+#nomad-routine .mw-input {
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: var(--rsm);
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--tx);
+  width: 70px;
+  outline: none;
+}
+
+/* ---- Water track ---- */
+#nomad-routine .water-big {
+  font-family: var(--mono);
+  font-size: 36px;
+  font-weight: 500;
+  color: var(--amber);
+  letter-spacing: -0.02em;
+  margin-bottom: 2px;
+}
+#nomad-routine .water-big .u { font-size: 18px; color: var(--txm); margin-left: 2px; }
+#nomad-routine .water-target { font-size: 11px; color: var(--txm); font-family: var(--mono); letter-spacing: 0.04em; }
+#nomad-routine .track {
+  display: flex;
+  justify-content: space-between;
+  margin: 16px 0 10px;
+  position: relative;
+}
+#nomad-routine .track-pt {
+  flex: 1;
+  text-align: center;
+  padding: 8px 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--txd);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+#nomad-routine .track-pt.on { color: var(--amber-deep); background: var(--amber-sf); font-weight: 500; }
+#nomad-routine .track-pt:active { transform: scale(0.95); }
+#nomad-routine .prog {
+  height: 6px;
+  background: var(--bg2);
+  border-radius: 100px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+#nomad-routine .prog-fill {
+  height: 100%;
+  background: var(--amber);
+  border-radius: 100px;
+  transition: width 0.3s ease;
+}
+#nomad-routine .prog-fill.teal { background: var(--teal); }
+#nomad-routine .prog-fill.green { background: var(--green); }
+
+/* ---- Stepper ---- */
+#nomad-routine .stepper {
+  display: flex; align-items: center; gap: 10px;
+}
+#nomad-routine .stepper button {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  color: var(--tx);
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font);
+}
+#nomad-routine .stepper button:active { transform: scale(0.92); }
+#nomad-routine .stepper button:disabled { opacity: 0.35; pointer-events: none; }
+#nomad-routine .stepper .val {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 500;
+  min-width: 28px;
+  text-align: center;
+  color: var(--tx);
+}
+
+/* ---- Pills / chips ---- */
+#nomad-routine .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--rpill);
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  font-size: 13px;
+  color: var(--tx);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+#nomad-routine .pill:active { transform: scale(0.96); }
+#nomad-routine .pill.on { background: var(--amber-sf); border-color: var(--amber); color: var(--amber-deep); font-weight: 500; }
+#nomad-routine .pill.on.teal { background: var(--teal-sf); border-color: var(--teal); color: var(--teal-deep); }
+#nomad-routine .pill.on.green { background: var(--green-sf); border-color: var(--green); color: var(--green-deep); }
+#nomad-routine .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+
+#nomad-routine .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--rpill);
+  background: var(--amber-sf);
+  border: 1px solid var(--bd);
+  font-size: 12px;
+  color: var(--amber-deep);
+  font-weight: 500;
+  animation: chipIn 0.25s ease;
+}
+#nomad-routine .chip button {
+  background: none; border: none; padding: 0;
+  color: var(--amber-deep);
+  cursor: pointer; font-size: 14px;
+  line-height: 1;
+}
+@keyframes chipIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- Curd toggle card ---- */
+#nomad-routine .tap-card {
+  padding: 18px;
+  border-radius: var(--r);
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+#nomad-routine .tap-card.on {
+  background: var(--green-sf);
+  border-color: var(--green);
+  color: var(--green-deep);
+}
+#nomad-routine .tap-card.teal.on {
+  background: var(--teal-sf);
+  border-color: var(--teal);
+  color: var(--teal-deep);
+}
+#nomad-routine .tap-card:active { transform: scale(0.98); }
+
+/* ---- Inputs ---- */
+#nomad-routine .inp {
+  width: 100%;
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: var(--rsm);
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--tx);
+  font-family: var(--font);
+  outline: none;
+}
+#nomad-routine .inp:focus { border-color: var(--bde); }
+textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
+input[type=number].inp { -moz-appearance: textfield; }
+input[type=number].inp::-webkit-outer-spin-button,
+input[type=number].inp::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+
+/* ---- Bottom nav ---- */
+#nomad-routine .nav {
+  position: fixed;
+  bottom: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  background: var(--sf);
+  border-top: 1px solid var(--bd);
+  display: flex;
+  padding: 10px 0 18px;
+  z-index: 100;
+}
+#nomad-routine .nav button {
+  flex: 1;
+  background: none; border: none;
+  padding: 6px 0;
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 3px;
+  color: var(--txm);
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+#nomad-routine .nav button svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+#nomad-routine .nav button.active.food { color: var(--amber-deep); }
+#nomad-routine .nav button.active.skin { color: var(--teal-deep); }
+#nomad-routine .nav button.active.log { color: var(--green-deep); }
+#nomad-routine .nav button.active.settings { color: var(--tx); }
+#nomad-routine .nav button:active { transform: scale(0.94); }
+
+/* ---- Skin header ---- */
+#nomad-routine .skin-hd {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px;
+}
+#nomad-routine .skin-hd .date { font-size: 13px; color: var(--txm); font-family: var(--mono); }
+#nomad-routine .phase-badge {
+  background: var(--teal-sf);
+  color: var(--teal-deep);
+  border-radius: var(--rpill);
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--teal);
+}
+
+/* ---- Collapsible card ---- */
+#nomad-routine .coll-hd {
+  display: flex; justify-content: space-between; align-items: center;
+  cursor: pointer;
+}
+#nomad-routine .coll-hd .t { font-weight: 500; font-size: 15px; }
+#nomad-routine .coll-hd .t .ct { color: var(--txm); font-size: 12px; font-weight: 400; margin-left: 6px; }
+#nomad-routine .chev {
+  transition: transform 0.2s;
+  color: var(--txm);
+}
+#nomad-routine .chev.open { transform: rotate(90deg); }
+#nomad-routine .steps {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--bd);
+}
+#nomad-routine .step {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 0;
+}
+#nomad-routine .step .info { flex: 1; }
+#nomad-routine .step .info .name { font-size: 14px; font-weight: 500; }
+#nomad-routine .step .info .kind { font-size: 11px; color: var(--txm); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+#nomad-routine .btn {
+  width: 100%;
+  background: var(--tx);
+  color: var(--bg);
+  border: none;
+  border-radius: var(--rsm);
+  padding: 12px;
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 12px;
+}
+#nomad-routine .btn.teal { background: var(--teal); color: #fff; }
+#nomad-routine .btn.green { background: var(--green); color: #fff; }
+#nomad-routine .btn.amber { background: var(--amber); color: #fff; }
+#nomad-routine .btn:active { transform: scale(0.98); }
+#nomad-routine .btn.ghost {
+  background: var(--bg2);
+  color: var(--tx);
+  border: 1px solid var(--bd);
+}
+#nomad-routine .btn.danger { background: #c23c3c; color: #fff; }
+
+/* ---- Notes confirm ---- */
+#nomad-routine .confirm-btn {
+  width: 100%;
+  background: none;
+  border: 1px solid var(--bd);
+  border-radius: var(--rsm);
+  padding: 10px 12px;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--txm);
+  cursor: pointer;
+  margin-top: 12px;
+  text-align: center;
+}
+#nomad-routine .confirm-btn:hover { background: var(--bg2); }
+#nomad-routine .saved-link {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  color: var(--txm);
+  margin-top: 12px;
+  cursor: pointer;
+  font-family: var(--mono);
+}
+#nomad-routine .saved-link:hover { color: var(--tx); }
+
+/* ---- Free food log categories ---- */
+#nomad-routine .food-cat { margin-bottom: 14px; }
+#nomad-routine .food-cat:last-child { margin-bottom: 0; }
+#nomad-routine .food-cat-lbl {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--txm);
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+#nomad-routine .food-cat .free-list { margin-top: 6px; }
+
+/* ---- Log screen ---- */
+#nomad-routine .stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+#nomad-routine .stat {
+  background: var(--sf);
+  border: 1px solid var(--bd);
+  border-radius: var(--rsm);
+  padding: 12px 10px;
+  text-align: center;
+}
+#nomad-routine .stat .v {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+#nomad-routine .stat .l {
+  font-size: 9px;
+  color: var(--txm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 3px;
+}
+#nomad-routine .stat.green .v { color: var(--green-deep); }
+#nomad-routine .stat.teal .v { color: var(--teal-deep); }
+#nomad-routine .stat.amber .v { color: var(--amber-deep); }
+
+#nomad-routine .cal-hd {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+}
+#nomad-routine .cal-hd .m { font-size: 14px; font-weight: 500; }
+#nomad-routine .cal-hd button {
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--tx);
+  font-size: 14px;
+}
+#nomad-routine .cal {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  animation: monthIn 0.25s ease;
+}
+@keyframes monthIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+#nomad-routine .cal-day-lbl {
+  font-size: 9px;
+  color: var(--txd);
+  text-align: center;
+  font-family: var(--mono);
+  text-transform: uppercase;
+}
+#nomad-routine .cal-cell {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: var(--bg2);
+  border: 1px solid transparent;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--txd);
+  cursor: pointer;
+}
+#nomad-routine .cal-cell.empty { visibility: hidden; }
+#nomad-routine .cal-cell.lvl1 { background: var(--green-sf); color: var(--green-deep); }
+#nomad-routine .cal-cell.lvl2 { background: #B8D68F; color: var(--green-deep); }
+#nomad-routine .cal-cell.lvl3 { background: var(--green); color: #fff; }
+#nomad-routine .cal-cell.lvl4 { background: var(--green-deep); color: #fff; font-weight: 500; }
+#nomad-routine .cal-cell.today { border-color: var(--tx); }
+
+#nomad-routine .sheet {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 150;
+  display: flex; align-items: flex-end;
+  animation: fadeIn 0.2s ease;
+}
+#nomad-routine .sheet-body {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  background: var(--bg);
+  border-radius: 24px 24px 0 0;
+  padding: 22px 20px 26px;
+  max-height: 85vh;
+  overflow-y: auto;
+  animation: slideUp 0.28s ease;
+}
+#nomad-routine .sheet-body::-webkit-scrollbar { display: none; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+#nomad-routine .sheet-hd {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px;
+}
+#nomad-routine .sheet-hd h2 { margin: 0; font-size: 18px; font-weight: 700; }
+#nomad-routine .sheet-hd button {
+  background: var(--bg2); border: none; width: 30px; height: 30px;
+  border-radius: 8px; cursor: pointer; font-size: 16px; color: var(--tx);
+}
+#nomad-routine .sum-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+#nomad-routine .sum-chip {
+  padding: 5px 10px;
+  border-radius: var(--rpill);
+  background: var(--sf);
+  border: 1px solid var(--bd);
+  font-size: 11px;
+  color: var(--tx);
+}
+
+/* ---- Sheet detail ---- */
+#nomad-routine .detail-section { margin-bottom: 16px; }
+#nomad-routine .detail-section-lbl {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  color: var(--txd);
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--bd);
+}
+#nomad-routine .detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  font-size: 12px;
+  padding: 3px 0;
+  color: var(--tx);
+}
+#nomad-routine .detail-row .dk { color: var(--txm); flex-shrink: 0; margin-right: 10px; }
+#nomad-routine .detail-row .dv { text-align: right; color: var(--tx); word-break: break-word; max-width: 65%; }
+
+/* ---- Settings ---- */
+#nomad-routine .sec { margin-bottom: 22px; }
+#nomad-routine .sec h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--txm);
+  font-weight: 500;
+  margin: 0 0 10px;
+  padding: 0 4px;
+}
+#nomad-routine .set-row {
+  background: var(--sf);
+  border: 1px solid var(--bd);
+  border-radius: var(--rsm);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+#nomad-routine .set-row .lbl { font-size: 13px; font-weight: 500; }
+#nomad-routine .set-row .desc { font-size: 11px; color: var(--txm); margin-top: 2px; }
+#nomad-routine .set-row .r { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+
+#nomad-routine .toggle {
+  width: 42px; height: 24px;
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: 100px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+#nomad-routine .toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+#nomad-routine .toggle.on { background: var(--green); border-color: var(--green); }
+#nomad-routine .toggle.on::after { transform: translateX(18px); }
+
+#nomad-routine .seg {
+  display: flex;
+  background: var(--bg2);
+  border-radius: var(--rsm);
+  padding: 3px;
+  gap: 2px;
+}
+#nomad-routine .seg button {
+  flex: 1;
+  padding: 7px 8px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--txm);
+  cursor: pointer;
+  font-family: var(--font);
+  font-weight: 500;
+}
+#nomad-routine .seg button.on { background: var(--sf); color: var(--tx); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+
+#nomad-routine .free-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+/* ---- Skin routine editor ---- */
+#nomad-routine .routine-day-row { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--bd); }
+#nomad-routine .routine-day-row:last-child { border-bottom: none; margin-bottom: 0; }
+#nomad-routine .routine-day-lbl { font-size: 13px; font-weight: 600; color: var(--tx); margin-bottom: 8px; }
+#nomad-routine .routine-sub { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 6px; }
+#nomad-routine .routine-sub-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--txm); font-weight: 500; min-width: 24px; padding-top: 6px;
+}
+#nomad-routine .routine-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; flex: 1; }
+#nomad-routine .routine-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 9px; border-radius: 100px;
+  background: var(--teal-sf); border: 1px solid var(--bd);
+  font-size: 11px; color: var(--teal-deep); font-weight: 500;
+}
+#nomad-routine .routine-chip button {
+  background: none; border: none; padding: 0;
+  color: var(--teal-deep); cursor: pointer; font-size: 13px; line-height: 1;
+}
+#nomad-routine .add-step-btn {
+  display: inline-flex; align-items: center; padding: 4px 9px;
+  border-radius: 100px; background: var(--bg2); border: 1px dashed var(--bd);
+  font-size: 11px; color: var(--txm); cursor: pointer; font-family: var(--font);
+}
+#nomad-routine .product-picker {
+  margin-top: 6px; background: var(--bg); border: 1px solid var(--bd);
+  border-radius: 8px; padding: 8px; display: flex; flex-wrap: wrap; gap: 5px; width: 100%;
+}
+#nomad-routine .product-picker-item {
+  padding: 4px 10px; border-radius: 100px; background: var(--bg2);
+  border: 1px solid var(--bd); font-size: 11px; color: var(--tx); cursor: pointer;
+}
+
+/* ---- Toast animation ---- */
+@keyframes toastPill {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+}
+
+/* ---- Progress dots row ---- */
+#nomad-routine .prog-dots {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--sf);
+  border: 1px solid var(--bd);
+  border-radius: var(--rsm);
+  margin-bottom: 14px;
+}
+#nomad-routine .prog-dot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+#nomad-routine .prog-dot .dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--bg2);
+  border: 1.5px solid var(--bd);
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+#nomad-routine .prog-dot .dot.on { background: var(--green); border-color: var(--green); box-shadow: 0 0 0 3px var(--green-sf); }
+#nomad-routine .prog-dot .dot.on.amber { background: var(--amber); border-color: var(--amber); box-shadow: 0 0 0 3px var(--amber-sf); }
+#nomad-routine .prog-dot .dot.on.teal { background: var(--teal); border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-sf); }
+#nomad-routine .prog-dot .dot-lbl {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--txd);
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+#nomad-routine .prog-dot .dot-val {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--txm);
+  font-weight: 500;
+}
+#nomad-routine .prog-dot-sep { width: 1px; height: 24px; background: var(--bd); flex-shrink: 0; }
+
+/* ---- End of day summary card ---- */
+#nomad-routine .eod-card {
+  background: var(--tx);
+  color: var(--bg);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#nomad-routine .eod-card .eod-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.55;
+  font-weight: 500;
+}
+#nomad-routine .eod-card .eod-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+#nomad-routine .eod-card .eod-item {
+  font-size: 13px;
+  font-family: var(--mono);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+#nomad-routine .eod-card .eod-item .eod-ok { opacity: 1; }
+#nomad-routine .eod-card .eod-item .eod-miss { opacity: 0.38; }
+
+/* ---- Confirm button polish ---- */
+#nomad-routine .confirm-btn {
+  width: 100%;
+  background: var(--green);
+  border: none;
+  border-radius: var(--rsm);
+  padding: 11px 12px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  margin-top: 12px;
+  text-align: center;
+  transition: opacity 0.15s;
+}
+#nomad-routine .confirm-btn:active { opacity: 0.85; }
+#nomad-routine .confirm-btn.teal { background: var(--teal); }
+`;
+
+/* ---------- helpers ---------- */
+const todayKey = () => new Date().toISOString().slice(0, 10);
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const dayOfWeek = (d = new Date()) => DOW[d.getDay()];
+const isAfterNoon = () => new Date().getHours() >= 12;
+
+/* Parse morning water amount string → litres */
+const parseMorningWater = (s) => {
+    if (!s) return 0;
+    const str = s.trim().toLowerCase();
+    const mlMatch = str.match(/^([\d.]+)\s*ml$/);
+    if (mlMatch) return parseFloat(mlMatch[1]) / 1000;
+    const lMatch = str.match(/^([\d.]+)\s*l$/);
+    if (lMatch) return parseFloat(lMatch[1]);
+    const numOnly = parseFloat(str);
+    if (!isNaN(numOnly)) return numOnly < 10 ? numOnly : numOnly / 1000;
+    return 0;
+};
+
+/* Migrate freeFoodLog to flat [{text, tag}] format */
+const migrateFreeFoodLog = (log) => {
+    if (!log) return [];
+    // Already new format: array of objects
+    if (Array.isArray(log) && (log.length === 0 || typeof log[0] === 'object')) return log;
+    // Old format: array of strings
+    if (Array.isArray(log)) return log.map(t => ({ text: t, tag: 'other' }));
+    // v2 categorized object format
+    if (typeof log === 'object') {
+        const result = [];
+        (log.breakfast || []).forEach(t => result.push({ text: t, tag: 'breakfast' }));
+        (log.lunch || []).forEach(t => result.push({ text: t, tag: 'lunch' }));
+        (log.dinner || []).forEach(t => result.push({ text: t, tag: 'dinner' }));
+        (log.other || []).forEach(t => result.push({ text: t, tag: 'other' }));
+        return result;
+    }
+    return [];
+};
+
+const PRODUCT_KEYS = ['cleanser', 'niacinamide', 'sunscreen', 'bhaSerum', 'retinol'];
+const PRODUCT_LABELS = { cleanser: 'Cleanser', niacinamide: 'Niacinamide', sunscreen: 'Sunscreen', bhaSerum: 'BHA serum', retinol: 'Retinol' };
+
+const DEFAULT_ROUTINES = {
+    Mon: { am: ['cleanser', 'niacinamide', 'sunscreen'], pm: ['cleanser', 'retinol'] },
+    Tue: { am: ['cleanser', 'niacinamide', 'sunscreen'], pm: ['cleanser', 'niacinamide', 'bhaSerum'] },
+    Wed: { am: ['cleanser', 'niacinamide', 'sunscreen'], pm: ['cleanser', 'retinol'] },
+    Thu: { am: ['cleanser', 'niacinamide', 'sunscreen'], pm: ['cleanser', 'niacinamide', 'bhaSerum'] },
+    Fri: { am: ['cleanser', 'niacinamide', 'sunscreen'], pm: ['cleanser'] },
+    Sat: { am: ['cleanser', 'niacinamide', 'sunscreen'], pm: ['cleanser', 'niacinamide', 'bhaSerum'] },
+    Sun: { am: ['cleanser', 'niacinamide', 'sunscreen'], pm: ['cleanser', 'retinol'] },
+};
+
+const DEFAULT_DAY = {
+    morningWater: false,
+    morningWaterAmount: '',
+    water: 0,
+    eggs: 0,
+    snack: '',
+    curd: false,
+    amSkinDone: false,
+    pmSkinDone: false,
+    freeFoodLog: [],
+    moodChip: '',       // kept in model for old export compat, not rendered
+    skinFeelChip: '',
+    energyChip: '',
+    skinTodayChip: '',
+    retinolReactionChip: '',
+    notes: '',
+    skinNotes: '',
+    notesConfirmed: false,
+    skinNotesConfirmed: false,
+};
+
+const DEFAULT_CONFIG = {
+    waterTarget: 3.5,
+    eggsTarget: 2,
+    retinolPhase: 1,
+    darkMode: false,
+    showProductNames: true,
+    snackRotation: {
+        Mon: 'Banana',
+        Tue: 'Cucumber + rock salt',
+        Wed: 'Carrot',
+        Thu: 'Banana',
+        Fri: 'Carrot + Cucumber',
+        Sat: 'Guava or Apple',
+        Sun: 'Whatever looks fresh',
+    },
+    snackOptions: ['Banana', 'Carrot', 'Cucumber', 'Guava', 'Apple', 'Pomegranate', 'Papaya', 'Other'],
+    products: {
+        cleanser: 'Barclay Italy SA Face Wash',
+        niacinamide: 'Minimalist Niacinamide 10%',
+        sunscreen: 'Barclay Italy Mineral SPF 50+',
+        bhaSerum: 'Barclay Italy SA Serum',
+        retinol: 'Minimalist Retinol 0.3%',
+    },
+    routines: DEFAULT_ROUTINES,
+};
+
+const loadData = () => {
+    try { return JSON.parse(localStorage.getItem('form_data') || '{}'); } catch { return {}; }
+};
+
+const loadConfig = () => {
+    try {
+        const c = JSON.parse(localStorage.getItem('form_config') || 'null');
+        if (!c) return DEFAULT_CONFIG;
+        const mergedRoutines = Object.fromEntries(
+            Object.entries(DEFAULT_ROUTINES).map(([day, def]) => [
+                day,
+                {
+                    am: c.routines?.[day]?.am || def.am,
+                    pm: c.routines?.[day]?.pm || def.pm,
+                },
+            ])
+        );
+        return {
+            ...DEFAULT_CONFIG,
+            ...c,
+            products: { ...DEFAULT_CONFIG.products, ...(c.products || {}) },
+            snackRotation: { ...DEFAULT_CONFIG.snackRotation, ...(c.snackRotation || {}) },
+            routines: mergedRoutines,
+        };
+    } catch { return DEFAULT_CONFIG; }
+};
+
+// Supabase
 const SB_URL = "https://zatwgngvsemgydaugaqr.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphdHdnbmd2c2VtZ3lkYXVnYXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDQ5MjMsImV4cCI6MjA5MTcyMDkyM30.8fVcKsFiMOABaMsglG0CDqoLJiCfH9jllQrH5raBR9U";
 const sbH = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` };
-const sbGet = async (table) => { const r = await fetch(`${SB_URL}/rest/v1/${table}?select=*`, { headers: sbH }); if (!r.ok) { console.error("sbGet fail", table, r.status); return [] } return r.json() };
-const sbUpsert = async (table, rows) => { const r = await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(rows) }); if (!r.ok) r.text().then(t => console.error("sbUpsert fail", table, r.status, t)); return r };
-const sbDelete = async (table, id) => fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "DELETE", headers: sbH });
-const fmt = n => CUR + Number(n).toLocaleString("en-IN"), mk = d => d.slice(0, 7);
-const ml = k => { const [y, m] = k.split("-"); return new Date(y, m - 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" }) };
-const dl = d => { const t = new Date().toISOString().slice(0, 10), y = new Date(Date.now() - 864e5).toISOString().slice(0, 10); return d === t ? "Today" : d === y ? "Yesterday" : new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) };
-const ls = { fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 6, display: "block", fontFamily: "var(--font-h)", fontWeight: 600 };
-const is = { background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "11px 14px", color: "var(--text)", fontSize: 14, fontFamily: "var(--font-b)", outline: "none", width: "100%", boxSizing: "border-box" };
-const isFix = e => !!(e.note && e.note.endsWith("(recurring)"));
+const sbGetR = async (table, id) => { try { const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}&select=*`, { headers: sbH }); if (!r.ok) return null; const d = await r.json(); return d[0] || null } catch { return null } };
+const sbUpsertR = async (table, row) => { try { await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(row) }) } catch { } };
+const sbDeleteR = async (table, id) => { try { await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "DELETE", headers: sbH }) } catch { } };
 
-const WALLETS = [{ id: "upi_lite", name: "UPI Lite", color: "#00D4FF", neon: "#00E5FF" }, { id: "bank", name: "Bank Account", color: "#34D399", neon: "#6EE7B7" }, { id: "cash", name: "Cash", color: "#FBBF24", neon: "#FDE68A" }];
-const IW = WALLETS.filter(w => w.id !== "upi_lite");
-const DC = [{ id: "food", name: "Food & Drinks", color: "#FF6B35", neon: "#FF9F1C" }, { id: "transport", name: "Transport", color: "#00D4FF", neon: "#00E5FF" }, { id: "rent", name: "Rent & Bills", color: "#A78BFA", neon: "#C4B5FD" }, { id: "entertainment", name: "Entertainment", color: "#F472B6", neon: "#FF8ED4" }, { id: "health", name: "Health", color: "#34D399", neon: "#6EE7B7" }, { id: "coffee", name: "Coffee / Snacks", color: "#FBBF24", neon: "#FDE68A" }, { id: "personal", name: "Personal Care", color: "#E879F9", neon: "#F0ABFC" }];
-const DI = [{ id: "allowance", name: "Allowance", color: "#34D399", neon: "#6EE7B7" }, { id: "gifts", name: "Gifts", color: "#FF6B35", neon: "#FF9F1C" }, { id: "investments", name: "Investments", color: "#00D4FF", neon: "#00E5FF" }];
-const RC = [{ id: "rent", name: "Rent / PG", color: "#A78BFA", neon: "#C4B5FD" }, { id: "emi", name: "EMI", color: "#F472B6", neon: "#FF8ED4" }, { id: "sip", name: "SIP / MF", color: "#34D399", neon: "#6EE7B7" }, { id: "insurance", name: "Insurance", color: "#00D4FF", neon: "#00E5FF" }, { id: "recharge", name: "Phone Recharge", color: "#FBBF24", neon: "#FDE68A" }, { id: "ott", name: "OTT / Subscriptions", color: "#E879F9", neon: "#F0ABFC" }, { id: "utilities", name: "Electricity / Bills", color: "#FF6B35", neon: "#FF9F1C" }, { id: "other_rec", name: "Other", color: "#8A8A9A", neon: "#A0A0B0" }];
+const BANNERS_KEY = 'form_banners';
+const getBanners = () => { try { return JSON.parse(localStorage.getItem(BANNERS_KEY) || '{}'); } catch { return {}; } };
 
-function DI2({ id, accent: A, size: sz = 18 }) {
-    const N = A || "#00E5FF", g = `drop-shadow(0 0 3px ${N}88) drop-shadow(0 0 8px ${N}44)`, p = { viewBox: "0 0 24 24", width: sz, height: sz, fill: "none", style: { filter: g } }, l = { stroke: N, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }, d = { ...l, opacity: 0.4 };
-    switch (id) {
-        case "food": return <svg {...p}><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"{...l} /><path d="M7 2v20"{...l} /><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"{...l} /></svg>;
-        case "transport": return <svg {...p}><rect x="3" y="7" width="18" height="10" rx="2"{...l} /><circle cx="7.5" cy="17" r="2"{...l} /><circle cx="16.5" cy="17" r="2"{...l} /><path d="M5.5 7L7 3h10l1.5 4"{...d} /></svg>;
-        case "rent": return <svg {...p}><path d="M3 10l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"{...l} /><polyline points="9 22 9 13 15 13 15 22"{...d} /></svg>;
-        case "entertainment": return <svg {...p}><rect x="2" y="6" width="20" height="12" rx="2"{...l} /><line x1="6" y1="12" x2="10" y2="12"{...d} /><line x1="8" y1="10" x2="8" y2="14"{...d} /><circle cx="16" cy="10.5" r="1.5" fill={N} stroke="none" opacity="0.7" /><circle cx="18.5" cy="13" r="1.5" fill={N} stroke="none" opacity="0.4" /></svg>;
-        case "health": return <svg {...p}><rect x="4" y="8" width="16" height="13" rx="2"{...l} /><path d="M8 2h8v6H8z"{...d} /><line x1="10" y1="14.5" x2="14" y2="14.5"{...l} /><line x1="12" y1="12.5" x2="12" y2="16.5"{...l} /></svg>;
-        case "coffee": return <svg {...p}><path d="M17 8h1a4 4 0 0 1 0 8h-1"{...d} /><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"{...l} /><line x1="6" y1="2" x2="6" y2="5"{...l} opacity="0.6" /><line x1="10" y1="2" x2="10" y2="5"{...l} opacity="0.6" /><line x1="14" y1="2" x2="14" y2="5"{...l} opacity="0.6" /></svg>;
-        case "personal": return <svg {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"{...l} /><circle cx="12" cy="7" r="4"{...l} /></svg>;
-        case "upi_lite": return <svg {...p}><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"{...l} /></svg>;
-        case "bank": return <svg {...p}><path d="M3 21h18"{...l} /><path d="M3 10h18"{...l} /><path d="M12 2L2 10h20L12 2z"{...l} /><rect x="5" y="10" width="3" height="8"{...d} /><rect x="10.5" y="10" width="3" height="8"{...d} /><rect x="16" y="10" width="3" height="8"{...d} /></svg>;
-        case "cash": return <svg {...p}><rect x="2" y="4" width="20" height="16" rx="2"{...l} /><circle cx="12" cy="12" r="4"{...d} /><circle cx="12" cy="12" r="1.5" fill={N} stroke="none" opacity="0.7" /></svg>;
-        case "allowance": return <svg {...p}><path d="M12 2v20"{...l} /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"{...l} /></svg>;
-        case "gifts": return <svg {...p}><rect x="3" y="8" width="18" height="14" rx="2"{...l} /><path d="M12 8v14"{...d} /><path d="M3 14h18"{...d} /><path d="M7.5 8C6 6.5 6 4 8 3s3.5 2.5 4 5"{...l} /><path d="M16.5 8c1.5-1.5 1.5-4-.5-5s-3.5 2.5-4 5"{...l} /></svg>;
-        case "investments": return <svg {...p}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"{...l} /><polyline points="16 7 22 7 22 13"{...l} /></svg>;
-        case "emi": return <svg {...p}><rect x="2" y="5" width="20" height="14" rx="2"{...l} /><line x1="2" y1="10" x2="22" y2="10"{...d} /><line x1="6" y1="15" x2="10" y2="15"{...d} /></svg>;
-        case "sip": return <svg {...p}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"{...l} /><polyline points="16 7 22 7 22 13"{...l} /></svg>;
-        case "recharge": return <svg {...p}><rect x="5" y="2" width="14" height="20" rx="2"{...l} /><line x1="9" y1="7" x2="15" y2="7"{...d} /><path d="M11 14l-2 4h4l-2 4"{...l} /></svg>;
-        case "ott": return <svg {...p}><rect x="2" y="6" width="20" height="12" rx="2"{...l} /><path d="M8 10l4 4 4-4"{...d} /></svg>;
-        case "utilities": return <svg {...p}><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"{...l} /></svg>;
-        case "other_rec": return <svg {...p}><circle cx="12" cy="12" r="9"{...l} /><line x1="12" y1="8" x2="12" y2="12"{...l} /><circle cx="12" cy="16" r="1" fill={N} stroke="none" /></svg>;
-        default: return <span style={{ fontSize: sz * 0.9 }}>📁</span>
+/* ---------- icons ---------- */
+const Icon = ({ name }) => {
+    const icons = {
+        food: <svg viewBox="0 0 24 24"><path d="M12 3c-4 0-7 3-7 7v1h14v-1c0-4-3-7-7-7zM4 13h16l-1 6a2 2 0 01-2 2H7a2 2 0 01-2-2l-1-6z" /></svg>,
+        skin: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M9 11c0 1 .5 2 1 2M15 11c0 1-.5 2-1 2M9 16c1 1 5 1 6 0" /></svg>,
+        log: <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M8 3v4M16 3v4M4 11h16" /></svg>,
+        settings: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>,
+        check: <svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7" /></svg>,
+        chev: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 6l6 6-6 6" /></svg>,
+    };
+    return icons[name];
+};
+
+/* ---------- Panda messages ---------- */
+const getPandaFoodMessage = (day, config) => {
+    if (!day.morningWater) return "Start with morning water. Before anything else.";
+    if (day.eggs < config.eggsTarget && isAfterNoon()) return "Eggs. Don't skip them.";
+    const mwL = parseMorningWater(day.morningWaterAmount);
+    const total = mwL + day.water;
+    if (total >= config.waterTarget && day.eggs >= config.eggsTarget && day.curd)
+        return "Clean day. That's the standard.";
+    if (total >= config.waterTarget * 0.7) return "Water on track. Keep the pattern.";
+    return "Ritual in progress.";
+};
+
+const getPandaSkinMessage = (day, config) => {
+    const dow = dayOfWeek();
+    const routine = (config.routines && config.routines[dow]) || { am: [], pm: [] };
+    const hasRetinol = routine.pm.includes('retinol');
+    const isPmShort = routine.pm.length <= 1;
+    if (!day.amSkinDone) return "AM routine first. Face wash → Niacinamide → SPF.";
+    if (hasRetinol && !day.pmSkinDone) return "Last step, nothing on top. Let it work.";
+    if (isPmShort && !day.pmSkinDone) return "Rest night. Face wash only.";
+    if (day.amSkinDone && day.pmSkinDone) return "Skin ritual done. Consistent beats perfect.";
+    return "PM routine when ready.";
+};
+
+const PANDA_SRC = "data:image/png;base64,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";
+
+const Panda = ({ msg, mode }) => (
+    <div className={`mascot ${mode === 'skin' ? 'skin' : ''}`}>
+        <div className="av">
+            <img src={PANDA_SRC} alt="mascot" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+        </div>
+        <div className="msg">{msg}</div>
+    </div>
+);
+
+const Check = ({ on, onClick, teal }) => (
+    <div className={`check ${on ? 'on' : ''} ${teal ? 'teal' : ''}`} onClick={onClick}>
+        {on && <Icon name="check" />}
+    </div>
+);
+
+/* ---------- Haptic ---------- */
+const haptic = (ms = 8) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) { } };
+
+/* ---------- Progress dots ---------- */
+const ProgressDots = ({ day, config, mode }) => {
+    const mwL = parseMorningWater(day.morningWaterAmount);
+    const waterTotal = mwL + day.water;
+    const waterOk = waterTotal >= config.waterTarget;
+    const waterPct = Math.min(100, Math.round((waterTotal / config.waterTarget) * 100));
+    const eggsOk = day.eggs >= config.eggsTarget;
+
+    if (mode === 'food') return (
+        <div className="prog-dots">
+            <div className="prog-dot">
+                <div className={`dot ${day.morningWater ? 'on amber' : ''}`} />
+                <div className="dot-lbl">Morning</div>
+                <div className="dot-val">{day.morningWater ? '✓' : '—'}</div>
+            </div>
+            <div className="prog-dot-sep" />
+            <div className="prog-dot">
+                <div className={`dot ${waterOk ? 'on amber' : ''}`} />
+                <div className="dot-lbl">Water</div>
+                <div className="dot-val">{waterPct}%</div>
+            </div>
+            <div className="prog-dot-sep" />
+            <div className="prog-dot">
+                <div className={`dot ${eggsOk ? 'on' : ''}`} />
+                <div className="dot-lbl">Eggs</div>
+                <div className="dot-val">{day.eggs}/{config.eggsTarget}</div>
+            </div>
+            <div className="prog-dot-sep" />
+            <div className="prog-dot">
+                <div className={`dot ${day.curd ? 'on' : ''}`} />
+                <div className="dot-lbl">Curd</div>
+                <div className="dot-val">{day.curd ? '✓' : '—'}</div>
+            </div>
+            <div className="prog-dot-sep" />
+            <div className="prog-dot">
+                <div className={`dot ${day.snack ? 'on' : ''}`} />
+                <div className="dot-lbl">Snack</div>
+                <div className="dot-val">{day.snack ? '✓' : '—'}</div>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="prog-dots">
+            <div className="prog-dot">
+                <div className={`dot ${day.amSkinDone ? 'on teal' : ''}`} />
+                <div className="dot-lbl">AM</div>
+                <div className="dot-val">{day.amSkinDone ? '✓' : '—'}</div>
+            </div>
+            <div className="prog-dot-sep" />
+            <div className="prog-dot">
+                <div className={`dot ${day.pmSkinDone ? 'on teal' : ''}`} />
+                <div className="dot-lbl">PM</div>
+                <div className="dot-val">{day.pmSkinDone ? '✓' : '—'}</div>
+            </div>
+            <div className="prog-dot-sep" />
+            <div className="prog-dot">
+                <div className={`dot ${day.skinTodayChip ? 'on teal' : ''}`} />
+                <div className="dot-lbl">Skin</div>
+                <div className="dot-val">{day.skinTodayChip || '—'}</div>
+            </div>
+            <div className="prog-dot-sep" />
+            <div className="prog-dot">
+                <div className={`dot ${day.skinNotesConfirmed ? 'on teal' : ''}`} />
+                <div className="dot-lbl">Notes</div>
+                <div className="dot-val">{day.skinNotesConfirmed ? '✓' : '—'}</div>
+            </div>
+        </div>
+    );
+};
+
+/* ---------- End of day summary ---------- */
+const EodCard = ({ day, config }) => {
+    const mwL = parseMorningWater(day.morningWaterAmount);
+    const waterTotal = (mwL + day.water).toFixed(1);
+    const waterOk = (mwL + day.water) >= config.waterTarget;
+    const eggsOk = day.eggs >= config.eggsTarget;
+
+    return (
+        <div className="eod-card">
+            <div className="eod-title">Today at a glance</div>
+            <div className="eod-row">
+                <div className="eod-item">
+                    <span className={waterOk ? 'eod-ok' : 'eod-miss'}>💧</span>
+                    <span>{waterTotal}L</span>
+                </div>
+                <div className="eod-item">
+                    <span className={eggsOk ? 'eod-ok' : 'eod-miss'}>🥚</span>
+                    <span>{day.eggs}/{config.eggsTarget}</span>
+                </div>
+                <div className="eod-item">
+                    <span className={day.curd ? 'eod-ok' : 'eod-miss'}>🥛</span>
+                    <span>{day.curd ? 'Curd ✓' : 'No curd'}</span>
+                </div>
+                <div className="eod-item">
+                    <span className={day.snack ? 'eod-ok' : 'eod-miss'}>🍌</span>
+                    <span>{day.snack || 'No snack'}</span>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/* ============================================================
+   FOOD SCREEN
+   ============================================================ */
+const FoodScreen = ({ day, update, config, onComplete, streak }) => {
+    const suggested = config.snackRotation[dayOfWeek()] || 'Banana';
+    const waterPts = [0.5, 1, 1.5, 2, 2.5, 3, 3.5];
+    const mwL = parseMorningWater(day.morningWaterAmount);
+    const foodLog = migrateFreeFoodLog(day.freeFoodLog);
+    const isEvening = new Date().getHours() >= 20;
+
+    const prevComplete = useRef(false);
+    useEffect(() => {
+        const complete = day.morningWater && day.eggs >= config.eggsTarget && day.curd;
+        if (complete && !prevComplete.current) onComplete('food');
+        prevComplete.current = complete;
+    }, [day.morningWater, day.eggs, day.curd, config.eggsTarget]);
+
+    const [logInput, setLogInput] = useState('');
+    const [logTag, setLogTag] = useState('breakfast');
+    const LOG_TAGS = ['breakfast', 'lunch', 'dinner', 'snack', 'other'];
+
+    const addEntry = () => {
+        const t = logInput.trim();
+        if (!t) return;
+        haptic();
+        update({ freeFoodLog: [...foodLog, { text: t, tag: logTag }] });
+        setLogInput('');
+    };
+
+    const removeEntry = (i) => {
+        haptic(4);
+        update({ freeFoodLog: foodLog.filter((_, idx) => idx !== i) });
+    };
+
+    const totalWater = (mwL + day.water).toFixed(1);
+
+    return (
+        <div className="screen">
+            <div className="hd">
+                <h1>NOMAD</h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {streak > 0 && (
+                        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', background: 'var(--amber-sf)', color: 'var(--amber-deep)', padding: '3px 8px', borderRadius: 100, border: '1px solid var(--amber)', fontWeight: 500 }}>
+                            🔥 {streak}
+                        </div>
+                    )}
+                    <div className="sub">{dayOfWeek()} · {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</div>
+                </div>
+            </div>
+
+            <ProgressDots day={day} config={config} mode="food" />
+            <Panda msg={getPandaFoodMessage(day, config)} mode="food" />
+
+            {/* Morning water */}
+            <div className={`card ${day.morningWater ? 'done' : ''}`}>
+                <div className="label">01 · Morning water</div>
+                <div className="mw-row">
+                    <Check on={day.morningWater} onClick={() => { haptic(); update({ morningWater: !day.morningWater }); }} />
+                    <div className="txt">First glass of the day</div>
+                    <input
+                        className="mw-input"
+                        placeholder="700ml"
+                        value={day.morningWaterAmount}
+                        onChange={(e) => update({ morningWaterAmount: e.target.value })}
+                    />
+                </div>
+            </div>
+
+            {/* Water total */}
+            <div className="card">
+                <div className="label">02 · Water total</div>
+                <div className="water-big">{totalWater}<span className="u">L</span></div>
+                <div className="water-target">
+                    Target · {config.waterTarget}L
+                    {mwL > 0 && <span style={{ marginLeft: 8, color: 'var(--txd)' }}>{mwL.toFixed(2)}L from morning</span>}
+                </div>
+                <div className="track">
+                    {waterPts.filter(p => p <= config.waterTarget + 0.01).map((p) => {
+                        const shown = (mwL + p).toFixed(1);
+                        return (
+                            <div
+                                key={p}
+                                className={`track-pt ${Math.abs(day.water - p) < 0.01 ? 'on' : ''}`}
+                                onClick={() => update({ water: day.water === p ? 0 : p })}
+                            >
+                                {shown}L
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="prog">
+                    <div className="prog-fill" style={{ width: `${Math.min(100, ((mwL + day.water) / config.waterTarget) * 100)}%` }} />
+                </div>
+            </div>
+
+            {/* Eggs */}
+            <div className={`card ${day.eggs >= config.eggsTarget ? 'done' : ''}`}>
+                <div className="label">03 · Eggs</div>
+                <div className="row">
+                    <div>
+                        <div style={{ fontSize: 14, fontWeight: 500 }}>Protein base</div>
+                        <div style={{ fontSize: 11, color: 'var(--txm)', marginTop: 2 }}>Target · {config.eggsTarget}</div>
+                    </div>
+                    <div className="stepper">
+                        <button onClick={() => update({ eggs: Math.max(0, day.eggs - 1) })}>−</button>
+                        <div className="val">{day.eggs}</div>
+                        <button disabled={day.eggs >= config.eggsTarget} onClick={() => update({ eggs: day.eggs + 1 })}>+</button>
+                        {day.eggs >= config.eggsTarget && <Check on={true} />}
+                    </div>
+                </div>
+            </div>
+
+            {/* Snack — simplified, no override */}
+            <div className="card">
+                <div className="label">04 · Evening snack</div>
+                <div style={{ fontSize: 12, color: 'var(--txm)', marginBottom: 10 }}>
+                    Today's pick · <span style={{ color: 'var(--tx)', fontWeight: 500 }}>{suggested}</span>
+                </div>
+                <div
+                    className={`tap-card ${day.snack === suggested ? 'on' : ''}`}
+                    onClick={() => { haptic(); update({ snack: day.snack === suggested ? '' : suggested }); }}
+                >
+                    {day.snack === suggested ? `✓ ${suggested} logged` : `Tap to log ${suggested}`}
+                </div>
+            </div>
+
+            {/* Curd */}
+            <div className="card">
+                <div className="label">05 · Curd</div>
+                <div
+                    className={`tap-card ${day.curd ? 'on' : ''}`}
+                    onClick={() => { haptic(); update({ curd: !day.curd }); }}
+                >
+                    {day.curd ? '✓ Curd logged' : 'Tap when done'}
+                </div>
+            </div>
+
+            {/* Free food log — flat running log with tags */}
+            <div className="card">
+                <div className="label">06 · Free food log</div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                    {LOG_TAGS.map(t => (
+                        <div
+                            key={t}
+                            className={`pill ${logTag === t ? 'on' : ''}`}
+                            style={{ padding: '5px 10px', fontSize: 12 }}
+                            onClick={() => setLogTag(t)}
+                        >
+                            {t[0].toUpperCase() + t.slice(1)}
+                        </div>
+                    ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                        className="inp"
+                        placeholder="What did you eat?"
+                        value={logInput}
+                        onChange={(e) => setLogInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') addEntry(); }}
+                        style={{ flex: 1 }}
+                    />
+                    <button
+                        className="btn"
+                        style={{ width: 'auto', marginTop: 0, padding: '0 14px', fontSize: 13 }}
+                        onClick={addEntry}
+                    >Add</button>
+                </div>
+                {foodLog.length > 0 && (
+                    <div className="free-list" style={{ marginTop: 10 }}>
+                        {foodLog.map((entry, i) => (
+                            <div key={i} className="chip" style={{ background: 'var(--amber-sf)' }}>
+                                <span style={{ fontSize: 10, opacity: 0.7, marginRight: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{entry.tag}</span>
+                                · {entry.text}
+                                <button onClick={() => removeEntry(i)}>×</button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Notes — no mood, with confirm */}
+            <div className={`card ${day.notesConfirmed ? 'confirmed' : ''}`}>
+                <div className="label">07 · Notes</div>
+                <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Skin feel</div>
+                <div className="pills" style={{ marginBottom: 10, opacity: day.notesConfirmed ? 0.6 : 1 }}>
+                    {['oily', 'normal', 'dry'].map((k) => (
+                        <div key={k} className={`pill ${day.skinFeelChip === k ? 'on' : ''}`}
+                            onClick={() => !day.notesConfirmed && update({ skinFeelChip: day.skinFeelChip === k ? '' : k })}>
+                            {k[0].toUpperCase() + k.slice(1)}
+                        </div>
+                    ))}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Energy</div>
+                <div className="pills" style={{ marginBottom: 12, opacity: day.notesConfirmed ? 0.6 : 1 }}>
+                    {['high', 'medium', 'low'].map((k) => (
+                        <div key={k} className={`pill ${day.energyChip === k ? 'on' : ''}`}
+                            onClick={() => !day.notesConfirmed && update({ energyChip: day.energyChip === k ? '' : k })}>
+                            {k[0].toUpperCase() + k.slice(1)}
+                        </div>
+                    ))}
+                </div>
+                <textarea
+                    className="inp"
+                    placeholder="Anything else..."
+                    value={day.notes}
+                    readOnly={day.notesConfirmed}
+                    onChange={(e) => !day.notesConfirmed && update({ notes: e.target.value })}
+                />
+                {!day.notesConfirmed
+                    ? <button className="confirm-btn" onClick={() => { haptic(); update({ notesConfirmed: true }); }}>Confirm notes</button>
+                    : <span className="saved-link" onClick={() => update({ notesConfirmed: false })}>✓ Saved · Edit</span>
+                }
+            </div>
+        </div>
+    );
+};
+
+/* ============================================================
+   SKIN SCREEN
+   ============================================================ */
+const SkinScreen = ({ day, update, config, onComplete, streak }) => {
+    const dow = dayOfWeek();
+    const routine = (config.routines && config.routines[dow]) || { am: ['cleanser', 'niacinamide', 'sunscreen'], pm: ['cleanser'] };
+
+    const [amOpen, setAmOpen] = useState(!day.amSkinDone);
+    const [pmOpen, setPmOpen] = useState(day.amSkinDone && !day.pmSkinDone);
+    const [amSteps, setAmSteps] = useState([false, false, false, false, false]);
+    const [pmSteps, setPmSteps] = useState([false, false, false, false, false]);
+
+    const phaseLabel = { 1: 'Phase 1 · 2×/wk', 2: 'Phase 2 · 3×/wk', 3: 'Phase 3 · nightly' }[config.retinolPhase];
+
+    const amStepList = routine.am.map(k => ({ key: k, name: config.products[k] || k, kind: PRODUCT_LABELS[k] || k }));
+    const pmStepList = routine.pm.map(k => ({ key: k, name: config.products[k] || k, kind: PRODUCT_LABELS[k] || k }));
+
+    const amLabel = `Morning routine · ${routine.am.length} step${routine.am.length !== 1 ? 's' : ''}`;
+    const pmLabel = `Evening routine · ${routine.pm.length} step${routine.pm.length !== 1 ? 's' : ''}`;
+
+    const prevComplete = useRef(false);
+    useEffect(() => {
+        const complete = day.amSkinDone && day.pmSkinDone;
+        if (complete && !prevComplete.current) onComplete('skin');
+        prevComplete.current = complete;
+    }, [day.amSkinDone, day.pmSkinDone]);
+
+    const toggleAmStep = (i) => {
+        const next = [...amSteps]; next[i] = !next[i]; setAmSteps(next);
+        if (next.slice(0, amStepList.length).every(Boolean)) update({ amSkinDone: true });
+    };
+    const togglePmStep = (i) => {
+        const next = [...pmSteps]; next[i] = !next[i]; setPmSteps(next);
+        if (next.slice(0, pmStepList.length).every(Boolean)) update({ pmSkinDone: true });
+    };
+
+    return (
+        <div className="screen">
+            <div className="hd">
+                <h1>NOMAD</h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {streak > 0 && (
+                        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', background: 'var(--teal-sf)', color: 'var(--teal-deep)', padding: '3px 8px', borderRadius: 100, border: '1px solid var(--teal)', fontWeight: 500 }}>
+                            🔥 {streak}
+                        </div>
+                    )}
+                    <div className="sub">{dow} · {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</div>
+                </div>
+            </div>
+
+            <div className="skin-hd">
+                <div className="date">Routine today</div>
+                <div className="phase-badge">{phaseLabel}</div>
+            </div>
+
+            <ProgressDots day={day} config={config} mode="skin" />
+            <Panda msg={getPandaSkinMessage(day, config)} mode="skin" />
+
+            {/* AM Card */}
+            <div className={`card ${day.amSkinDone ? 'skin-done' : ''}`}>
+                <div className="coll-hd" onClick={() => setAmOpen(!amOpen)}>
+                    <div className="t">
+                        {day.amSkinDone && '✓ '}{amLabel.split(' · ')[0]}<span className="ct">{amLabel.split(' · ')[1]}</span>
+                    </div>
+                    <div className={`chev ${amOpen ? 'open' : ''}`}><Icon name="chev" /></div>
+                </div>
+                {amOpen && (
+                    <div className="steps">
+                        {amStepList.map((s, i) => (
+                            <div key={i} className="step">
+                                <Check on={amSteps[i] || day.amSkinDone} teal onClick={() => toggleAmStep(i)} />
+                                <div className="info">
+                                    <div className="name">{config.showProductNames ? s.name : s.kind}</div>
+                                    <div className="kind">{s.kind}</div>
+                                </div>
+                            </div>
+                        ))}
+                        {!day.amSkinDone && (
+                            <button className="btn teal" onClick={() => { haptic(10); update({ amSkinDone: true }); setAmSteps([true, true, true, true, true]); }}>
+                                Mark AM done
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* PM Card */}
+            <div className={`card ${day.pmSkinDone ? 'skin-done' : ''}`}>
+                <div className="coll-hd" onClick={() => setPmOpen(!pmOpen)}>
+                    <div className="t">
+                        {day.pmSkinDone && '✓ '}{pmLabel.split(' · ')[0]}<span className="ct">{pmLabel.split(' · ')[1]}</span>
+                    </div>
+                    <div className={`chev ${pmOpen ? 'open' : ''}`}><Icon name="chev" /></div>
+                </div>
+                {pmOpen && (
+                    <div className="steps">
+                        {pmStepList.map((s, i) => (
+                            <div key={i} className="step">
+                                <Check on={pmSteps[i] || day.pmSkinDone} teal onClick={() => togglePmStep(i)} />
+                                <div className="info">
+                                    <div className="name">{config.showProductNames ? s.name : s.kind}</div>
+                                    <div className="kind">{s.kind}</div>
+                                </div>
+                            </div>
+                        ))}
+                        {!day.pmSkinDone && (
+                            <button className="btn teal" onClick={() => { haptic(10); update({ pmSkinDone: true }); setPmSteps([true, true, true, true, true]); }}>
+                                Mark PM done
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Skin notes — with confirm */}
+            <div className={`card ${day.skinNotesConfirmed ? 'confirmed' : ''}`}>
+                <div className="label">Skin notes</div>
+                <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Skin today</div>
+                <div className="pills" style={{ marginBottom: 10, opacity: day.skinNotesConfirmed ? 0.6 : 1 }}>
+                    {['clear', 'breakouts', 'purging', 'oily', 'dry'].map((k) => (
+                        <div key={k} className={`pill ${day.skinTodayChip === k ? 'on teal' : ''}`}
+                            onClick={() => !day.skinNotesConfirmed && update({ skinTodayChip: day.skinTodayChip === k ? '' : k })}>
+                            {k[0].toUpperCase() + k.slice(1)}
+                        </div>
+                    ))}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Retinol reaction</div>
+                <div className="pills" style={{ marginBottom: 12, opacity: day.skinNotesConfirmed ? 0.6 : 1 }}>
+                    {[['none', 'None'], ['mild', 'Mild dryness'], ['irritation', 'Irritation']].map(([k, l]) => (
+                        <div key={k} className={`pill ${day.retinolReactionChip === k ? 'on teal' : ''}`}
+                            onClick={() => !day.skinNotesConfirmed && update({ retinolReactionChip: day.retinolReactionChip === k ? '' : k })}>{l}</div>
+                    ))}
+                </div>
+                <textarea
+                    className="inp"
+                    placeholder="Anything else about skin..."
+                    value={day.skinNotes}
+                    readOnly={day.skinNotesConfirmed}
+                    onChange={(e) => !day.skinNotesConfirmed && update({ skinNotes: e.target.value })}
+                />
+                {!day.skinNotesConfirmed
+                    ? <button className="confirm-btn teal" onClick={() => { haptic(); update({ skinNotesConfirmed: true }); }}>Confirm notes</button>
+                    : <span className="saved-link" onClick={() => update({ skinNotesConfirmed: false })}>✓ Saved · Edit</span>
+                }
+            </div>
+        </div>
+    );
+};
+
+/* ============================================================
+   LOG SCREEN
+   ============================================================ */
+const LogScreen = ({ allData, config }) => {
+    const [monthOffset, setMonthOffset] = useState(0);
+    const [activeDay, setActiveDay] = useState(null);
+    const [exported, setExported] = useState(false);
+
+    const viewDate = useMemo(() => {
+        const d = new Date();
+        d.setDate(1);
+        d.setMonth(d.getMonth() + monthOffset);
+        return d;
+    }, [monthOffset]);
+
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const monthName = viewDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayOfWeek = new Date(year, month, 1).getDay();
+
+    const dayLevel = (d) => {
+        if (!d) return 0;
+        let pts = 0;
+        if (d.morningWater) pts++;
+        const mwL = parseMorningWater(d.morningWaterAmount);
+        if ((mwL + (d.water || 0)) >= config.waterTarget) pts++;
+        if ((d.eggs || 0) >= config.eggsTarget) pts++;
+        if (d.curd) pts++;
+        if (d.amSkinDone) pts++;
+        if (d.pmSkinDone) pts++;
+        if (pts >= 6) return 4;
+        if (pts >= 4) return 3;
+        if (pts >= 2) return 2;
+        if (pts >= 1) return 1;
+        const log = migrateFreeFoodLog(d.freeFoodLog);
+        if (d.snack || log.length || d.notes || d.skinNotes) return 1;
+        return 0;
+    };
+
+    const streak = useMemo(() => {
+        let s = 0;
+        const d = new Date();
+        while (true) {
+            const key = d.toISOString().slice(0, 10);
+            const rec = allData[key];
+            if (rec && dayLevel(rec) > 0) { s++; d.setDate(d.getDate() - 1); }
+            else break;
+        }
+        return s;
+    }, [allData, config]);
+
+    const daysTrackedThisMonth = useMemo(() => {
+        const now = new Date();
+        let c = 0;
+        for (const k in allData) {
+            const d = new Date(k + 'T12:00:00');
+            if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && dayLevel(allData[k]) > 0) c++;
+        }
+        return c;
+    }, [allData, config]);
+
+    const completionPct = useMemo(() => {
+        const now = new Date();
+        const daysSoFar = now.getDate();
+        let full = 0;
+        for (let i = 1; i <= daysSoFar; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth(), i);
+            const key = d.toISOString().slice(0, 10);
+            if (allData[key] && dayLevel(allData[key]) >= 4) full++;
+        }
+        return Math.round((full / daysSoFar) * 100);
+    }, [allData, config]);
+
+    const avgWater = useMemo(() => {
+        const now = new Date();
+        let total = 0, count = 0;
+        for (let i = 1; i <= now.getDate(); i++) {
+            const k = new Date(now.getFullYear(), now.getMonth(), i).toISOString().slice(0, 10);
+            const rec = allData[k];
+            if (rec) {
+                const mwL = parseMorningWater(rec.morningWaterAmount);
+                total += mwL + (rec.water || 0);
+                count++;
+            }
+        }
+        return count > 0 ? (total / count).toFixed(1) : '—';
+    }, [allData]);
+
+    const cells = [];
+    for (let i = 0; i < firstDayOfWeek; i++) cells.push({ empty: true, key: `e${i}` });
+    for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        const key = date.toISOString().slice(0, 10);
+        const rec = allData[key];
+        const lvl = dayLevel(rec);
+        const isToday = key === todayKey();
+        cells.push({ d, key, lvl, isToday, rec });
     }
-}
 
-const TIPS = ["Track every chai! Small spends add up.", "Saving ₹50/day = ₹1500/month!", "Review your week every Sunday!", "Needs vs wants — ask first!", "You're doing great!", "Set a weekly food budget!", "Unsubscribe unused stuff!", "Cook at home more!"];
-const LH = ["Roarrr! Saving well!", "Budget king!", "Income > spending!", "Proud of you!", "Wallet smiling!"];
-const LS = ["Spending > income…", "Tighten the belt.", "Slow down a bit.", "Cut one expense!", "Ramen week? Got this."];
+    const loadXLSX = () => new Promise((resolve, reject) => {
+        if (window.XLSX) return resolve(window.XLSX);
+        const s = document.createElement('script');
+        s.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+        s.onload = () => resolve(window.XLSX);
+        s.onerror = reject;
+        document.head.appendChild(s);
+    });
 
-function Lion({ mood, dancing }) {
-    const [b, sB] = useState(false); useEffect(() => { if (!dancing) { sB(false); return } sB(true); const t = setTimeout(() => sB(false), 1600); return () => clearTimeout(t) }, [dancing]); const m = mood === "happy" ? "#E07A5F" : "#999", f = "#fae6c8";
-    return <svg viewBox="0 0 80 80" width="56" height="56" style={{ transition: "transform 0.2s", transform: b ? "translateY(-6px) rotate(-5deg)" : "none", animation: b ? "ld 0.3s ease infinite alternate" : "none" }}><circle cx="40" cy="40" r="32" fill={m} opacity="0.9" /><circle cx="20" cy="25" r="10" fill={m} opacity="0.7" /><circle cx="60" cy="25" r="10" fill={m} opacity="0.7" /><circle cx="15" cy="42" r="9" fill={m} opacity="0.6" /><circle cx="65" cy="42" r="9" fill={m} opacity="0.6" /><circle cx="24" cy="60" r="8" fill={m} opacity="0.5" /><circle cx="56" cy="60" r="8" fill={m} opacity="0.5" /><circle cx="40" cy="42" r="22" fill={f} />{mood === "happy" ? <><path d="M30 38Q33 34 36 38" stroke="#141413" strokeWidth="2.5" fill="none" strokeLinecap="round" /><path d="M44 38Q47 34 50 38" stroke="#141413" strokeWidth="2.5" fill="none" strokeLinecap="round" /></> : <><circle cx="33" cy="37" r="3" fill="#141413" /><circle cx="47" cy="37" r="3" fill="#141413" /></>}<ellipse cx="40" cy="45" rx="4" ry="3" fill={mood === "happy" ? "#c4736e" : "#999"} />{mood === "happy" ? <path d="M34 49Q40 55 46 49" stroke="#141413" strokeWidth="1.8" fill="none" strokeLinecap="round" /> : <path d="M34 52Q40 48 46 52" stroke="#141413" strokeWidth="1.8" fill="none" strokeLinecap="round" />}<circle cx="22" cy="22" r="6" fill={f} /><circle cx="58" cy="22" r="6" fill={f} /><circle cx="22" cy="22" r="3" fill="#f0c4b0" /><circle cx="58" cy="22" r="3" fill="#f0c4b0" /></svg>
-}
+    const exportData = async () => {
+        // XLSX only
+        try {
+            const XLSX = await loadXLSX();
+            const wb = XLSX.utils.book_new();
 
-function LionM({ balance: bal, dancing }) {
-    const [msg, sM] = useState(""), mood = bal >= 0 ? "happy" : "sad"; useEffect(() => { const p = Math.random() < 0.5 ? TIPS : (mood === "happy" ? LH : LS); sM(p[Math.floor(Math.random() * p.length)]) }, [bal, mood]);
-    return <div style={{ display: "flex", alignItems: "flex-end", gap: 12, padding: "12px 0" }}><Lion mood={mood} dancing={dancing} /><div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px 14px 14px 4px", padding: "10px 14px", fontSize: 13, color: "var(--ts)", maxWidth: 220, fontFamily: "var(--font-b)", lineHeight: 1.5 }}>{msg}</div></div>
-}
+            // Daily sheet
+            const hdr = ['Date', 'Day', 'Water (L)', 'Water target', 'Morning water', 'Eggs', 'Eggs target', 'Curd', 'Snack', 'Breakfast', 'Lunch', 'Dinner', 'Other food', 'Skin feel', 'Energy', 'AM skin', 'PM skin', 'AM products', 'PM products', 'Skin today', 'Retinol reaction', 'Notes', 'Skin notes'];
+            const rows = [hdr];
+            Object.keys(allData).sort().forEach((k) => {
+                const d = allData[k];
+                const dow2 = dayOfWeek(new Date(k + 'T12:00:00'));
+                const mwL = parseMorningWater(d.morningWaterAmount);
+                const log = migrateFreeFoodLog(d.freeFoodLog);
+                const r2 = (config.routines && config.routines[dow2]) || { am: [], pm: [] };
+                rows.push([
+                    k, dow2,
+                    parseFloat((mwL + (d.water || 0)).toFixed(2)),
+                    config.waterTarget,
+                    d.morningWaterAmount || '',
+                    d.eggs || 0, config.eggsTarget,
+                    d.curd ? 'yes' : 'no', d.snack || '',
+                    log.filter(e => e.tag === 'breakfast').map(e => e.text).join('; '),
+                    log.filter(e => e.tag === 'lunch').map(e => e.text).join('; '),
+                    log.filter(e => e.tag === 'dinner').map(e => e.text).join('; '),
+                    log.filter(e => e.tag === 'snack' || e.tag === 'other').map(e => e.text).join('; '),
+                    d.skinFeelChip || '', d.energyChip || '',
+                    d.amSkinDone ? 'yes' : 'no', d.pmSkinDone ? 'yes' : 'no',
+                    r2.am.map(pk => config.products[pk] || pk).join(', '),
+                    r2.pm.map(pk => config.products[pk] || pk).join(', '),
+                    d.skinTodayChip || '', d.retinolReactionChip || '',
+                    d.notes || '', d.skinNotes || '',
+                ]);
+            });
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Daily');
 
-function Chart({ expenses: ex, incomes: inc, months: ms }) {
-    if (ms.length < 1) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>Add transactions to see trends</p>;
-    const gd = m => ({ i: inc.filter(x => mk(x.date) === m).reduce((s, x) => s + x.amount, 0), e: ex.filter(x => mk(x.date) === m).reduce((s, x) => s + x.amount, 0) });
-    const data = ms.map(gd), mx = Math.max(...data.flatMap(d => [d.i, d.e]), 1), w = 320, h = 150, px = 48, py = 16, gw = w - px * 2, gh = h - py * 2;
-    const tX = i => px + (ms.length === 1 ? gw / 2 : (i / (ms.length - 1)) * gw), tY = v => py + gh - (v / mx) * gh, mp = k => data.map((d, i) => `${i === 0 ? "M" : "L"}${tX(i)},${tY(d[k])}`).join(" ");
-    const legendY = h + 40;
-    return <svg viewBox={`0 0 ${w} ${h + 52}`} width="100%" style={{ display: "block" }}>{[0, 0.5, 1].map((f, i) => <g key={i}><line x1={px} x2={w - px} y1={tY(mx * f)} y2={tY(mx * f)} stroke="var(--border)" strokeDasharray="3 3" /><text x={2} y={tY(mx * f) + 4} fill="var(--muted)" fontSize={9} fontFamily="var(--font-h)">{fmt(Math.round(mx * f))}</text></g>)}
-        <path d={`${mp("i")} L${tX(data.length - 1)},${h - py} L${tX(0)},${h - py} Z`} fill="#6BAA75" opacity="0.08" />
-        <path d={`${mp("e")} L${tX(data.length - 1)},${h - py} L${tX(0)},${h - py} Z`} fill="#E07A5F" opacity="0.08" />
-        <path d={mp("i")} fill="none" stroke="#6BAA75" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-        <path d={mp("e")} fill="none" stroke="#E07A5F" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-        {data.map((d, i) => <g key={i}><circle cx={tX(i)} cy={tY(d.i)} r={4} fill="var(--card)" stroke="#6BAA75" strokeWidth={2} /><circle cx={tX(i)} cy={tY(d.e)} r={4} fill="var(--card)" stroke="#E07A5F" strokeWidth={2} /><text x={tX(i)} y={h + 22} textAnchor="middle" fill="var(--muted)" fontSize={9} fontFamily="var(--font-h)">{ml(ms[i])}</text></g>)}
-        <g transform={`translate(${w / 2 - 52},${legendY})`}><circle cx={0} cy={5} r={4} fill="#6BAA75" /><text x={10} y={9} fill="var(--muted)" fontSize={10} fontFamily="var(--font-h)">Income</text><circle cx={72} cy={5} r={4} fill="#E07A5F" /><text x={82} y={9} fill="var(--muted)" fontSize={10} fontFamily="var(--font-h)">Spent</text></g>
-    </svg>
-}
+            // Config sheet
+            const cfgRows = [['Key', 'Value']];
+            cfgRows.push(['waterTarget', config.waterTarget], ['eggsTarget', config.eggsTarget], ['retinolPhase', config.retinolPhase], ['showProductNames', config.showProductNames]);
+            Object.entries(config.products || {}).forEach(([k, v]) => cfgRows.push([`product.${k}`, v]));
+            Object.entries(config.snackRotation || {}).forEach(([k, v]) => cfgRows.push([`snack.${k}`, v]));
+            Object.entries(config.routines || {}).forEach(([day, r]) => {
+                cfgRows.push([`routine.${day}.am`, r.am.join(', ')]);
+                cfgRows.push([`routine.${day}.pm`, r.pm.join(', ')]);
+            });
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cfgRows), 'Config');
 
-function Heatmap({ expenses: ex }) {
-    const today = new Date(), [vY, sY] = useState(today.getFullYear()), [vM, sM] = useState(today.getMonth()); const goB = () => { if (vM === 0) { sM(11); sY(y => y - 1) } else sM(m => m - 1) }; const goF = () => { if (vY === today.getFullYear() && vM === today.getMonth()) return; if (vM === 11) { sM(0); sY(y => y + 1) } else sM(m => m + 1) }; const iC = vY === today.getFullYear() && vM === today.getMonth();
-    const fd = new Date(vY, vM, 1).getDay(), dim = new Date(vY, vM + 1, 0).getDate(), mn = new Date(vY, vM).toLocaleDateString("en-US", { month: "long", year: "numeric" }), pfx = `${vY}-${String(vM + 1).padStart(2, "0")}`;
-    const dt = {}; ex.forEach(e => { if (e.date.startsWith(pfx)) dt[e.date] = (dt[e.date] || 0) + e.amount }); const mx = Math.max(...Object.values(dt), 1), mt = Object.values(dt).reduce((s, v) => s + v, 0), ad = Object.keys(dt).length;
-    const gc = a => { if (!a) return "var(--border)"; const r = a / mx; return r < 0.25 ? "#6BAA75" : r < 0.5 ? "#FBBF24" : r < 0.75 ? "#E07A5F" : "#D4726A" };
-    const cells = []; for (let i = 0; i < fd; i++)cells.push(<div key={`e${i}`} style={{ width: 36, height: 36 }} />); for (let d = 1; d <= dim; d++) { const ds = `${pfx}-${String(d).padStart(2, "0")}`, a = dt[ds] || 0, isT = iC && d === today.getDate(); cells.push(<div key={d} style={{ width: 36, height: 36, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: gc(a), color: a ? "#fff" : "var(--muted)", fontSize: 11, fontFamily: "var(--font-h)", fontWeight: isT ? 700 : 500, border: isT ? "2px solid var(--text)" : "2px solid transparent" }}>{d}</div>) }
-    const nb = { background: "none", border: "1px solid var(--border)", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", fontSize: 14 };
-    return <div style={{ ...cc, padding: 16, marginBottom: 14, position: "relative", overflow: "hidden" }}><div style={{ position: "absolute", bottom: 0, right: 0, width: 60, height: 3, borderRadius: "3px 0 0 0", background: "#FBBF24" }} /><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}><button onClick={goB} style={nb}>←</button><div style={{ textAlign: "center" }}><div style={{ fontFamily: "var(--font-h)", fontSize: 13, color: "var(--text)", fontWeight: 600 }}>{mn}</div>{!iC && <button onClick={() => { sY(today.getFullYear()); sM(today.getMonth()) }} style={{ background: "none", border: "none", fontSize: 10, color: "#E07A5F", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 600, marginTop: 2 }}>Jump to today</button>}</div><button onClick={goF} style={{ ...nb, opacity: iC ? 0.3 : 1 }}>→</button></div><div style={{ display: "flex", gap: 8, marginBottom: 12 }}>{[{ l: "TOTAL", v: fmt(mt), c: "#E07A5F" }, { l: "AVG/DAY", v: fmt(ad > 0 ? Math.round(mt / ad) : 0), c: "var(--ts)" }, { l: "DAYS", v: `${ad}/${dim}`, c: "var(--ts)" }].map(x => <div key={x.l} style={{ flex: 1, background: "var(--bg)", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}><div style={{ fontSize: 9, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 600 }}>{x.l}</div><div style={{ fontSize: 14, fontWeight: 600, fontFamily: "var(--font-h)", color: x.c, marginTop: 2 }}>{x.v}</div></div>)}</div><div style={{ display: "flex", gap: 2, marginBottom: 8 }}>{"SMTWTFS".split("").map((d, i) => <div key={i} style={{ width: 36, textAlign: "center", fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 600 }}>{d}</div>)}</div><div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>{cells}</div><div style={{ display: "flex", gap: 8, marginTop: 10, justifyContent: "center" }}>{[{ c: "var(--border)", l: "None" }, { c: "#6BAA75", l: "Low" }, { c: "#FBBF24", l: "Med" }, { c: "#E07A5F", l: "High" }, { c: "#D4726A", l: "Heavy" }].map(x => <div key={x.l} style={{ display: "flex", alignItems: "center", gap: 3 }}><div style={{ width: 10, height: 10, borderRadius: 3, background: x.c }} /><span style={{ fontSize: 9, color: "var(--muted)" }}>{x.l}</span></div>)}</div></div>
-}
+            const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const xlsxBlob = new Blob([wbOut], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const xlsxUrl = URL.createObjectURL(xlsxBlob);
+            const ax = document.createElement('a');
+            ax.href = xlsxUrl; ax.download = `form-export-${todayKey()}.xlsx`;
+            document.body.appendChild(ax); ax.click(); document.body.removeChild(ax);
+            URL.revokeObjectURL(xlsxUrl);
+        } catch (err) {
+            console.error('XLSX export failed:', err);
+        }
 
-function Report({ expenses: ex }) {
-    const today = new Date(), dow = today.getDay(), ws = new Date(today); ws.setDate(today.getDate() - dow); const lws = new Date(ws); lws.setDate(ws.getDate() - 7);
-    const inR = (e, s, days) => { const d = new Date(e.date), end = new Date(s); end.setDate(s.getDate() + days); return d >= s && d < end };
-    const tw = ex.filter(e => inR(e, ws, 7) && !isFix(e)), lw = ex.filter(e => inR(e, lws, 7) && !isFix(e)), tt = tw.reduce((s, e) => s + e.amount, 0), lt = lw.reduce((s, e) => s + e.amount, 0);
-    const pwt = []; for (let w = 1; w <= 12; w++) { const s = new Date(ws); s.setDate(ws.getDate() - w * 7); const t = ex.filter(e => inR(e, s, 7) && !isFix(e)).reduce((sum, e) => sum + e.amount, 0); if (t > 0) pwt.push(t) }
-    const avg = pwt.length > 0 ? pwt.reduce((s, v) => s + v, 0) / pwt.length : 0, at = avg > 0 ? avg : (tt > 0 ? tt * 1.2 : 1000);
-    const tscore = Math.max(0, 40 - (tt / at) * 40), trs = lt > 0 ? (tt <= lt ? 30 : Math.max(0, 30 - ((tt - lt) / lt) * 30)) : 15;
-    const ct = {}; tw.forEach(e => { ct[e.categoryId] = (ct[e.categoryId] || 0) + e.amount }); const cv = Object.values(ct), mcp = tt > 0 && cv.length > 0 ? Math.max(...cv) / tt : 0;
-    const cs = cv.length === 0 ? 15 : (mcp > 0.5 ? Math.max(0, 30 - (mcp - 0.5) * 60) : 30), total = Math.round(tscore + trs + cs);
-    const grade = total >= 85 ? "A" : total >= 70 ? "B" : total >= 50 ? "C" : total >= 30 ? "D" : "F", gc = { A: "#6BAA75", B: "#7B8CDE", C: "#FBBF24", D: "#E07A5F", F: "#D4726A" }[grade];
-    const gm = { A: "Outstanding week!", B: "Good — room to improve.", C: "Decent, watch spending.", D: "Spending heavy…", F: "Fresh start ahead!" }[grade], pc = lt > 0 ? ((tt - lt) / lt * 100).toFixed(0) : null;
-    return <div style={{ ...cc, padding: 20, marginBottom: 14, position: "relative", overflow: "hidden" }}><div style={{ position: "absolute", bottom: 0, right: 0, width: 60, height: 3, borderRadius: "3px 0 0 0", background: "#6BAA75" }} /><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "#6BAA75", marginBottom: 16, letterSpacing: "0.5px", fontWeight: 700 }}>Weekly Report Card</div><div style={{ display: "flex", alignItems: "center", gap: 16 }}><div style={{ width: 72, height: 72, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: gc + "18", border: `3px solid ${gc}`, flexShrink: 0 }}><span style={{ fontSize: 32, fontWeight: 700, fontFamily: "var(--font-h)", color: gc }}>{grade}</span></div><div><div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)", marginBottom: 4 }}>{gm}</div><div style={{ fontSize: 12, color: "var(--ts)", fontFamily: "var(--font-b)", lineHeight: 1.5 }}>Flexible spend: <strong style={{ color: "#E07A5F" }}>{fmt(tt)}</strong> this week{pc !== null && <span style={{ color: Number(pc) <= 0 ? "#6BAA75" : "#E07A5F" }}> ({Number(pc) > 0 ? "+" : ""}{pc}%)</span>}</div><div style={{ fontSize: 10, color: "var(--muted)", marginTop: 6, fontStyle: "italic" }}>Graded on flexible spending only. Fixed costs excluded.</div></div></div><div style={{ display: "flex", gap: 8, marginTop: 16 }}>{[{ label: "Target", score: Math.round(tscore), max: 40 }, { label: "Trend", score: Math.round(trs), max: 30 }, { label: "Balance", score: Math.round(cs), max: 30 }].map(s => <div key={s.label} style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 600, marginBottom: 4 }}>{s.label}</div><div style={{ height: 5, borderRadius: 3, background: "var(--border)", overflow: "hidden" }}><div style={{ height: "100%", width: `${(s.score / s.max) * 100}%`, background: gc, borderRadius: 3 }} /></div><div style={{ fontSize: 10, color: "var(--ts)", fontFamily: "var(--font-h)", marginTop: 3 }}>{s.score}/{s.max}</div></div>)}</div></div>
-}
+        setExported(true);
+        setTimeout(() => setExported(false), 2000);
+    };
 
-function SettleM({ split: sp, onConfirm: oc, onClose: cl }) {
-    const [wid, sW] = useState("bank"); const isO = sp.direction === "owed";
-    return <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={cl}><div onClick={e => e.stopPropagation()} style={{ background: "var(--card)", borderRadius: "20px 20px 0 0", padding: 28, width: "100%", maxWidth: 430 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{isO ? `${sp.name} pays you back` : `Pay ${sp.name}`}</div><div style={{ fontSize: 24, fontWeight: 700, fontFamily: "var(--font-h)", color: isO ? "#6BAA75" : "#E07A5F", marginBottom: 16 }}>{isO ? "+" : "−"}{fmt(sp.amount)}</div><div style={ls}>{isO ? "Receive into" : "Pay from"}</div><div style={{ display: "flex", gap: 8, marginBottom: 20 }}>{WALLETS.filter(w => w.id !== "upi_lite").map(w => <button key={w.id} onClick={() => sW(w.id)} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, border: `2px solid ${wid === w.id ? w.color : "var(--border)"}`, background: wid === w.id ? w.color + "15" : "var(--card)", cursor: "pointer" }}><DI2 id={w.id} accent={w.neon || w.color} size={18} /><span style={{ fontSize: 10, fontFamily: "var(--font-h)", fontWeight: wid === w.id ? 700 : 500, color: wid === w.id ? w.color : "var(--muted)" }}>{w.name}</span></button>)}</div><div style={{ display: "flex", gap: 10 }}><button onClick={cl} style={{ flex: 1, padding: 14, border: "1.5px solid var(--border)", borderRadius: 12, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 14, cursor: "pointer" }}>Cancel</button><button onClick={() => { oc(wid); cl() }} style={{ flex: 2, padding: 14, border: "none", borderRadius: 12, background: isO ? "#6BAA75" : "#E07A5F", color: "#fff", fontFamily: "var(--font-h)", fontSize: 14, cursor: "pointer", fontWeight: 700 }}>{isO ? "Received ✓" : "Paid ✓"}</button></div></div></div>
-}
+    const renderDetail = (key, rec) => {
+        const mwL = parseMorningWater(rec.morningWaterAmount);
+        const totalW = (mwL + (rec.water || 0)).toFixed(1);
+        const dow2 = dayOfWeek(new Date(key + 'T12:00:00'));
+        const log = migrateFreeFoodLog(rec.freeFoodLog);
+        const r2 = (config.routines && config.routines[dow2]) || { am: [], pm: [] };
+        const amNames = r2.am.map(pk => config.products[pk] || PRODUCT_LABELS[pk] || pk).join(', ');
+        const pmNames = r2.pm.map(pk => config.products[pk] || PRODUCT_LABELS[pk] || pk).join(', ');
 
-function Splits({ splits: sp, onAdd, onSettle: os, onDelete: od, expanded: exp, onToggle: ot }) {
-    const [nm, sN] = useState(""), [am, sA] = useState(""), [dir, sD] = useState("owe"), [st, sT] = useState(null);
-    const add = () => { if (!nm.trim() || !am || Number(am) <= 0) return; onAdd({ id: uid(), name: nm.trim(), amount: Number(am), direction: dir, settled: false }); sN(""); sA("") };
-    const tO = sp.filter(s => s.direction === "owe" && !s.settled).reduce((t, s) => t + s.amount, 0), tI = sp.filter(s => s.direction === "owed" && !s.settled).reduce((t, s) => t + s.amount, 0);
-    if (!exp) return <div onClick={ot} style={{ ...cc, borderRadius: 16, padding: "16px 18px", marginBottom: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", overflow: "hidden" }}><div style={{ position: "absolute", bottom: 0, right: 0, width: 60, height: 3, borderRadius: "3px 0 0 0", background: "#D4726A" }} /><div><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "#D4726A", letterSpacing: "0.5px", fontWeight: 700 }}>Split Expenses</div><div style={{ fontSize: 13, fontFamily: "var(--font-b)", color: "var(--ts)", marginTop: 4 }}>{sp.filter(s => !s.settled).length === 0 ? "No pending splits" : <><span style={{ color: "#E07A5F" }}>You owe {fmt(tO)}</span> · <span style={{ color: "#6BAA75" }}>Owed {fmt(tI)}</span></>}</div></div><span style={{ fontSize: 18, color: "var(--muted)" }}>→</span></div>;
-    return <div style={{ ...cc, borderRadius: 16, padding: 18, marginBottom: 14, position: "relative", overflow: "hidden" }}><div style={{ position: "absolute", bottom: 0, right: 0, width: 60, height: 3, borderRadius: "3px 0 0 0", background: "#D4726A" }} /><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "#D4726A", letterSpacing: "0.5px", fontWeight: 700 }}>Split Expenses</div><button onClick={ot} style={{ background: "none", border: "none", fontSize: 12, color: "var(--muted)", cursor: "pointer", fontFamily: "var(--font-h)" }}>← Back</button></div>
-        <div style={{ display: "flex", gap: 12, marginBottom: 16 }}><div style={{ flex: 1, textAlign: "center", padding: 12, background: "#E07A5F12", borderRadius: 10 }}><div style={{ fontSize: 10, color: "#E07A5F", fontFamily: "var(--font-h)", fontWeight: 600 }}>YOU OWE</div><div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-h)", color: "#E07A5F", marginTop: 4 }}>{fmt(tO)}</div></div><div style={{ flex: 1, textAlign: "center", padding: 12, background: "#6BAA7512", borderRadius: 10 }}><div style={{ fontSize: 10, color: "#6BAA75", fontFamily: "var(--font-h)", fontWeight: 600 }}>OWED TO YOU</div><div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-h)", color: "#6BAA75", marginTop: 4 }}>{fmt(tI)}</div></div></div>
-        {sp.filter(s => !s.settled).map(s => <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--bg)", borderRadius: 10, marginBottom: 6, border: "1px solid var(--border)" }}><span style={{ fontSize: 16 }}>{s.direction === "owe" ? "🔴" : "🟢"}</span><div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, fontFamily: "var(--font-h)", color: "var(--text)" }}>{s.name}</div><div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-b)" }}>{s.direction === "owe" ? "You owe" : "Owes you"}</div></div><span style={{ fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 14, color: s.direction === "owe" ? "#E07A5F" : "#6BAA75" }}>{fmt(s.amount)}</span><button onClick={() => sT(s)} style={{ border: "1px solid var(--border)", background: "none", borderRadius: 6, padding: "4px 8px", fontSize: 10, color: "var(--muted)", cursor: "pointer" }}>Settle</button><button onClick={() => od(s.id)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.4 }}>✕</button></div>)}
-        {sp.filter(s => s.settled).length > 0 && <details style={{ marginTop: 10 }}><summary style={{ fontSize: 11, color: "var(--muted)", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 500, marginBottom: 6 }}>Settled ({sp.filter(s => s.settled).length})</summary>{sp.filter(s => s.settled).map(s => <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "var(--bg)", borderRadius: 10, marginBottom: 4, opacity: 0.5 }}><span>✅</span><span style={{ flex: 1, fontSize: 12, fontFamily: "var(--font-h)", color: "var(--ts)" }}>{s.name}</span><span style={{ fontSize: 12, fontFamily: "var(--font-h)", color: "var(--muted)" }}>{fmt(s.amount)}</span><button onClick={() => od(s.id)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12, opacity: 0.4 }}>✕</button></div>)}</details>}
-        <div style={{ borderTop: "1px solid var(--border)", marginTop: 14, paddingTop: 14 }}><div style={{ display: "flex", gap: 6, marginBottom: 10 }}>{["owe", "owed"].map(d => <button key={d} onClick={() => sD(d)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 12, fontFamily: "var(--font-h)", border: `1.5px solid ${dir === d ? (d === "owe" ? "#E07A5F" : "#6BAA75") : "var(--border)"}`, background: dir === d ? (d === "owe" ? "#E07A5F18" : "#6BAA7518") : "var(--card)", color: dir === d ? (d === "owe" ? "#E07A5F" : "#6BAA75") : "var(--muted)", cursor: "pointer", fontWeight: 500 }}>{d === "owe" ? "I owe them" : "They owe me"}</button>)}</div><div style={{ display: "flex", gap: 6 }}><input value={nm} onChange={e => sN(e.target.value)} placeholder="Friend name" style={{ ...is, flex: 1 }} /><input type="number" value={am} onChange={e => sA(e.target.value)} placeholder="₹" style={{ ...is, width: 80 }} /><button onClick={add} style={{ padding: "10px 14px", border: "none", borderRadius: 10, background: "#E07A5F", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+</button></div></div>
-        {st && <SettleM split={st} onConfirm={wid => { os(st.id, wid); sT(null) }} onClose={() => sT(null)} />}</div>
-}
+        return (
+            <>
+                <div className="detail-section">
+                    <div className="detail-section-lbl">Food</div>
+                    <div className="detail-row"><span className="dk">Water</span><span className="dv">{totalW} / {config.waterTarget}L</span></div>
+                    <div className="detail-row"><span className="dk">Eggs</span><span className="dv">{rec.eggs || 0} / {config.eggsTarget}</span></div>
+                    <div className="detail-row"><span className="dk">Curd</span><span className="dv">{rec.curd ? '✓' : '—'}</span></div>
+                    <div className="detail-row"><span className="dk">Snack</span><span className="dv">{rec.snack || '—'}</span></div>
+                    {log.length > 0 && (
+                        <div style={{ marginTop: 6 }}>
+                            {['breakfast', 'lunch', 'dinner', 'snack', 'other'].map(tag => {
+                                const items = log.filter(e => e.tag === tag).map(e => e.text);
+                                if (!items.length) return null;
+                                return <div key={tag} className="detail-row"><span className="dk" style={{ textTransform: 'capitalize' }}>{tag}</span><span className="dv">{items.join(', ')}</span></div>;
+                            })}
+                        </div>
+                    )}
+                    {(rec.skinFeelChip || rec.energyChip) && (
+                        <div className="sum-chips" style={{ marginTop: 8, marginBottom: 0 }}>
+                            {rec.skinFeelChip && <div className="sum-chip">Skin feel · {rec.skinFeelChip}</div>}
+                            {rec.energyChip && <div className="sum-chip">Energy · {rec.energyChip}</div>}
+                        </div>
+                    )}
+                    {rec.notes && <div style={{ fontSize: 12, color: 'var(--txm)', marginTop: 8, padding: '8px 10px', background: 'var(--sf)', border: '1px solid var(--bd)', borderRadius: 8 }}>{rec.notes}</div>}
+                </div>
 
-function AddPage({ categories: cats, incomeSources: isrc, onAddExpense: oE, onAddIncome: oI, onAddTransfer: oT, onAddRec: oR }) {
-    const [type, sType] = useState("expense"), [amt, sAmt] = useState("0"), [catId, sCat] = useState(cats[0]?.id || ""), [srcId, sSrc] = useState(isrc[0]?.id || ""), [wid, sW] = useState("upi_lite"), [iwid, sIW] = useState("bank"), [tFrom, sTF] = useState("bank"), [tTo, sTT] = useState("upi_lite"), [date, sDate] = useState(new Date().toISOString().slice(0, 10)), [note, sNote] = useState("");
-    const [rName, sRN] = useState(""), [rAmt, sRA] = useState(""), [rCat, sRC] = useState("rent"), [rWal, sRW] = useState("bank"), [rFreq, sRF] = useState("monthly"), [rDay, sRD] = useState(1), [rInt, sRI] = useState(30), [rStart, sRS] = useState(new Date().toISOString().slice(0, 10)), [rOther, sRO] = useState(""), [rYM, sRYM] = useState(1), [rYD, sRYD] = useState(1);
-    const ts = useRef(null), tc = type === "expense" ? "#E07A5F" : type === "income" ? "#6BAA75" : type === "transfer" ? "#7B8CDE" : "#A78BFA";
-    const submit = () => { const a = parseFloat(amt); if (!a || a <= 0) return; if (type === "expense") oE({ amount: a, categoryId: catId, date, note, walletId: wid }); else if (type === "income") oI({ amount: a, sourceId: srcId, date, note, walletId: iwid }); else if (type === "transfer") { if (tFrom === tTo) return; oT({ amount: a, fromWallet: tFrom, toWallet: tTo, date, note }) } sAmt("0"); sNote("") };
-    const submitRec = () => { const a = parseFloat(rAmt); if (!rName.trim() || !a || a <= 0) return; if (rCat === "other_rec" && !rOther.trim()) return; oR({ id: uid(), name: rName.trim(), amount: a, categoryId: rCat, categoryName: rCat === "other_rec" ? rOther.trim() : null, walletId: rWal, frequency: rFreq, dayOfMonth: rFreq === "monthly" ? Number(rDay) : null, intervalDays: rFreq === "custom" ? Number(rInt) : null, yearMonth: rFreq === "yearly" ? Number(rYM) : null, yearDay: rFreq === "yearly" ? Number(rYD) : null, startDate: rStart, active: true, lastPaidDate: null }); sRN(""); sRA(""); sRO("") };
-    const WB = ({ wallets, sel, onSel }) => <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>{wallets.map(w => <button key={w.id} onClick={() => onSel(w.id)} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, border: `2px solid ${sel === w.id ? w.color : "var(--border)"}`, background: sel === w.id ? w.color + "15" : "var(--card)", cursor: "pointer" }}><DI2 id={w.id} accent={w.neon || w.color} size={14} /><span style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: sel === w.id ? 700 : 500, color: sel === w.id ? w.color : "var(--muted)" }}>{w.name}</span></button>)}</div>;
-    return <div onTouchStart={e => { ts.current = e.touches[0].clientX }} onTouchEnd={e => { if (!ts.current) return; const d = e.changedTouches[0].clientX - ts.current; if (d < -60) sType(type === "expense" ? "income" : type === "income" ? "transfer" : type === "transfer" ? "recurring" : "expense"); if (d > 60) sType(type === "recurring" ? "transfer" : type === "transfer" ? "income" : type === "income" ? "expense" : "recurring"); ts.current = null }} style={{ padding: "0 0 20px" }}>
-        <div style={{ display: "flex", background: "var(--card)", borderRadius: 12, padding: 4, border: "1px solid var(--border)", marginBottom: 20, gap: 2 }}>{[{ id: "expense", label: "Expense" }, { id: "income", label: "Income" }, { id: "transfer", label: "Transfer" }, { id: "recurring", label: "🔁 Recurring" }].map(t => <button key={t.id} onClick={() => sType(t.id)} style={{ flex: 1, padding: "7px 0", border: "none", borderRadius: 9, background: type === t.id ? (t.id === "expense" ? "#E07A5F" : t.id === "income" ? "#6BAA75" : t.id === "transfer" ? "#7B8CDE" : "#A78BFA") : "transparent", color: type === t.id ? "#fff" : "var(--muted)", fontFamily: "var(--font-h)", fontSize: 18, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>{t.label}</button>)}</div>
-        <p style={{ textAlign: "center", fontSize: 11, color: "var(--muted)", marginTop: -14, marginBottom: 14, fontFamily: "var(--font-b)", fontStyle: "italic" }}>Swipe left / right to switch</p>
-        {type !== "recurring" && <><div style={{ marginBottom: 16 }}><label style={ls}>Amount ({CUR})</label><input type="number" value={amt === "0" ? "" : amt} onChange={e => sAmt(e.target.value || "0")} placeholder="0" autoFocus style={{ ...is, fontSize: 32, fontWeight: 600, fontFamily: "var(--font-h)", textAlign: "center", padding: "18px 14px", color: tc, borderColor: tc }} /></div>
-            {type === "expense" && <><label style={ls}>Pay From</label><WB wallets={WALLETS} sel={wid} onSel={sW} /><label style={ls}>Category</label><div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>{cats.map(c => <button key={c.id} onClick={() => sCat(c.id)} style={{ padding: "8px 14px", borderRadius: 10, fontSize: 13, fontFamily: "var(--font-b)", border: `1.5px solid ${catId === c.id ? c.color : "var(--border)"}`, background: catId === c.id ? c.color + "18" : "var(--card)", color: catId === c.id ? c.color : "var(--ts)", cursor: "pointer", fontWeight: catId === c.id ? 600 : 400, display: "flex", alignItems: "center", gap: 5 }}><DI2 id={c.id} accent={c.neon || c.color} size={14} />{c.name}</button>)}</div></>}
-            {type === "income" && <><label style={ls}>Receive Into</label><WB wallets={IW} sel={iwid} onSel={sIW} /><label style={ls}>Source</label><div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>{isrc.map(c => <button key={c.id} onClick={() => sSrc(c.id)} style={{ padding: "8px 14px", borderRadius: 10, fontSize: 13, fontFamily: "var(--font-b)", border: `1.5px solid ${srcId === c.id ? c.color : "var(--border)"}`, background: srcId === c.id ? c.color + "18" : "var(--card)", color: srcId === c.id ? c.color : "var(--ts)", cursor: "pointer", fontWeight: srcId === c.id ? 600 : 400, display: "flex", alignItems: "center", gap: 5 }}><DI2 id={c.id} accent={c.neon || c.color} size={14} />{c.name}</button>)}</div></>}
-            {type === "transfer" && <><label style={ls}>From</label><WB wallets={WALLETS} sel={tFrom} onSel={sTF} /><div style={{ textAlign: "center", fontSize: 18, color: "var(--muted)", marginBottom: 12 }}>↓</div><label style={ls}>To</label><WB wallets={WALLETS} sel={tTo} onSel={sTT} />{tFrom === tTo && <p style={{ fontSize: 12, color: "#D4726A", textAlign: "center", marginBottom: 12 }}>Must be different.</p>}</>}
-            <div style={{ display: "flex", gap: 10, marginBottom: 18 }}><div style={{ flex: 1 }}><label style={ls}>Date</label><input type="date" value={date} onChange={e => sDate(e.target.value)} style={is} /></div><div style={{ flex: 1 }}><label style={ls}>Note</label><input value={note} onChange={e => sNote(e.target.value)} placeholder="Optional…" style={is} /></div></div>
-            <button onClick={submit} style={{ width: "100%", padding: "14px", border: "none", borderRadius: 12, background: tc, color: "#fff", fontSize: 15, fontFamily: "var(--font-h)", fontWeight: 600, cursor: "pointer" }}>{type === "expense" ? "Add Expense" : type === "income" ? "Add Income" : "Transfer"}</button></>}
-        {type === "recurring" && <><label style={ls}>Name</label><input value={rName} onChange={e => sRN(e.target.value)} placeholder="e.g. Netflix, Rent…" style={{ ...is, marginBottom: 12 }} /><label style={ls}>Amount ({CUR})</label><input type="number" value={rAmt} onChange={e => sRA(e.target.value)} placeholder="0" style={{ ...is, fontSize: 24, fontWeight: 700, fontFamily: "var(--font-h)", textAlign: "center", padding: "14px", color: "#A78BFA", borderColor: "#A78BFA", marginBottom: 12 }} /><label style={ls}>Category</label><div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>{RC.map(c => <button key={c.id} onClick={() => sRC(c.id)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontFamily: "var(--font-b)", border: `1.5px solid ${rCat === c.id ? c.color : "var(--border)"}`, background: rCat === c.id ? c.color + "18" : "var(--card)", color: rCat === c.id ? c.color : "var(--ts)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><DI2 id={c.id} accent={c.neon || c.color} size={13} />{c.name}</button>)}</div>
-            {rCat === "other_rec" && <input value={rOther} onChange={e => sRO(e.target.value)} placeholder="Name this category…" style={{ ...is, marginBottom: 12 }} />}
-            <label style={ls}>Wallet</label><WB wallets={IW} sel={rWal} onSel={sRW} /><label style={ls}>Frequency</label><div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>{[{ id: "monthly", label: "Monthly" }, { id: "yearly", label: "Yearly" }, { id: "custom", label: "Every X Days" }].map(f => <button key={f.id} onClick={() => sRF(f.id)} style={{ flex: 1, padding: "9px", borderRadius: 9, fontSize: 12, fontFamily: "var(--font-h)", border: `1.5px solid ${rFreq === f.id ? "#A78BFA" : "var(--border)"}`, background: rFreq === f.id ? "#A78BFA18" : "var(--card)", color: rFreq === f.id ? "#A78BFA" : "var(--muted)", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>{f.label}</button>)}</div>
-            {rFreq === "monthly" && <div style={{ marginBottom: 12 }}><label style={ls}>Day of Month</label><input type="number" min={1} max={31} value={rDay} onChange={e => sRD(e.target.value)} style={{ ...is, textAlign: "center", fontFamily: "var(--font-h)", fontWeight: 600 }} /></div>}
-            {rFreq === "yearly" && <div style={{ display: "flex", gap: 8, marginBottom: 12 }}><div style={{ flex: 1 }}><label style={ls}>Month (1–12)</label><input type="number" min={1} max={12} value={rYM} onChange={e => sRYM(e.target.value)} style={{ ...is, textAlign: "center", fontFamily: "var(--font-h)", fontWeight: 600 }} /></div><div style={{ flex: 1 }}><label style={ls}>Day</label><input type="number" min={1} max={31} value={rYD} onChange={e => sRYD(e.target.value)} style={{ ...is, textAlign: "center", fontFamily: "var(--font-h)", fontWeight: 600 }} /></div></div>}
-            {rFreq === "custom" && <div style={{ marginBottom: 12 }}><label style={ls}>Every how many days?</label><input type="number" min={1} value={rInt} onChange={e => sRI(e.target.value)} style={{ ...is, textAlign: "center", fontFamily: "var(--font-h)", fontWeight: 600 }} /></div>}
-            <label style={ls}>Start Date</label><input type="date" value={rStart} onChange={e => sRS(e.target.value)} style={{ ...is, marginBottom: 18 }} /><button onClick={submitRec} style={{ width: "100%", padding: "14px", border: "none", borderRadius: 12, background: "#A78BFA", color: "#fff", fontSize: 15, fontFamily: "var(--font-h)", fontWeight: 600, cursor: "pointer" }}>Add Recurring</button></>}</div>
-}
+                <div className="detail-section">
+                    <div className="detail-section-lbl">Skin</div>
+                    <div className="detail-row">
+                        <span className="dk">AM</span>
+                        <span className="dv">{rec.amSkinDone ? '✓' : '—'} {amNames && <span style={{ fontSize: 11, color: 'var(--txm)' }}>{amNames}</span>}</span>
+                    </div>
+                    <div className="detail-row">
+                        <span className="dk">PM</span>
+                        <span className="dv">{rec.pmSkinDone ? '✓' : '—'} {pmNames && <span style={{ fontSize: 11, color: 'var(--txm)' }}>{pmNames}</span>}</span>
+                    </div>
+                    {(rec.skinTodayChip || rec.retinolReactionChip) && (
+                        <div className="sum-chips" style={{ marginTop: 8, marginBottom: 0 }}>
+                            {rec.skinTodayChip && <div className="sum-chip">Skin today · {rec.skinTodayChip}</div>}
+                            {rec.retinolReactionChip && <div className="sum-chip">Retinol · {rec.retinolReactionChip}</div>}
+                        </div>
+                    )}
+                    {rec.skinNotes && <div style={{ fontSize: 12, color: 'var(--txm)', marginTop: 8, padding: '8px 10px', background: 'var(--sf)', border: '1px solid var(--bd)', borderRadius: 8 }}>{rec.skinNotes}</div>}
+                </div>
+            </>
+        );
+    };
 
-function TxCard({ item: it, categories: cats, incomeSources: isrc, events: evs, onDelete: od }) {
-    const isE = it.type === "expense", isI = it.type === "income", isTr = it.type === "transfer", isS = it.type === "settlement";
-    const cat = isE ? cats.find(c => c.id === it.categoryId) : isI ? isrc.find(s => s.id === it.sourceId) : null; const w = WALLETS.find(x => x.id === it.walletId), fW = WALLETS.find(x => x.id === it.fromWallet), tW = WALLETS.find(x => x.id === it.toWallet);
-    const ev = it.eventId ? evs?.find(e => e.id === it.eventId) : null, evT = ev ? `● ${ev.name}` : null;
-    if (isTr) return <div style={{ ...cc, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}><div style={{ width: 44, height: 44, borderRadius: 12, background: "#7B8CDE14", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🔄</div><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)" }}>Transfer</div><div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 2 }}>{fW?.name} → {tW?.name} · {dl(it.date)}</div></div><div style={{ fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 15, color: "#7B8CDE" }}>{fmt(it.amount)}</div><button onClick={() => od(it.id, it.type)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.35 }}>✕</button></div>;
-    if (isS) { const sW = WALLETS.find(x => x.id === it.walletId); return <div style={{ ...cc, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}><div style={{ width: 44, height: 44, borderRadius: 12, background: it.direction === "owed" ? "#6BAA7514" : "#E07A5F14", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{it.direction === "owed" ? "💰" : "💸"}</div><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)" }}>{it.direction === "owed" ? `${it.splitName} paid back` : `Paid ${it.splitName}`}</div><div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 2 }}>{sW?.name} · {dl(it.date)}</div></div><div style={{ fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 15, color: it.direction === "owed" ? "#6BAA75" : "#E07A5F" }}>{it.direction === "owed" ? "+" : "−"}{fmt(it.amount)}</div><button onClick={() => od(it.id, it.type)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.35 }}>✕</button></div> }
-    return <div style={{ ...cc, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}><div style={{ width: 44, height: 44, borderRadius: 12, background: (cat?.color || "#999") + "14", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{cat ? <DI2 id={cat.id} accent={cat.neon || cat.color} size={22} /> : <span style={{ fontSize: 22 }}>❓</span>}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)" }}>{cat?.name || "Unknown"}</span>{isE && <span style={{ fontSize: 7, fontFamily: "var(--font-h)", fontWeight: 600, color: isFix(it) ? "#A78BFA" : "#FBBF24", background: isFix(it) ? "#A78BFA15" : "#FBBF2415", padding: "1px 5px", borderRadius: 3 }}>{isFix(it) ? "FIXED" : "FLEX"}</span>}{w && <span style={{ fontSize: 9, fontFamily: "var(--font-h)", fontWeight: 600, color: w.color, background: w.color + "18", padding: "2px 6px", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 2 }}><DI2 id={w.id} accent={w.neon || w.color} size={10} /></span>}</div><div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evT && <span style={{ fontWeight: 600, color: "var(--ts)" }}>{evT} · </span>}{it.note ? it.note + " · " : ""}{dl(it.date)}</div></div><div style={{ fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 15, color: isE ? "#E07A5F" : "#6BAA75", flexShrink: 0 }}>{isE ? "−" : "+"}{fmt(it.amount)}</div><button onClick={() => od(it.id, it.type)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.35, flexShrink: 0 }}>✕</button></div>
-}
+    return (
+        <div className="screen">
+            <div className="hd">
+                <h1>Log</h1>
+                <div className="sub">History</div>
+            </div>
 
-function CalM({ wallet: w, currentBal: cb, onSave: os, onClose: cl }) {
-    const [v, sV] = useState(cb.toString());
-    return <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={cl}><div onClick={e => e.stopPropagation()} style={{ background: "var(--card)", borderRadius: "20px 20px 0 0", padding: 28, width: "100%", maxWidth: 430 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}><DI2 id={w.id} accent={w.neon || w.color} size={20} /> Calibrate {w.name}</div><p style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-b)", marginBottom: 20, lineHeight: 1.5 }}>Enter your actual current balance.</p><label style={ls}>Current Balance ({CUR})</label><input type="number" value={v} onChange={e => sV(e.target.value)} autoFocus style={{ ...is, fontSize: 28, fontWeight: 700, fontFamily: "var(--font-h)", textAlign: "center", padding: "16px", color: w.color, borderColor: w.color, marginBottom: 16 }} /><div style={{ display: "flex", gap: 10 }}><button onClick={cl} style={{ flex: 1, padding: 14, border: "1.5px solid var(--border)", borderRadius: 12, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 14, cursor: "pointer" }}>Cancel</button><button onClick={() => { os(Number(v) || 0); cl() }} style={{ flex: 2, padding: 14, border: "none", borderRadius: 12, background: w.color, color: "#fff", fontFamily: "var(--font-h)", fontSize: 14, cursor: "pointer", fontWeight: 700 }}>Set Balance</button></div></div></div>
-}
+            <div className="stats" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                <div className="stat green"><div className="v">{streak}</div><div className="l">Streak</div></div>
+                <div className="stat teal"><div className="v">{daysTrackedThisMonth}</div><div className="l">This month</div></div>
+                <div className="stat amber"><div className="v">{completionPct}%</div><div className="l">Completion</div></div>
+                <div className="stat" style={{ '--v-color': 'var(--teal-deep)' }}>
+                    <div className="v" style={{ color: 'var(--teal-deep)' }}>{avgWater}{avgWater !== '—' ? 'L' : ''}</div>
+                    <div className="l">Avg water</div>
+                </div>
+            </div>
 
-const EI = [{ id: "film", svg: "M2 2h20v20H2zM7 2v20M17 2v20M2 12h20" }, { id: "plane", svg: "M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2" }, { id: "cake", svg: "M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2-1 2-1M2 21h20" }, { id: "sun", svg: "M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" }, { id: "dinner", svg: "M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3v7" }, { id: "party", svg: "M5.8 11.3L2 22l10.7-3.79M4 3h.01M22 8h.01M15 2h.01" }, { id: "camp", svg: "M3.5 21L14 3M20.5 21L10 3M2 21h20M7 21l5-7 5 7" }, { id: "cart", svg: "M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" }, { id: "game", svg: "M6 12h4M8 10v6 6h20v12H2z" }, { id: "sport", svg: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20" }, { id: "study", svg: "M22 10v6M2 10l10-5 10 5-10 5zM6 12v5c0 1.1 2.7 3 6 3s6-1.9 6-3v-5" }, { id: "cafe", svg: "M17 8h1a4 4 0 0 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" }];
-function EvIcon({ id, size = 18 }) { const ic = EI.find(i => i.id === id); if (!ic) return <span style={{ fontSize: size }}>📌</span>; return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={ic.svg} /></svg> }
+            <div className="card">
+                <div className="cal-hd">
+                    <button onClick={() => setMonthOffset(monthOffset - 1)}>‹</button>
+                    <div className="m">{monthName}</div>
+                    <button onClick={() => setMonthOffset(Math.min(0, monthOffset + 1))}>›</button>
+                </div>
+                {Object.keys(allData).length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--txm)' }}>
+                        <div style={{ fontSize: 32, marginBottom: 10 }}>🌱</div>
+                        <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>No data yet</div>
+                        <div style={{ fontSize: 12 }}>Start logging on the Food and Skin tabs — your history will appear here.</div>
+                    </div>
+                ) : (
+                    <div className="cal" key={monthOffset}>
+                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} className="cal-day-lbl">{d}</div>)}
+                        {cells.map((c) => c.empty
+                            ? <div key={c.key} className="cal-cell empty" />
+                            : <div
+                                key={c.key}
+                                className={`cal-cell lvl${c.lvl} ${c.isToday ? 'today' : ''}`}
+                                onClick={() => c.rec && setActiveDay({ key: c.key, rec: c.rec })}
+                            >{c.d}</div>
+                        )}
+                    </div>
+                )}
+            </div>
 
-function Events({ events: evs, expenses: ex, splits: sp, settlements: stl, categories: cats, onCreate: oC, onAddExp: oE, onAddSplit: oS, onSettleSplit: oSS, onDeleteSplit: oDS, onMarkDone: oMD }) {
-    const [view, sV] = useState("list"), [selId, sSel] = useState(null), [nn, sNN] = useState(""), [ne, sNE] = useState("film");
-    const [ea, sEA] = useState(""), [ec, sEC] = useState(cats[0]?.id || ""), [ew, sEW] = useState("upi_lite"), [en, sEN] = useState("");
-    const [sn, sSN] = useState(""), [sa, sSA] = useState(""), [sd, sSD] = useState("owed"), [stgt, sSTgt] = useState(null);
-    const [bsOpen, sBsO] = useState(false), [bsMode, sBsM] = useState("equal"), [bsTotal, sBsT] = useState(""), [bsPpl, sBsP] = useState([{ name: "", amount: "" }]), [bsCat, sBsC] = useState(cats[0]?.id || ""), [bsW, sBsW] = useState("upi_lite"), [bsNote, sBsN] = useState(""), [bsStep, sBsS] = useState(1);
-    const sel = evs.find(e => e.id === selId);
-    const create = () => { if (!nn.trim()) return; oC({ id: uid(), name: nn.trim(), emoji: ne, date: new Date().toISOString().slice(0, 10), status: "active" }); sNN(""); sNE("film"); sV("list") };
-    const addExp = () => { const a = parseFloat(ea); if (!a || a <= 0 || !sel) return; const ok = oE({ amount: a, categoryId: ec, walletId: ew, note: en, date: new Date().toISOString().slice(0, 10), eventId: sel.id }); if (ok !== false) { sEA(""); sEN("") } };
-    const addSplit = () => { if (!sn.trim() || !sa || Number(sa) <= 0 || !sel) return; oS({ id: uid(), name: sn.trim(), amount: Number(sa), direction: sd, settled: false, eventId: sel.id }); sSN(""); sSA("") };
-    const netSpent = (evId) => { const e = ex.filter(x => x.eventId === evId).reduce((s, x) => s + x.amount, 0), sO = stl.filter(x => x.eventId === evId && x.direction === "owed").reduce((s, x) => s + x.amount, 0), sI = stl.filter(x => x.eventId === evId && x.direction === "owe").reduce((s, x) => s + x.amount, 0); return e - sO + sI };
+            <button className={`btn ${exported ? 'green' : ''}`} onClick={exportData}>
+                {exported ? 'Exported ✓' : 'Export data'}
+            </button>
 
-    if (view === "create") return <div style={{ paddingTop: 8 }}><button onClick={() => sV("list")} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 13, fontFamily: "var(--font-h)", marginBottom: 16 }}>← Back</button><div style={{ fontFamily: "var(--font-h)", fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 16 }}>New Event</div><label style={ls}>Icon</label><div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>{EI.map(ic => <button key={ic.id} onClick={() => sNE(ic.id)} style={{ width: 38, height: 38, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${ne === ic.id ? "#E07A5F" : "var(--border)"}`, background: ne === ic.id ? "#E07A5F18" : "var(--card)", cursor: "pointer", color: ne === ic.id ? "#E07A5F" : "var(--muted)" }}><EvIcon id={ic.id} size={18} /></button>)}</div><label style={ls}>Event Name</label><input value={nn} onChange={e => sNN(e.target.value)} placeholder="e.g. Movie Night, Goa Trip…" style={{ ...is, marginBottom: 20 }} /><button onClick={create} style={{ width: "100%", padding: 14, border: "none", borderRadius: 12, background: "#E07A5F", color: "#fff", fontFamily: "var(--font-h)", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>Create Event</button></div>;
+            {activeDay && (
+                <div className="sheet" onClick={() => setActiveDay(null)}>
+                    <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
+                        <div className="sheet-hd">
+                            <h2>{new Date(activeDay.key + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
+                            <button onClick={() => setActiveDay(null)}>×</button>
+                        </div>
+                        {renderDetail(activeDay.key, activeDay.rec)}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
-    if (view === "detail" && sel) {
-        const eExps = ex.filter(e => e.eventId === sel.id), eSp = sp.filter(s => s.eventId === sel.id), ns = netSpent(sel.id), tp = eExps.reduce((s, e) => s + e.amount, 0);
-        const tO = eSp.filter(s => s.direction === "owe" && !s.settled).reduce((t, s) => t + s.amount, 0), tI = eSp.filter(s => s.direction === "owed" && !s.settled).reduce((t, s) => t + s.amount, 0);
-        return <div style={{ paddingTop: 8 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}><button onClick={() => sV("list")} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 13, fontFamily: "var(--font-h)" }}>← Events</button>{sel.status === "active" && <button onClick={() => oMD(sel.id)} style={{ padding: "6px 14px", border: "1.5px solid #6BAA75", borderRadius: 8, background: "#6BAA7518", color: "#6BAA75", fontFamily: "var(--font-h)", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Mark Done ✓</button>}</div>
-            <div style={{ ...cc, padding: 20, marginBottom: 14, display: "flex", alignItems: "center", gap: 14 }}><div style={{ width: 48, height: 48, borderRadius: 12, background: "#E07A5F12", display: "flex", alignItems: "center", justifyContent: "center", color: "#E07A5F", flexShrink: 0 }}><EvIcon id={sel.emoji} size={24} /></div><div style={{ flex: 1 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 17, fontWeight: 700, color: "var(--text)" }}>{sel.name}</div><div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 2 }}>{sel.date} · {sel.status === "active" ? "🟡 Active" : "✅ Done"}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 600 }}>NET SPENT</div><div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-h)", color: "#E07A5F" }}>{fmt(ns)}</div><div style={{ fontSize: 9, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 500, marginTop: 3 }}>Total Paid: {fmt(tp)}</div></div></div>
-            {eSp.length > 0 && <div style={{ display: "flex", gap: 8, marginBottom: 14 }}><div style={{ flex: 1, background: "#E07A5F12", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}><div style={{ fontSize: 9, color: "#E07A5F", fontFamily: "var(--font-h)", fontWeight: 600 }}>YOU OWE</div><div style={{ fontSize: 16, fontWeight: 700, fontFamily: "var(--font-h)", color: "#E07A5F" }}>{fmt(tO)}</div></div><div style={{ flex: 1, background: "#6BAA7512", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}><div style={{ fontSize: 9, color: "#6BAA75", fontFamily: "var(--font-h)", fontWeight: 600 }}>OWED TO YOU</div><div style={{ fontSize: 16, fontWeight: 700, fontFamily: "var(--font-h)", color: "#6BAA75" }}>{fmt(tI)}</div></div></div>}
-            {eExps.length > 0 && <div style={{ ...cc, padding: 14, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 10, letterSpacing: "0.5px" }}>EXPENSES</div>{[...eExps].reverse().map(e => { const cat = cats.find(c => c.id === e.categoryId) || { id: "other", name: "Other", color: "#999", neon: "#999" }; return <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border)" }}><DI2 id={cat.id} accent={cat.neon || cat.color} size={18} /><div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, fontFamily: "var(--font-h)", color: "var(--text)" }}>{cat.name}</div>{e.note && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>{e.note}</div>}</div><span style={{ fontFamily: "var(--font-h)", fontWeight: 600, color: "#E07A5F", fontSize: 14 }}>−{fmt(e.amount)}</span></div> })}</div>}
-            {eSp.length > 0 && <div style={{ ...cc, padding: 14, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 10, letterSpacing: "0.5px" }}>SPLITS</div>{eSp.map(s => <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border)", opacity: s.settled ? 0.4 : 1 }}><span style={{ fontSize: 14 }}>{s.settled ? "✅" : s.direction === "owe" ? "🔴" : "🟢"}</span><div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, fontFamily: "var(--font-h)", color: "var(--text)" }}>{s.name}</div><div style={{ fontSize: 11, color: "var(--muted)" }}>{s.settled ? "Settled" : s.direction === "owe" ? "You owe" : "Owes you"}</div></div><span style={{ fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 14, color: s.direction === "owe" ? "#E07A5F" : "#6BAA75" }}>{fmt(s.amount)}</span>{!s.settled && <button onClick={() => sSTgt(s)} style={{ border: "1px solid var(--border)", background: "none", borderRadius: 6, padding: "3px 8px", fontSize: 10, color: "var(--muted)", cursor: "pointer" }}>Settle</button>}<button onClick={() => oDS(s.id)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 13, opacity: 0.4 }}>✕</button></div>)}</div>}
-            {sel.status === "active" && <div style={{ ...cc, padding: 16, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 12, letterSpacing: "0.5px" }}>ADD EXPENSE</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>{cats.map(c => <button key={c.id} onClick={() => sEC(c.id)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontFamily: "var(--font-b)", border: `1.5px solid ${ec === c.id ? c.color : "var(--border)"}`, background: ec === c.id ? c.color + "18" : "var(--card)", color: ec === c.id ? c.color : "var(--ts)", cursor: "pointer", fontWeight: ec === c.id ? 600 : 400, display: "flex", alignItems: "center", gap: 4 }}><DI2 id={c.id} accent={c.neon || c.color} size={14} />{c.name}</button>)}</div><label style={ls}>Paid From</label><div style={{ display: "flex", gap: 6, marginBottom: 12 }}>{WALLETS.map(w => <button key={w.id} onClick={() => sEW(w.id)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1.5px solid ${ew === w.id ? w.color : "var(--border)"}`, background: ew === w.id ? w.color + "15" : "var(--card)", fontSize: 12, fontWeight: ew === w.id ? 600 : 500, fontFamily: "var(--font-h)", color: ew === w.id ? w.color : "var(--muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}><DI2 id={w.id} accent={w.neon || w.color} size={12} />{w.name}</button>)}</div><div style={{ display: "flex", gap: 8 }}><input type="number" value={ea} onChange={e => sEA(e.target.value)} placeholder="₹" style={{ ...is, width: 80 }} /><input value={en} onChange={e => sEN(e.target.value)} placeholder="Note" style={{ ...is, flex: 1 }} /><button onClick={addExp} style={{ padding: "10px 14px", border: "none", borderRadius: 10, background: "#E07A5F", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+</button></div></div>}
-            {sel.status === "active" && (() => {
-                const totalNum = parseFloat(bsTotal) || 0, validPpl = bsPpl.filter(p => p.name.trim()), hc = validPpl.length + 1;
-                const eqPP = hc > 0 ? Math.floor(totalNum / hc) : 0, eqMy = totalNum - (eqPP * validPpl.length);
-                const custOT = bsPpl.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0), custMy = Math.max(0, totalNum - custOT);
-                const myShare = bsMode === "equal" ? eqMy : custMy;
-                const canSub = totalNum > 0 && validPpl.length > 0 && (bsMode === "equal" || (custOT > 0 && custOT <= totalNum));
-                const bsReset = () => { sBsT(""); sBsP([{ name: "", amount: "" }]); sBsN(""); sBsS(1); sBsO(false) };
-                const bsSubmit = () => { if (!canSub || !sel) return; const gid = uid(); if (myShare > 0) { const ok = oE({ amount: myShare, categoryId: bsCat, walletId: bsW, note: bsNote || "Bill split — my share", date: new Date().toISOString().slice(0, 10), eventId: sel.id, groupId: gid }); if (ok === false) return } validPpl.forEach(p => { const amt = bsMode === "equal" ? eqPP : (parseFloat(p.amount) || 0); if (amt > 0) oS({ id: uid(), name: p.name.trim(), amount: amt, direction: "owed", settled: false, eventId: sel.id, groupId: gid }) }); sBsS(3); setTimeout(bsReset, 2000) };
-                if (!bsOpen) return <button onClick={() => sBsO(true)} style={{ width: "100%", padding: 14, border: "1.5px solid #7B8CDE", borderRadius: 14, background: "#7B8CDE12", color: "#7B8CDE", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 600, cursor: "pointer", marginBottom: 14 }}>🧾 Bill Splitter</button>;
-                if (bsStep === 3) return <div style={{ ...cc, padding: 24, marginBottom: 14, textAlign: "center" }}><div style={{ fontSize: 32, marginBottom: 8 }}>✅</div><div style={{ fontFamily: "var(--font-h)", fontSize: 14, color: "#6BAA75", fontWeight: 600 }}>Split recorded!</div><div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>Your share ({fmt(myShare)}) logged.</div></div>;
-                if (bsStep === 2) { const cat = cats.find(c => c.id === bsCat) || cats[0]; return <div style={{ ...cc, padding: 16, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 14, letterSpacing: "0.5px" }}>🧾 CONFIRM SPLIT</div><div style={{ background: "#E07A5F12", borderRadius: 10, padding: "12px 14px", marginBottom: 14, border: "1px solid #E07A5F30" }}><div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 600, marginBottom: 6 }}>YOUR EXPENSE</div><div style={{ display: "flex", alignItems: "center", gap: 10 }}><DI2 id={cat?.id} accent={cat?.neon || cat?.color} size={20} /><div style={{ flex: 1 }}><div style={{ fontSize: 13, fontFamily: "var(--font-h)", fontWeight: 600, color: "var(--text)" }}>Your share</div></div><div style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--font-h)", color: "#E07A5F" }}>−{fmt(myShare)}</div></div></div><div style={{ marginBottom: 14 }}><div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 600, marginBottom: 8 }}>THEY OWE YOU</div>{validPpl.map((p, i) => { const amt = bsMode === "equal" ? eqPP : (parseFloat(p.amount) || 0); return <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid var(--border)" }}><span style={{ fontSize: 13, fontFamily: "var(--font-h)", color: "var(--text)" }}>{p.name}</span><span style={{ fontSize: 13, fontFamily: "var(--font-h)", fontWeight: 600, color: "#6BAA75" }}>{fmt(amt)}</span></div> })}</div><div style={{ display: "flex", gap: 8 }}><button onClick={() => sBsS(1)} style={{ flex: 1, padding: 12, border: "1.5px solid var(--border)", borderRadius: 10, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer" }}>← Edit</button><button onClick={bsSubmit} style={{ flex: 2, padding: 12, border: "none", borderRadius: 10, background: "#6BAA75", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Confirm ✓</button></div></div> }
-                return <div style={{ ...cc, padding: 16, marginBottom: 14 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, color: "var(--muted)", fontWeight: 600, letterSpacing: "0.5px" }}>🧾 BILL SPLITTER</div><button onClick={bsReset} style={{ background: "none", border: "none", fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>✕</button></div>
-                    <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>{[{ id: "equal", label: "Equal Split" }, { id: "custom", label: "Custom Split" }].map(m => <button key={m.id} onClick={() => sBsM(m.id)} style={{ flex: 1, padding: "9px", borderRadius: 8, fontSize: 12, fontFamily: "var(--font-h)", border: `1.5px solid ${bsMode === m.id ? "#7B8CDE" : "var(--border)"}`, background: bsMode === m.id ? "#7B8CDE18" : "var(--card)", color: bsMode === m.id ? "#7B8CDE" : "var(--muted)", cursor: "pointer", fontWeight: 600 }}>{m.label}</button>)}</div>
-                    <label style={ls}>Total Bill (₹)</label><input type="number" value={bsTotal} onChange={e => sBsT(e.target.value)} placeholder="0" style={{ ...is, marginBottom: 14, fontSize: 20, fontWeight: 700, fontFamily: "var(--font-h)", textAlign: "center" }} />
-                    <label style={ls}>People (excluding you)</label>{bsPpl.map((p, i) => <div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}><input value={p.name} onChange={e => sBsP(pp => pp.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))} placeholder="Name" style={{ ...is, flex: 1 }} />{bsMode === "custom" && <input type="number" value={p.amount} onChange={e => sBsP(pp => pp.map((x, idx) => idx === i ? { ...x, amount: e.target.value } : x))} placeholder="₹" style={{ ...is, width: 78 }} />}{bsPpl.length > 1 && <button onClick={() => sBsP(pp => pp.filter((_, idx) => idx !== i))} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 16, opacity: 0.4 }}>✕</button>}</div>)}
-                    <button onClick={() => sBsP(p => [...p, { name: "", amount: "" }])} style={{ background: "none", border: "1px dashed var(--border)", borderRadius: 8, padding: "7px 14px", fontSize: 12, color: "var(--muted)", cursor: "pointer", fontFamily: "var(--font-h)", marginBottom: 14, width: "100%" }}>+ Add person</button>
-                    {totalNum > 0 && validPpl.length > 0 && <div style={{ background: "var(--bg)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, border: "1px solid var(--border)" }}>{bsMode === "equal" ? <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: "var(--font-h)", color: "var(--ts)" }}><span>Per person ({hc})</span><span style={{ fontWeight: 600 }}>{fmt(eqPP)}</span></div> : <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontFamily: "var(--font-h)", color: custOT > totalNum ? "#D4726A" : "var(--ts)" }}><span>Others total</span><span style={{ fontWeight: 600 }}>{fmt(custOT)} / {fmt(totalNum)}{custOT > totalNum ? " (over!)" : ""}</span></div>}<div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontFamily: "var(--font-h)", color: "#E07A5F", fontWeight: 700, marginTop: 6 }}><span>Your share</span><span>{fmt(myShare)}</span></div></div>}
-                    <label style={ls}>Category</label><div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>{cats.map(c => <button key={c.id} onClick={() => sBsC(c.id)} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, fontFamily: "var(--font-b)", border: `1.5px solid ${bsCat === c.id ? c.color : "var(--border)"}`, background: bsCat === c.id ? c.color + "18" : "var(--card)", color: bsCat === c.id ? c.color : "var(--ts)", cursor: "pointer", fontWeight: bsCat === c.id ? 600 : 400 }}><DI2 id={c.id} accent={c.neon || c.color} size={14} /> {c.name}</button>)}</div>
-                    <label style={ls}>Paid From</label><div style={{ display: "flex", gap: 6, marginBottom: 14 }}>{WALLETS.map(w => <button key={w.id} onClick={() => sBsW(w.id)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1.5px solid ${bsW === w.id ? w.color : "var(--border)"}`, background: bsW === w.id ? w.color + "15" : "var(--card)", fontSize: 12, fontWeight: bsW === w.id ? 600 : 500, fontFamily: "var(--font-h)", color: bsW === w.id ? w.color : "var(--muted)", cursor: "pointer" }}><DI2 id={w.id} accent={w.neon || w.color} size={12} /> {w.name}</button>)}</div>
-                    <button onClick={() => { if (canSub) sBsS(2) }} disabled={!canSub} style={{ width: "100%", padding: 13, border: "none", borderRadius: 10, background: canSub ? "#6BAA75" : "var(--border)", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, cursor: canSub ? "pointer" : "default", opacity: canSub ? 1 : 0.5 }}>Review Split →</button></div>
-            })()}
-            {sel.status === "active" && <div style={{ ...cc, padding: 16, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 12, letterSpacing: "0.5px" }}>ADD SPLIT</div><div style={{ display: "flex", gap: 6, marginBottom: 10 }}>{["owed", "owe"].map(d => <button key={d} onClick={() => sSD(d)} style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 12, fontFamily: "var(--font-h)", border: `1.5px solid ${sd === d ? (d === "owe" ? "#E07A5F" : "#6BAA75") : "var(--border)"}`, background: sd === d ? (d === "owe" ? "#E07A5F18" : "#6BAA7518") : "var(--card)", color: sd === d ? (d === "owe" ? "#E07A5F" : "#6BAA75") : "var(--muted)", cursor: "pointer", fontWeight: 500 }}>{d === "owe" ? "I owe them" : "They owe me"}</button>)}</div><div style={{ display: "flex", gap: 8 }}><input value={sn} onChange={e => sSN(e.target.value)} placeholder="Friend name" style={{ ...is, flex: 1 }} /><input type="number" value={sa} onChange={e => sSA(e.target.value)} placeholder="₹" style={{ ...is, width: 80 }} /><button onClick={addSplit} style={{ padding: "10px 14px", border: "none", borderRadius: 10, background: "#6BAA75", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+</button></div></div>}
-            {stgt && <SettleM split={stgt} onConfirm={wid => { oSS(stgt.id, wid); sSTgt(null) }} onClose={() => sSTgt(null)} />}</div>
-    }
+/* ============================================================
+   ROUTINE EDITOR (Settings sub-component)
+   ============================================================ */
+const RoutineEditor = ({ config, setConfig }) => {
+    const [picker, setPicker] = useState(null); // { day, slot } | null
 
-    const active = evs.filter(e => e.status === "active"), done = evs.filter(e => e.status === "completed");
-    return <div style={{ paddingTop: 8 }}><button onClick={() => sV("create")} style={{ width: "100%", padding: 14, border: "2px dashed var(--border)", borderRadius: 14, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: 16 }}>+ New Event</button>
-        {active.length === 0 && done.length === 0 && <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--muted)", fontFamily: "var(--font-b)", fontSize: 14, lineHeight: 2 }}>No events yet.<br />Create one!</div>}
-        {active.map(ev => { const ns = netSpent(ev.id), ps = sp.filter(s => s.eventId === ev.id && !s.settled).length; return <div key={ev.id} onClick={() => { sSel(ev.id); sV("detail") }} style={{ ...cc, borderRadius: 16, padding: 18, marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}><div style={{ width: 42, height: 42, borderRadius: 10, background: "#E07A5F12", display: "flex", alignItems: "center", justifyContent: "center", color: "#E07A5F", flexShrink: 0 }}><EvIcon id={ev.emoji} size={20} /></div><div style={{ flex: 1 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{ev.name}</div><div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 2 }}>{ev.date} · 🟡 Active{ps > 0 && ` · ⚠️ ${ps} unsettled`}</div></div><div style={{ fontFamily: "var(--font-h)", fontSize: 15, fontWeight: 700, color: "#E07A5F" }}>{fmt(ns)}</div></div> })}
-        {done.length > 0 && <div style={{ marginTop: 16 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 10, letterSpacing: "0.5px" }}>PAST EVENTS</div>{done.map(ev => { const ns = netSpent(ev.id); return <div key={ev.id} onClick={() => { sSel(ev.id); sV("detail") }} style={{ ...cc, borderRadius: 14, padding: 16, marginBottom: 8, cursor: "pointer", opacity: 0.6, display: "flex", alignItems: "center", gap: 12 }}><div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", flexShrink: 0 }}><EvIcon id={ev.emoji} size={18} /></div><div style={{ flex: 1 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{ev.name}</div><div style={{ fontSize: 11, color: "var(--muted)" }}>{ev.date} · ✅ Done</div></div><span style={{ fontFamily: "var(--font-h)", fontSize: 13, color: "var(--ts)", fontWeight: 600 }}>{fmt(ns)}</span></div> })}</div>}</div>
-}
+    const updateRoutine = (day, slot, keys) => {
+        setConfig({
+            ...config,
+            routines: {
+                ...config.routines,
+                [day]: { ...config.routines[day], [slot]: keys },
+            },
+        });
+    };
 
-function NI({ type: t, active: a }) {
-    const c = a ? "#E07A5F" : "var(--muted)";
-    if (t === "dashboard") return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="11" width="7" height="10" rx="1.5" /><rect x="3" y="13" width="7" height="8" rx="1.5" /></svg>;
-    if (t === "add") return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
-    if (t === "events") return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /><circle cx="12" cy="16" r="2" /></svg>;
-    if (t === "history") return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round"><path d="M12 8v4l3 3" /><circle cx="12" cy="12" r="9" /></svg>;
-    if (t === "settings") return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>;
-    return null
-}
+    return (
+        <div className="set-row">
+            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => {
+                const r = (config.routines && config.routines[day]) || { am: [], pm: [] };
+                return (
+                    <div key={day} className="routine-day-row">
+                        <div className="routine-day-lbl">{day}</div>
+                        {['am', 'pm'].map((slot) => {
+                            const keys = r[slot] || [];
+                            const pickerOpen = picker && picker.day === day && picker.slot === slot;
+                            const available = PRODUCT_KEYS.filter(k => !keys.includes(k));
+                            return (
+                                <div key={slot} className="routine-sub">
+                                    <div className="routine-sub-label">{slot.toUpperCase()}</div>
+                                    <div style={{ flex: 1 }}>
+                                        <div className="routine-chips">
+                                            {keys.map((k, i) => (
+                                                <div key={i} className="routine-chip">
+                                                    {PRODUCT_LABELS[k] || k}
+                                                    <button onClick={() => updateRoutine(day, slot, keys.filter((_, idx) => idx !== i))}>×</button>
+                                                </div>
+                                            ))}
+                                            <div className="add-step-btn" onClick={() => setPicker(pickerOpen ? null : { day, slot })}>
+                                                + Add
+                                            </div>
+                                        </div>
+                                        {pickerOpen && (
+                                            <div className="product-picker">
+                                                {available.length > 0 ? available.map(k => (
+                                                    <div key={k} className="product-picker-item" onClick={() => {
+                                                        updateRoutine(day, slot, [...keys, k]);
+                                                        setPicker(null);
+                                                    }}>{PRODUCT_LABELS[k]}</div>
+                                                )) : <span style={{ fontSize: 11, color: 'var(--txm)' }}>All added</span>}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
 
-// Clean card style
-const cc = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: 20, boxShadow: "0 2px 16px rgba(0,0,0,0.04)" };
+/* ============================================================
+   SETTINGS SCREEN
+   ============================================================ */
+const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
+    const update = (patch) => setConfig({ ...config, ...patch });
+    const updateProducts = (patch) => setConfig({ ...config, products: { ...config.products, ...patch } });
+    const updateRotation = (day, val) => setConfig({ ...config, snackRotation: { ...config.snackRotation, [day]: val } });
 
-export default function Nomad() {
-    const [module, setModule] = useState("finance");
-    const [routineTab, setRoutineTab] = useState("food");
-    const [tab, sTab] = useState("dashboard"), [ex, sEx] = useState([]), [inc, sInc] = useState([]), [tr, sTr] = useState([]), [stl, sStl] = useState([]), [cats, sCats] = useState(DC), [isrc, sIsrc] = useState(DI), [sp, sSp] = useState([]), [evs, sEvs] = useState([]), [rec, sRec] = useState([]), [fm, sFm] = useState("all"), [loaded, sL] = useState(false), [ld, sLd] = useState(false), [dm, sDm] = useState(false), [toast, sToast] = useState(null), [nn, sNN] = useState(""), [ne2, sNE2] = useState("📁"), [nc, sNC] = useState("#E07A5F"), [mt, sMt] = useState("expense"), [clr, sClr] = useState(false), [spX, sSpX] = useState(false), [calW, sCalW] = useState(null), [wsb, sWsb] = useState({ upi_lite: 0, bank: 0, cash: 0 });
-    const showT = (msg, type = "info") => { sToast({ msg, type }); setTimeout(() => sToast(null), 2000) };
+    const [newSnack, setNewSnack] = useState('');
+    const [restoreMsg, setRestoreMsg] = useState('');
+    const fileRef = useRef(null);
+
+    const handleBackup = () => {
+        const json = JSON.stringify({ data: allData, config, version: 2 }, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `form-backup-${todayKey()}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleRestore = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const parsed = JSON.parse(ev.target.result);
+                if (!parsed.data || !parsed.config) { alert('Invalid backup file.'); return; }
+                if (!confirm('Overwrite all current data?')) return;
+                setAllData(parsed.data);
+                setConfig({
+                    ...DEFAULT_CONFIG,
+                    ...parsed.config,
+                    products: { ...DEFAULT_CONFIG.products, ...(parsed.config.products || {}) },
+                    routines: parsed.config.routines || DEFAULT_ROUTINES,
+                });
+                setRestoreMsg('Restored ✓');
+                setTimeout(() => setRestoreMsg(''), 2500);
+            } catch { alert('Failed to parse backup file.'); }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+    };
+
+    const [nukeStep, setNukeStep] = useState(0); // 0=idle, 1=confirming
+
+    const handleNuke = () => {
+        if (nukeStep === 0) { setNukeStep(1); return; }
+        localStorage.removeItem('form_data');
+        localStorage.removeItem('form_config');
+        localStorage.removeItem(BANNERS_KEY);
+        sbDeleteR("daily_logs", "all_data");
+        sbDeleteR("user_config", "singleton");
+        setAllData({});
+        setConfig(DEFAULT_CONFIG);
+        setNukeStep(0);
+    };
+
+    return (
+        <div className="screen">
+            <div className="hd">
+                <h1>Settings</h1>
+                <div className="sub">Configure</div>
+            </div>
+
+            {/* Appearance — FIRST */}
+            {/* Targets */}
+            <div className="sec">
+                <h3>Targets</h3>
+                <div className="set-row">
+                    <div className="r">
+                        <div>
+                            <div className="lbl">Water target</div>
+                            <div className="desc">Daily goal in litres</div>
+                        </div>
+                        <div className="stepper">
+                            <button onClick={() => update({ waterTarget: Math.max(1.5, config.waterTarget - 0.5) })}>−</button>
+                            <div className="val">{config.waterTarget}L</div>
+                            <button onClick={() => update({ waterTarget: Math.min(5, config.waterTarget + 0.5) })}>+</button>
+                        </div>
+                    </div>
+                </div>
+                <div className="set-row">
+                    <div className="r">
+                        <div>
+                            <div className="lbl">Egg target</div>
+                            <div className="desc">Daily count</div>
+                        </div>
+                        <div className="stepper">
+                            <button onClick={() => update({ eggsTarget: Math.max(1, config.eggsTarget - 1) })}>−</button>
+                            <div className="val">{config.eggsTarget}</div>
+                            <button onClick={() => update({ eggsTarget: Math.min(4, config.eggsTarget + 1) })}>+</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Skincare */}
+            <div className="sec">
+                <h3>Skincare</h3>
+                <div className="set-row">
+                    <div className="lbl" style={{ marginBottom: 10 }}>Retinol phase</div>
+                    <div className="seg">
+                        {[1, 2, 3].map((p) => (
+                            <button key={p} className={config.retinolPhase === p ? 'on' : ''} onClick={() => update({ retinolPhase: p })}>
+                                {p === 1 ? '2×/wk' : p === 2 ? '3×/wk' : 'Nightly'}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                {[['cleanser', 'Cleanser'], ['niacinamide', 'Niacinamide serum'], ['sunscreen', 'Sunscreen'], ['bhaSerum', 'BHA serum'], ['retinol', 'Retinol']].map(([k, label]) => (
+                    <div key={k} className="set-row">
+                        <div className="lbl" style={{ marginBottom: 6 }}>{label}</div>
+                        <input className="inp" value={config.products[k]} onChange={(e) => updateProducts({ [k]: e.target.value })} />
+                    </div>
+                ))}
+                <div className="set-row">
+                    <div className="r">
+                        <div>
+                            <div className="lbl">Show product names</div>
+                            <div className="desc">Off = show step types only</div>
+                        </div>
+                        <div className={`toggle ${config.showProductNames ? 'on' : ''}`} onClick={() => update({ showProductNames: !config.showProductNames })} />
+                    </div>
+                </div>
+            </div>
+
+            {/* Skin routine */}
+            <div className="sec">
+                <h3>Skin routine</h3>
+                <RoutineEditor config={config} setConfig={setConfig} />
+            </div>
+
+            {/* Snack rotation */}
+            <div className="sec">
+                <h3>Snack rotation</h3>
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+                    <div key={d} className="set-row">
+                        <div className="r">
+                            <div className="lbl" style={{ width: 42 }}>{d}</div>
+                            <input className="inp" value={config.snackRotation[d] || ''} onChange={(e) => updateRotation(d, e.target.value)} />
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Snack options */}
+            <div className="sec">
+                <h3>Snack options</h3>
+                <div className="set-row">
+                    <div className="free-list" style={{ marginBottom: 10 }}>
+                        {config.snackOptions.map((s, i) => (
+                            <div key={i} className="chip">
+                                {s}
+                                <button onClick={() => update({ snackOptions: config.snackOptions.filter((_, idx) => idx !== i) })}>×</button>
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <input className="inp" placeholder="Add snack..." value={newSnack} onChange={(e) => setNewSnack(e.target.value)} />
+                        <button className="btn" style={{ width: 'auto', marginTop: 0, padding: '0 16px' }} onClick={() => {
+                            if (newSnack.trim()) { update({ snackOptions: [...config.snackOptions, newSnack.trim()] }); setNewSnack(''); }
+                        }}>Add</button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Data */}
+            <div className="sec">
+                <h3>Data</h3>
+                <button className="btn ghost" onClick={handleBackup}>Backup data</button>
+                <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleRestore} />
+                <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => fileRef.current && fileRef.current.click()}>
+                    {restoreMsg || 'Restore from backup'}
+                </button>
+
+                {nukeStep === 0 ? (
+                    <button className="btn danger" onClick={handleNuke} style={{ marginTop: 8 }}>
+                        Clear all data
+                    </button>
+                ) : (
+                    <div style={{ marginTop: 8, background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 'var(--rsm)', padding: '14px' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#991b1b', marginBottom: 4 }}>Clear all data?</div>
+                        <div style={{ fontSize: 12, color: '#b91c1c', marginBottom: 12 }}>This will permanently delete all your tracked days and reset settings. Cannot be undone.</div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                                onClick={handleNuke}
+                                style={{ flex: 1, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, padding: '10px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                            >
+                                Yes, clear everything
+                            </button>
+                            <button
+                                onClick={() => setNukeStep(0)}
+                                style={{ flex: 1, background: 'var(--bg2)', color: 'var(--tx)', border: '1px solid var(--bd)', borderRadius: 8, padding: '10px', fontSize: 13, cursor: 'pointer' }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+/* ============================================================
+   APP
+   ============================================================ */
+export default function RoutineApp({ darkMode = false, onTabChange }) {
+    const [allData, setAllData] = useState(loadData);
+    const [config, setConfig] = useState(loadConfig);
+    const [activeTab, setActiveTab] = useState('food');
+    const [toast, setToast] = useState(null);
+
+    const handleTabChange = (t) => { setActiveTab(t); if (onTabChange) onTabChange(t); };
 
     useEffect(() => {
+        if (document.getElementById('form-style')) return;
+        const s = document.createElement('style');
+        s.id = 'form-style';
+        s.textContent = CSS;
+        document.head.appendChild(s);
+    }, []);
+
+    useEffect(() => {
+        const el = document.getElementById('nomad-routine');
+        if (el) el.classList.toggle('dark', !!darkMode);
+    }, [darkMode]);
+
+    // Load from Supabase on mount, fall back to localStorage
+    useEffect(() => {
         const load = async () => {
-            try {
-                const [dbEx, dbInc, dbTr, dbStl, dbSp, dbRec, dbWsb] = await Promise.all([
-                    sbGet("expenses"), sbGet("incomes"), sbGet("transfers"), sbGet("settlements"),
-                    sbGet("splits"), sbGet("recurring"), sbGet("wallet_balances")
-                ]);
-                // Supabase is source of truth — always use it, even if empty
-                if (dbEx?.length) sEx(dbEx);
-                if (dbInc?.length) sInc(dbInc);
-                if (dbTr?.length) sTr(dbTr);
-                if (dbStl?.length) sStl(dbStl);
-                if (dbSp?.length) sSp(dbSp);
-                if (dbRec?.length) sRec(dbRec);
-                if (dbWsb?.length) { const wb = { upi_lite: 0, bank: 0, cash: 0 }; dbWsb.forEach(r => { wb[r.wallet_id] = r.balance }); sWsb(wb) }
-            } catch {
-                // Offline only — fallback to localStorage
+            const [dbData, dbConfig] = await Promise.all([
+                sbGetR("daily_logs", "all_data"),
+                sbGetR("user_config", "singleton"),
+            ]);
+            if (dbData?.data) {
+                setAllData(dbData.data);
+                localStorage.setItem('form_data', JSON.stringify(dbData.data));
+            }
+            if (dbConfig?.data) {
                 try {
-                    const r = localStorage.getItem("nomad-v5"); if (r) {
-                        const d = JSON.parse(r);
-                        if (d.expenses) sEx(d.expenses); if (d.incomes) sInc(d.incomes); if (d.transfers) sTr(d.transfers);
-                        if (d.settlements) sStl(d.settlements); if (d.categories?.length) sCats(d.categories);
-                        if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.splits) sSp(d.splits);
-                        if (d.recurring) sRec(d.recurring); if (d.darkMode !== undefined) sDm(d.darkMode);
-                        if (d.walletStartBal) sWsb(d.walletStartBal);
-                    }
+                    const c = dbConfig.data;
+                    const mergedRoutines = Object.fromEntries(
+                        Object.entries(DEFAULT_ROUTINES).map(([day, def]) => [
+                            day, { am: c.routines?.[day]?.am || def.am, pm: c.routines?.[day]?.pm || def.pm }
+                        ])
+                    );
+                    const merged = { ...DEFAULT_CONFIG, ...c, products: { ...DEFAULT_CONFIG.products, ...(c.products || {}) }, snackRotation: { ...DEFAULT_CONFIG.snackRotation, ...(c.snackRotation || {}) }, routines: mergedRoutines };
+                    setConfig(merged);
+                    localStorage.setItem('form_config', JSON.stringify(merged));
                 } catch { }
             }
-            sL(true);
-            if ("serviceWorker" in navigator) { navigator.serviceWorker.getRegistrations().then(r => r.forEach(sw => sw.unregister())) }
         };
         load();
     }, []);
-    // Keep localStorage in sync as offline backup
-    useEffect(() => { if (!loaded) return; try { localStorage.setItem("nomad-v5", JSON.stringify({ expenses: ex, incomes: inc, transfers: tr, settlements: stl, categories: cats, incomeSources: isrc, splits: sp, events: evs, recurring: rec, darkMode: dm, walletStartBal: wsb })) } catch { } }, [ex, inc, tr, stl, cats, isrc, sp, evs, rec, dm, wsb, loaded]);
 
-    const allM = useMemo(() => { const s = new Set(); ex.forEach(e => s.add(mk(e.date))); inc.forEach(i => s.add(mk(i.date))); return [...s].sort() }, [ex, inc]);
-    const flt = useMemo(() => fm === "all" ? { expenses: ex, incomes: inc } : { expenses: ex.filter(e => mk(e.date) === fm), incomes: inc.filter(i => mk(i.date) === fm) }, [ex, inc, fm]);
-    const tI = flt.incomes.reduce((s, i) => s + i.amount, 0), tE = flt.expenses.reduce((s, e) => s + e.amount, 0);
+    useEffect(() => {
+        localStorage.setItem('form_data', JSON.stringify(allData));
+        sbUpsertR("daily_logs", { id: "all_data", data: allData });
+    }, [allData]);
 
-    const wBal = useMemo(() => { const b = { upi_lite: wsb.upi_lite || 0, bank: wsb.bank || 0, cash: wsb.cash || 0 }; inc.forEach(i => { const w = i.walletId || "bank"; if (b[w] !== undefined) b[w] += i.amount }); ex.forEach(e => { const w = e.walletId || "upi_lite"; if (b[w] !== undefined) b[w] -= e.amount }); tr.forEach(t => { if (b[t.fromWallet] !== undefined) b[t.fromWallet] -= t.amount; if (b[t.toWallet] !== undefined) b[t.toWallet] += t.amount }); stl.forEach(s => { if (b[s.walletId] !== undefined) { if (s.direction === "owed") b[s.walletId] += s.amount; else b[s.walletId] -= s.amount } }); return b }, [ex, inc, tr, stl, wsb]);
-    const mBal = Object.values(wBal).reduce((s, v) => s + v, 0);
+    useEffect(() => {
+        localStorage.setItem('form_config', JSON.stringify(config));
+        sbUpsertR("user_config", { id: "singleton", data: config });
+    }, [config]);
 
-    const dance = () => { sLd(true); setTimeout(() => sLd(false), 1800) };
-    const toSB = (obj, keys) => Object.fromEntries(keys.filter(k => obj[k] !== undefined).map(k => [k, obj[k]]));
-    const addE = data => { const w = WALLETS.find(x => x.id === data.walletId), b = Math.round((wBal[data.walletId] || 0) * 100) / 100, amt = Math.round(data.amount * 100) / 100; if (b < amt) { showT(`Not enough in ${w?.name}`, "error"); return false } const rec = { id: uid(), type: "expense", ...data }; sEx(p => [rec, ...p]); sbUpsert("expenses", [toSB(rec, ["id", "amount", "categoryId", "walletId", "note", "date"])]); dance(); showT("Expense added", "success"); return true };
-    const addI = data => { if (data.walletId === "upi_lite") { showT("UPI Lite is for spending only", "error"); return } const rec = { id: uid(), type: "income", ...data }; sInc(p => [rec, ...p]); sbUpsert("incomes", [toSB(rec, ["id", "amount", "sourceId", "walletId", "note", "date"])]); dance(); showT("Income added", "success") };
-    const addT = data => { const b = Math.round((wBal[data.fromWallet] || 0) * 100) / 100, amt = Math.round(data.amount * 100) / 100; if (b < amt) { showT(`Insufficient balance`, "error"); return } const rec = { id: uid(), type: "transfer", ...data }; sTr(p => [rec, ...p]); sbUpsert("transfers", [toSB(rec, ["id", "amount", "fromWallet", "toWallet", "note", "date"])]); dance(); showT("Transfer done", "success") };
-    const settle = (sid, wid) => { const s = sp.find(x => x.id === sid); if (!s) return; if (s.direction === "owe") { if (wid === "upi_lite") { showT("UPI Lite is for spending only", "error"); return } const b = wBal[wid] || 0; if (b < s.amount) { showT("Not enough to settle", "error"); return } } if (s.direction === "owed" && wid === "upi_lite") { showT("UPI Lite is for spending only", "error"); return } const rec = { id: uid(), type: "settlement", splitName: s.name, amount: s.amount, direction: s.direction, walletId: wid, date: new Date().toISOString().slice(0, 10), ...(s.groupId && { groupId: s.groupId }), ...(s.eventId && { eventId: s.eventId }) }; sStl(p => [...p, rec]); sbUpsert("settlements", [toSB(rec, ["id", "amount", "splitName", "direction", "walletId", "date", "groupId", "eventId"])]); sSp(p => p.map(x => x.id === sid ? { ...x, settled: true } : x)); showT("Settled", "success") };
-    const delItem = (id, type) => { if (type === "expense") { sEx(p => p.filter(e => e.id !== id)); sbDelete("expenses", id) } else if (type === "income") { sInc(p => p.filter(i => i.id !== id)); sbDelete("incomes", id) } else if (type === "transfer") { sTr(p => p.filter(t => t.id !== id)); sbDelete("transfers", id) } else if (type === "settlement") { sStl(p => p.filter(s => s.id !== id)); sbDelete("settlements", id) } };
-    const addRec = r => sRec(p => [...p, r]);
-    const addCust = () => { if (!nn.trim()) return; const id = nn.trim().toLowerCase().replace(/\s+/g, "_") + "_" + uid(), item = { id, name: nn.trim(), emoji: ne2, color: nc }; if (mt === "expense") sCats(p => [...p, item]); else sIsrc(p => [...p, item]); sNN(""); sNE2("📁"); sNC("#E07A5F") };
-    const handleCal = (wId, desired) => { const cur = wBal[wId], start = wsb[wId] || 0; sWsb(p => ({ ...p, [wId]: start + (desired - cur) })) };
-    const expCSV = () => { let csv = "Type,Date,Amount,Category/Source,Wallet,Note\n"; inc.forEach(i => { csv += `Income,${i.date},${i.amount},"${isrc.find(s => s.id === i.sourceId)?.name || ""}","${WALLETS.find(x => x.id === i.walletId)?.name || "Bank"}","${i.note || ""}"\n` }); ex.forEach(e => { csv += `Expense,${e.date},${e.amount},"${cats.find(c => c.id === e.categoryId)?.name || ""}","${WALLETS.find(x => x.id === e.walletId)?.name || ""}","${e.note || ""}"\n` }); tr.forEach(t => { csv += `Transfer,${t.date},${t.amount},"${t.fromWallet}→${t.toWallet}","","${t.note || ""}"\n` }); stl.forEach(s => { csv += `Settlement,${s.date},${s.amount},"${s.splitName}","${WALLETS.find(w => w.id === s.walletId)?.name || ""}","${s.direction}"\n` }); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `nomad_${new Date().toISOString().slice(0, 10)}.csv`; a.click() };
-    const expBackup = () => { const data = JSON.stringify({ expenses: ex, incomes: inc, transfers: tr, settlements: stl, categories: cats, incomeSources: isrc, splits: sp, events: evs, recurring: rec, darkMode: dm, walletStartBal: wsb, _v: "nomad-v9", _date: new Date().toISOString() }, null, 2); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type: "application/json" })); a.download = `nomad_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); showT("Backup downloaded", "success") };
-    const impBackup = (file) => { const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); if (!d._v || !d._v.startsWith("nomad")) { showT("Invalid backup file", "error"); return } if (d.expenses) sEx(d.expenses); if (d.incomes) sInc(d.incomes); if (d.transfers) sTr(d.transfers); if (d.settlements) sStl(d.settlements); if (d.categories?.length) sCats(d.categories); if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.splits) sSp(d.splits); if (d.events) sEvs(d.events); if (d.recurring) sRec(d.recurring); if (d.darkMode !== undefined) sDm(d.darkMode); if (d.walletStartBal) sWsb(d.walletStartBal); showT("Data restored!", "success") } catch { showT("Failed to read file", "error") } }; r.readAsText(file) };
+    const key = todayKey();
+    const rawDay = allData[key] || {};
+    const day = {
+        ...DEFAULT_DAY,
+        ...rawDay,
+        freeFoodLog: migrateFreeFoodLog(rawDay.freeFoodLog),
+    };
+    const updateDay = (patch) => setAllData(prev => ({ ...prev, [key]: { ...day, ...patch } }));
 
-    if (!loaded) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F2F0EB", fontFamily: "Plus Jakarta Sans,sans-serif", color: "#8A8A9A", flexDirection: "column", gap: 12 }}><span style={{ fontSize: 40 }}>🦁</span><span style={{ fontWeight: 700, letterSpacing: 2, fontSize: 18 }}>NOMAD</span></div>;
-    const theme = dm ? { "--bg": "#000", "--card": "#111", "--border": "rgba(255,255,255,0.08)", "--text": "#FFF", "--ts": "#A0A0A0", "--muted": "#666", "--nav-bg": "rgba(0,0,0,0.92)" } : { "--bg": "#F2F0EB", "--card": "#FFF", "--border": "rgba(0,0,0,0.06)", "--text": "#1A1A2E", "--ts": "#4A4A5A", "--muted": "#8A8A9A", "--nav-bg": "rgba(242,240,235,0.92)" };
+    const appStreak = useMemo(() => {
+        const dayLevel = (d) => {
+            if (!d) return 0;
+            let pts = 0;
+            if (d.morningWater) pts++;
+            const mwL = parseMorningWater(d.morningWaterAmount);
+            if ((mwL + (d.water || 0)) >= config.waterTarget) pts++;
+            if ((d.eggs || 0) >= config.eggsTarget) pts++;
+            if (d.curd) pts++;
+            if (d.amSkinDone) pts++;
+            if (d.pmSkinDone) pts++;
+            return pts;
+        };
+        let s = 0;
+        const d = new Date();
+        while (true) {
+            const k = d.toISOString().slice(0, 10);
+            const rec = allData[k];
+            if (rec && dayLevel(rec) > 0) { s++; d.setDate(d.getDate() - 1); }
+            else break;
+        }
+        return s;
+    }, [allData, config]);
 
-    return <div style={{ ...theme, fontFamily: "var(--font-b)", background: "var(--bg)", color: "var(--text)", minHeight: "100vh", width: "100%", maxWidth: 430, margin: "0 auto", padding: "0 0 90px", overflowX: "hidden", boxSizing: "border-box" }}><style>{`
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Nunito:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500&display=swap');
-:root{--font-h:'Plus Jakarta Sans',sans-serif;--font-b:'Nunito',sans-serif}
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{overflow-x:hidden;max-width:100%}
-body{background:${dm ? "#000" : "#F2F0EB"};overflow-x:hidden}
-input[type=date]{color-scheme:${dm ? "dark" : "light"}}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}input[type=number]{-moz-appearance:textfield}
-::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform:scale(0.96)}
-@keyframes fi{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-@keyframes fis{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
-@keyframes ld{from{transform:translateY(-6px) rotate(-5deg)}to{transform:translateY(-4px) rotate(5deg)}}
-@keyframes ti{from{opacity:0;transform:translate(-50%,-20px)}to{opacity:1;transform:translate(-50%,0)}}
-@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
-.pe{animation:fi 0.3s ease-out}.pse{animation:fis 0.25s ease-out}
-.card-hover{transition:box-shadow 0.2s ease,transform 0.2s ease}
-.card-hover:hover{box-shadow:0 4px 24px rgba(0,0,0,0.08);transform:translateY(-1px)}
-#nomad-routine .hd{display:none!important}
-#nomad-routine .skin-hd .date{display:none!important}
-`}</style>
+    const onComplete = (type) => {
+        const banners = getBanners();
+        const todayStr = todayKey();
+        const bKey = type === 'food' ? 'foodBannerShown' : 'skinBannerShown';
+        if (banners[bKey] === todayStr) return;
+        banners[bKey] = todayStr;
+        localStorage.setItem(BANNERS_KEY, JSON.stringify(banners));
+        const id = Date.now();
+        setToast({ type, id });
+        setTimeout(() => setToast(prev => (prev && prev.id === id ? null : prev)), 2500);
+    };
 
+    return (
+        <div id="nomad-routine">
+            <div className="app" data-tab={activeTab}>
+                {activeTab === 'food' && <FoodScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
+                {activeTab === 'skin' && <SkinScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
+                {activeTab === 'log' && <LogScreen allData={allData} config={config} />}
+                {activeTab === 'settings' && <SettingsScreen config={config} setConfig={setConfig} allData={allData} setAllData={setAllData} />}
 
-        {(() => {
-            const isHome = (module === "finance" && tab === "dashboard") || (module === "routine" && routineTab === "food");
-            const isRoutineOther = module === "routine" && routineTab !== "food";
-            if (module === "finance" && tab !== "dashboard") return null;
-            return <div style={{ position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", background: dm ? "rgba(0,0,0,0.45)" : "rgba(242,240,235,0.55)", borderBottom: `1px solid ${dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`, padding: isRoutineOther ? "8px 20px" : "14px 20px 10px" }}>
-                {!isRoutineOther && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    <span style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 500, color: "var(--text)", letterSpacing: "0.02em" }}>NOMAD</span>
-                    <span style={{ fontFamily: "var(--font-h)", fontSize: 11, color: "var(--muted)", fontWeight: 600, letterSpacing: "1.5px" }}>{new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()} · {new Date().getDate()} {new Date().toLocaleDateString("en-US", { month: "short" }).toUpperCase()}</span>
-                </div>}
-                <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => setModule("finance")} style={{ flex: 1, padding: "7px 0", borderRadius: 100, fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 600, border: `1.5px solid ${module === "finance" ? "#E07A5F" : dm ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`, cursor: "pointer", background: module === "finance" ? "#E07A5F" : "transparent", color: module === "finance" ? "#fff" : dm ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.35)", letterSpacing: "0.5px", transition: "all 0.2s" }}>Finance</button>
-                    <button onClick={() => setModule("routine")} style={{ flex: 1, padding: "7px 0", borderRadius: 100, fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 600, border: `1.5px solid ${module === "routine" ? "#EF9F27" : dm ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`, cursor: "pointer", background: module === "routine" ? "#EF9F27" : "transparent", color: module === "routine" ? "#fff" : dm ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.35)", letterSpacing: "0.5px", transition: "all 0.2s" }}>Routine</button>
-                </div>
+                {toast && (
+                    <div
+                        key={toast.id}
+                        style={{
+                            position: 'fixed',
+                            top: 14,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            zIndex: 300,
+                            animation: 'toastPill 2.5s ease forwards',
+                            pointerEvents: 'none',
+                        }}
+                    >
+                        <div style={{
+                            padding: '10px 22px',
+                            borderRadius: 100,
+                            background: toast.type === 'food' ? 'var(--green)' : 'var(--teal)',
+                            color: '#fff',
+                            fontSize: 13,
+                            fontWeight: 500,
+                            whiteSpace: 'nowrap',
+                            boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                            fontFamily: 'var(--font)',
+                        }}>
+                            {toast.type === 'food' ? 'Food ritual complete ✓' : 'Skin ritual complete ✓'}
+                        </div>
+                    </div>
+                )}
+
+                <nav className="nav">
+                    {[['food', 'Food'], ['skin', 'Skin'], ['log', 'Log'], ['settings', 'Settings']].map(([k, l]) => (
+                        <button key={k} className={activeTab === k ? `active ${k}` : ''} onClick={() => handleTabChange(k)}>
+                            <Icon name={k} />
+                            {l}
+                        </button>
+                    ))}
+                </nav>
             </div>
-        })()}
-
-        {module === "routine" && <RoutineApp darkMode={dm} onTabChange={setRoutineTab} />}
-        {module === "finance" && <div style={{ padding: "0 16px" }}>
-
-            {(tab === "dashboard" || tab === "history") && <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "12px 0 16px", scrollbarWidth: "none" }}><button onClick={() => sFm("all")} style={{ padding: "7px 16px", borderRadius: 20, fontSize: 12, fontFamily: "var(--font-h)", border: `1.5px solid ${fm === "all" ? "#E07A5F" : "var(--border)"}`, background: fm === "all" ? "#E07A5F" : "var(--card)", color: fm === "all" ? "#fff" : "var(--muted)", cursor: "pointer", whiteSpace: "nowrap", fontWeight: 500 }}>All</button>{allM.map(m => <button key={m} onClick={() => sFm(m)} style={{ padding: "7px 16px", borderRadius: 20, fontSize: 12, fontFamily: "var(--font-h)", border: `1.5px solid ${fm === m ? "#6BAA75" : "var(--border)"}`, background: fm === m ? "#6BAA75" : "var(--card)", color: fm === m ? "#fff" : "var(--muted)", cursor: "pointer", whiteSpace: "nowrap", fontWeight: 500 }}>{ml(m)}</button>)}</div>}
-
-            {tab === "dashboard" && <div className="pe">
-                {(() => {
-                    const tod = new Date(), todS = tod.toISOString().slice(0, 10), due = rec.filter(r => { if (!r.active || r.startDate > todS) return false; if (r.frequency === "monthly") { const dd = new Date(tod.getFullYear(), tod.getMonth(), r.dayOfMonth); return !(r.lastPaidDate && r.lastPaidDate.slice(0, 7) === todS.slice(0, 7)) && todS >= dd.toISOString().slice(0, 10) } if (r.frequency === "yearly") { const dd = new Date(tod.getFullYear(), r.yearMonth - 1, r.yearDay); const thisYear = todS.slice(0, 4); return !(r.lastPaidDate && r.lastPaidDate.slice(0, 4) === thisYear) && todS >= dd.toISOString().slice(0, 10) } if (r.frequency === "custom") { const last = r.lastPaidDate || r.startDate; return Math.floor((tod - new Date(last)) / 864e5) >= r.intervalDays } return false });
-                    return due.length > 0 && <div style={{ marginBottom: 14 }}>{due.map(r => { const cat = cats.find(c => c.id === r.categoryId) || { name: r.categoryId }; const wal = WALLETS.find(w => w.id === r.walletId) || { name: r.walletId }; return <div key={r.id} style={{ ...cc, borderLeft: "3px solid #E07A5F", borderRadius: 14, padding: "14px 16px", marginBottom: 8 }}><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><span style={{ fontSize: 14 }}>🔔</span><div style={{ flex: 1 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{r.name} due today — {fmt(r.amount)}</div><div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{wal.name} → {cat.name}</div></div></div><div style={{ display: "flex", gap: 6 }}><button onClick={() => { const ok = addE({ amount: r.amount, categoryId: r.categoryId, walletId: r.walletId, date: todS, note: r.name + " (recurring)" }); if (ok !== false) sRec(p => p.map(x => x.id === r.id ? { ...x, lastPaidDate: todS } : x)) }} style={{ flex: 1, padding: "8px", border: "none", borderRadius: 8, background: "#6BAA75", color: "#fff", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>✓ Paid</button><button onClick={() => { sRec(p => p.map(x => x.id === r.id ? { ...x, lastPaidDate: todS } : x)); showT("Skipped for this cycle", "info") }} style={{ flex: 1, padding: "8px", border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--card)", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Skip</button><button onClick={() => showT("Snoozed", "info")} style={{ flex: 1, padding: "8px", border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--card)", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Snooze</button></div></div> })}</div>
-                })()}
-                <div style={{ ...cc, padding: "28px 24px", marginBottom: 16, textAlign: "center" }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, color: "var(--muted)", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 500 }}>Total Money</div><div style={{ fontSize: 36, fontWeight: 700, fontFamily: "var(--font-h)", color: mBal >= 0 ? "#6BAA75" : "#E07A5F", marginTop: 8, lineHeight: 1.2 }}>{fmt(mBal)}</div><div style={{ display: "flex", justifyContent: "space-around", marginTop: 22 }}><div><div style={{ fontFamily: "var(--font-h)", fontSize: 10, color: "var(--muted)", letterSpacing: "1px", fontWeight: 500 }}>INCOME</div><div style={{ fontFamily: "var(--font-h)", fontSize: 16, color: "#6BAA75", marginTop: 4, fontWeight: 600 }}>{fmt(tI)}</div></div><div style={{ width: 1, background: "var(--border)" }} /><div><div style={{ fontFamily: "var(--font-h)", fontSize: 10, color: "var(--muted)", letterSpacing: "1px", fontWeight: 500 }}>NET SPENT</div><div style={{ fontFamily: "var(--font-h)", fontSize: 16, color: "#E07A5F", marginTop: 4, fontWeight: 600 }}>{fmt(tE)}</div></div></div></div>
-
-                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>{WALLETS.map(w => { const b = wBal[w.id] || 0; return <div key={w.id} onClick={() => sCalW(w)} className="card-hover" style={{ ...cc, flex: 1, minWidth: 0, padding: "12px 10px", cursor: "pointer", borderLeft: `3px solid ${w.color}`, borderRadius: 14 }}><div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 8 }}><DI2 id={w.id} accent={w.neon || w.color} size={14} /><span style={{ fontSize: 8, fontFamily: "var(--font-h)", fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{w.name}</span></div><div style={{ fontSize: 16, fontWeight: 700, fontFamily: "var(--font-h)", color: b >= 0 ? w.color : "#E07A5F" }}>{fmt(b)}</div></div> })}</div>
-
-                <LionM balance={mBal} dancing={ld} />
-                <Splits splits={sp} expanded={spX} onToggle={() => sSpX(!spX)} onAdd={s => sSp(p => [...p, s])} onSettle={settle} onDelete={id => sSp(p => p.filter(s => s.id !== id))} />
-                {(() => { const cm = new Date().toISOString().slice(0, 7), mE = ex.filter(e => mk(e.date) === cm), fixT = mE.filter(isFix).reduce((s, e) => s + e.amount, 0), flxT = mE.filter(e => !isFix(e)).reduce((s, e) => s + e.amount, 0), tot = fixT + flxT, fixP = tot > 0 ? Math.round(fixT / tot * 100) : 0, flxP = 100 - fixP; return <div style={{ ...cc, padding: "16px 18px", marginBottom: 14, position: "relative", overflow: "hidden" }}><div style={{ position: "absolute", bottom: 0, right: 0, width: 60, height: 3, borderRadius: "3px 0 0 0", background: "#A78BFA" }} /><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "#A78BFA", fontWeight: 700, letterSpacing: "0.5px" }}>Fixed vs Flexible</div><div style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-h)" }}>This Month</div></div>{tot === 0 ? <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: "8px 0" }}>No expenses this month</p> : <><div style={{ height: 8, borderRadius: 4, background: "#FBBF24", overflow: "hidden", marginBottom: 10 }}><div style={{ height: "100%", width: `${fixP}%`, background: "#A78BFA", borderRadius: 4 }} /></div><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: 2, background: "#A78BFA", flexShrink: 0 }} /><span style={{ fontSize: 12, fontFamily: "var(--font-h)", color: "var(--ts)" }}>Fixed</span></div><span style={{ fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 600, color: "var(--text)" }}>{fmt(fixT)} <span style={{ color: "var(--muted)", fontWeight: 400 }}>({fixP}%)</span></span></div><div style={{ display: "flex", justifyContent: "space-between" }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: 2, background: "#FBBF24", flexShrink: 0 }} /><span style={{ fontSize: 12, fontFamily: "var(--font-h)", color: "var(--ts)" }}>Flexible</span></div><span style={{ fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 600, color: "var(--text)" }}>{fmt(flxT)} <span style={{ color: "var(--muted)", fontWeight: 400 }}>({flxP}%)</span></span></div></>}</div> })()}
-                <div style={{ ...cc, padding: "18px 14px", marginBottom: 16, position: "relative", overflow: "hidden" }}><div style={{ position: "absolute", bottom: 0, right: 0, width: 60, height: 3, borderRadius: "3px 0 0 0", background: "#7B8CDE" }} /><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "#7B8CDE", marginBottom: 8, letterSpacing: "0.5px", fontWeight: 700 }}>Trend</div><div style={{ overflowX: "auto", width: "100%" }}><Chart expenses={ex} incomes={inc} months={allM} /></div></div>
-                <div style={{ ...cc, padding: 18, marginBottom: 16, position: "relative", overflow: "hidden" }}><div style={{ position: "absolute", bottom: 0, right: 0, width: 60, height: 3, borderRadius: "3px 0 0 0", background: "#E07A5F" }} /><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "#E07A5F", marginBottom: 16, letterSpacing: "0.5px", fontWeight: 700 }}>Spending by Category</div>{flt.expenses.length === 0 ? <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 20 }}>No expenses yet</p> : (() => { const t = {}; flt.expenses.forEach(e => { t[e.categoryId] = (t[e.categoryId] || 0) + e.amount }); const s = Object.entries(t).sort((a, b) => b[1] - a[1]), mx = s[0]?.[1] || 1; return s.map(([cid, total]) => { const c = cats.find(x => x.id === cid) || { id: cid, name: cid, color: "#999", neon: "#999" }; const cExps = flt.expenses.filter(e => e.categoryId === cid); const ctag = cExps.length > 0 && cExps.every(isFix) ? "fixed" : "flexible"; return <div key={cid} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}><span style={{ width: 30, display: "flex", justifyContent: "center" }}><DI2 id={c.id} accent={c.neon || c.color} size={20} /></span><div style={{ flex: 1 }}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}><div style={{ display: "flex", alignItems: "center" }}><span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)" }}>{c.name}</span><span style={{ fontSize: 8, fontFamily: "var(--font-h)", fontWeight: 600, color: ctag === "fixed" ? "#A78BFA" : "#FBBF24", background: ctag === "fixed" ? "#A78BFA15" : "#FBBF2415", padding: "2px 6px", borderRadius: 4, marginLeft: 6 }}>{ctag === "fixed" ? "FIXED" : "FLEX"}</span></div><span style={{ fontSize: 13, fontFamily: "var(--font-h)", color: "var(--ts)", fontWeight: 500 }}>{fmt(total)}</span></div><div style={{ height: 5, borderRadius: 3, background: "var(--border)", overflow: "hidden" }}><div style={{ height: "100%", width: `${(total / mx) * 100}%`, background: c.color, borderRadius: 3 }} /></div></div></div> }) })()}</div>
-                <Report expenses={ex} /></div>}
-
-            {tab === "add" && <div className="pse" style={{ paddingTop: 20 }}><AddPage categories={cats} incomeSources={isrc} onAddExpense={addE} onAddIncome={addI} onAddTransfer={addT} onAddRec={addRec} /></div>}
-            {tab === "events" && <div className="pse"><Events events={evs} expenses={ex} splits={sp} settlements={stl} categories={cats} onCreate={ev => sEvs(p => [...p, ev])} onAddExp={addE} onAddSplit={s => sSp(p => [...p, s])} onSettleSplit={settle} onDeleteSplit={id => sSp(p => p.filter(s => s.id !== id))} onMarkDone={id => sEvs(p => p.map(e => e.id === id ? { ...e, status: "completed" } : e))} /></div>}
-            {tab === "history" && <div className="pe"><Heatmap expenses={ex} />{[...flt.expenses.map(e => ({ ...e, type: "expense" })), ...flt.incomes.map(i => ({ ...i, type: "income" })), ...(fm === "all" ? tr : tr.filter(t => mk(t.date) === fm)).map(t => ({ ...t, type: "transfer" })), ...(fm === "all" ? stl : stl.filter(s => mk(s.date) === fm)).map(s => ({ ...s, type: "settlement" }))].sort((a, b) => { const dd = new Date(b.date) - new Date(a.date); if (dd !== 0) return dd; const ta = parseInt(a.id, 36), tb = parseInt(b.id, 36); return tb - ta }).map(it => <TxCard key={it.id} item={it} categories={cats} incomeSources={isrc} events={evs} onDelete={delItem} />)}{flt.expenses.length === 0 && flt.incomes.length === 0 && <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--muted)", fontSize: 14, lineHeight: 1.8 }}>No transactions yet.</div>}</div>}
-
-            {tab === "settings" && <div className="pe" style={{ paddingTop: 8 }}>
-                <div style={{ ...cc, padding: "16px 18px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}><div><div style={{ fontFamily: "var(--font-h)", fontSize: 13, color: "var(--text)", fontWeight: 600 }}>{dm ? "🌙" : "☀️"} Dark Mode</div><div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{dm ? "Dark" : "Light"}</div></div><div onClick={() => sDm(!dm)} style={{ width: 48, height: 26, borderRadius: 13, background: dm ? "#E07A5F" : "var(--border)", cursor: "pointer", position: "relative" }}><div style={{ width: 20, height: 20, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: dm ? 25 : 3, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }} /></div></div>
-                <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Export</div><button onClick={expCSV} style={{ width: "100%", padding: "13px", border: "none", borderRadius: 10, background: "#E07A5F", color: "#fff", fontFamily: "var(--font-h)", fontSize: 14, cursor: "pointer", fontWeight: 600 }}>Download CSV</button><p style={{ fontSize: 12, color: "var(--muted)", marginTop: 10, lineHeight: 1.6, fontStyle: "italic" }}>Upload to ChatGPT or Claude for analysis.</p></div>
-                <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Backup & Restore</div><div style={{ display: "flex", gap: 8, marginBottom: 12 }}><button onClick={expBackup} style={{ flex: 1, padding: "13px", border: "none", borderRadius: 10, background: "#6BAA75", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>📥 Backup</button><label style={{ flex: 1, padding: "13px", border: "1.5px solid #7B8CDE", borderRadius: 10, background: "#7B8CDE12", color: "#7B8CDE", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600, textAlign: "center" }}>📤 Restore<input type="file" accept=".json" onChange={e => { if (e.target.files[0]) impBackup(e.target.files[0]); e.target.value = "" }} style={{ display: "none" }} /></label></div><p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6, fontStyle: "italic" }}>Backup saves all data as JSON. Restore replaces current data with the backup file.</p></div>
-                <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Recurring ({rec.length})</div>{rec.length === 0 && <p style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", padding: "12px 0", fontStyle: "italic" }}>No recurring expenses set up yet.</p>}{rec.map(r => { const rc = RC.find(c => c.id === r.categoryId) || { name: r.categoryName || r.categoryId, color: "#8A8A9A", neon: "#A0A0B0", id: r.categoryId }; const fl = r.frequency === "monthly" ? `Every month on the ${r.dayOfMonth}${[, "st", "nd", "rd"][r.dayOfMonth] || "th"}` : r.frequency === "yearly" ? `Yearly on ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][(r.yearMonth || 1) - 1]} ${r.yearDay}` : `Every ${r.intervalDays} days`; return <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--bg)", borderRadius: 10, marginBottom: 6, border: "1px solid var(--border)", opacity: r.active ? 1 : 0.45 }}><DI2 id={rc.id} accent={rc.neon || rc.color} size={18} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600, fontFamily: "var(--font-h)", color: "var(--text)" }}>{r.name} — {fmt(r.amount)}</div><div style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 1 }}>{fl}</div></div><div onClick={() => sRec(p => p.map(x => x.id === r.id ? { ...x, active: !x.active } : x))} style={{ width: 36, height: 20, borderRadius: 10, background: r.active ? "#A78BFA" : "var(--border)", cursor: "pointer", position: "relative", flexShrink: 0 }}><div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: r.active ? 19 : 3, transition: "left 0.2s" }} /></div><button onClick={() => sRec(p => p.filter(x => x.id !== r.id))} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.5 }}>✕</button></div> })}</div>
-                <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Manage</div><div style={{ display: "flex", gap: 6, marginBottom: 16 }}>{["expense", "income"].map(t => <button key={t} onClick={() => sMt(t)} style={{ flex: 1, padding: "9px", borderRadius: 10, fontSize: 13, fontFamily: "var(--font-h)", border: `1.5px solid ${mt === t ? "#E07A5F" : "var(--border)"}`, background: mt === t ? "#E07A5F" : "var(--card)", color: mt === t ? "#fff" : "var(--muted)", cursor: "pointer", fontWeight: 500 }}>{t === "expense" ? "Categories" : "Income Sources"}</button>)}</div>{(mt === "expense" ? cats : isrc).map(c => <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--bg)", borderRadius: 10, marginBottom: 6, border: "1px solid var(--border)" }}><DI2 id={c.id} accent={c.neon || c.color} size={18} /><span style={{ flex: 1, fontSize: 13, color: "var(--text)", fontWeight: 500, fontFamily: "var(--font-h)" }}>{c.name}</span><span style={{ width: 14, height: 14, borderRadius: "50%", background: c.color }} /><button onClick={() => { const defs = mt === "expense" ? DC : DI; if (defs.find(d => d.id === c.id)) return; if (mt === "expense") sCats(p => p.filter(x => x.id !== c.id)); else sIsrc(p => p.filter(x => x.id !== c.id)) }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, padding: "2px 6px", opacity: (mt === "expense" ? DC : DI).find(d => d.id === c.id) ? 0.15 : 0.5 }}>✕</button></div>)}<div style={{ borderTop: "1px solid var(--border)", marginTop: 14, paddingTop: 14 }}><label style={ls}>Add New</label><div style={{ display: "flex", gap: 6, marginBottom: 10 }}><input value={ne2} onChange={e => sNE2(e.target.value)} maxLength={2} style={{ ...is, width: 48, textAlign: "center", flexShrink: 0 }} /><input value={nn} onChange={e => sNN(e.target.value)} placeholder="Name…" style={is} /><input type="color" value={nc} onChange={e => sNC(e.target.value)} style={{ width: 42, height: 42, border: "none", cursor: "pointer", borderRadius: 8, flexShrink: 0 }} /></div><button onClick={addCust} style={{ width: "100%", padding: "11px", border: "none", borderRadius: 10, background: "#7B8CDE", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>+ Add {mt === "expense" ? "Category" : "Source"}</button></div></div>
-                <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Danger Zone</div>{!clr ? <button onClick={() => sClr(true)} style={{ width: "100%", padding: "13px", border: "1.5px solid #D4726A", borderRadius: 10, background: "#D4726A12", color: "#D4726A", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>Clear All Data</button> : <div><p style={{ fontSize: 13, color: "#D4726A", marginBottom: 12, lineHeight: 1.5 }}>Delete everything permanently?</p><div style={{ display: "flex", gap: 8 }}><button onClick={() => sClr(false)} style={{ flex: 1, padding: "11px", border: "1.5px solid var(--border)", borderRadius: 10, background: "var(--card)", color: "var(--ts)", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer" }}>Cancel</button><button onClick={() => { sEx([]); sInc([]); sTr([]); sStl([]); sCats(DC); sIsrc(DI); sSp([]); sEvs([]); sRec([]); sWsb({ upi_lite: 0, bank: 0, cash: 0 }); sClr(false); localStorage.removeItem("nomad-v5");["expenses", "incomes", "transfers", "settlements", "splits", "recurring", "wallet_balances"].forEach(t => fetch(`${SB_URL}/rest/v1/${t}?id=neq.null`, { method: "DELETE", headers: sbH })); fetch(`${SB_URL}/rest/v1/wallet_balances?wallet_id=neq.null`, { method: "DELETE", headers: sbH }) }} style={{ flex: 1, padding: "11px", border: "none", borderRadius: 10, background: "#D4726A", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>Yes, Delete</button></div></div>}</div>
-                <div style={{ textAlign: "center", padding: "24px 20px", color: "var(--muted)", fontSize: 12, lineHeight: 1.8, fontStyle: "italic" }}>NOMAD v10.4 — Track smart. Spend wise. 🦁</div></div>}
-
-        </div>}
-
-        {module === "finance" && <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--nav-bg)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "center", maxWidth: 430, margin: "0 auto", zIndex: 50, paddingBottom: "env(safe-area-inset-bottom)" }}>{[{ id: "dashboard", label: "Home" }, { id: "add", label: "Add" }, { id: "events", label: "Events" }, { id: "history", label: "History" }, { id: "settings", label: "Settings" }].map(n => <button key={n.id} onClick={() => sTab(n.id)} style={{ flex: 1, padding: "10px 0 8px", border: "none", background: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", opacity: tab === n.id ? 1 : 0.45 }}><NI type={n.id} active={tab === n.id} /><span style={{ fontFamily: "var(--font-h)", fontSize: 9, color: tab === n.id ? "#E07A5F" : "var(--muted)", fontWeight: tab === n.id ? 600 : 400 }}>{n.label}</span></button>)}</div>}
-
-        {calW && <CalM wallet={calW} currentBal={wBal[calW.id] || 0} onSave={v => handleCal(calW.id, v)} onClose={() => sCalW(null)} />}
-        {toast && <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 300, background: toast.type === "error" ? "#D4726A" : toast.type === "success" ? "#6BAA75" : "#7B8CDE", color: "#fff", borderRadius: 50, padding: "9px 22px", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", textAlign: "center", whiteSpace: "nowrap", animation: "ti 0.25s ease-out" }}>{toast.msg}</div>}
-    </div>
+        </div>
+    );
 }
