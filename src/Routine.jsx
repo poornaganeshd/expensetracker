@@ -1896,18 +1896,15 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
         reader.onload = (ev) => {
             try {
                 const parsed = JSON.parse(ev.target.result);
-                if (!parsed.data || !parsed.config) { alert('Invalid backup file.'); return; }
-                if (!confirm('Overwrite all current data?')) return;
+                if (!parsed.data || !parsed.config) { setRestoreMsg('Invalid file ✗'); setTimeout(() => setRestoreMsg(''), 2500); return; }
+                const mergedConfig = { ...DEFAULT_CONFIG, ...parsed.config, products: { ...DEFAULT_CONFIG.products, ...(parsed.config.products || {}) }, routines: parsed.config.routines || DEFAULT_ROUTINES };
                 setAllData(parsed.data);
-                setConfig({
-                    ...DEFAULT_CONFIG,
-                    ...parsed.config,
-                    products: { ...DEFAULT_CONFIG.products, ...(parsed.config.products || {}) },
-                    routines: parsed.config.routines || DEFAULT_ROUTINES,
-                });
+                setConfig(mergedConfig);
+                sbUpsertR("daily_logs", { id: "all_data", data: parsed.data });
+                sbUpsertR("user_config", { id: "singleton", data: mergedConfig });
                 setRestoreMsg('Restored ✓');
                 setTimeout(() => setRestoreMsg(''), 2500);
-            } catch { alert('Failed to parse backup file.'); }
+            } catch { setRestoreMsg('Failed to read ✗'); setTimeout(() => setRestoreMsg(''), 2500); }
         };
         reader.readAsText(file);
         e.target.value = '';
@@ -2099,6 +2096,8 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     }, [darkMode]);
 
     // Load from Supabase on mount, fall back to localStorage
+    const [sbLoaded, setSbLoaded] = useState(false);
+
     useEffect(() => {
         const load = async () => {
             const [dbData, dbConfig] = await Promise.all([
@@ -2122,19 +2121,22 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
                     localStorage.setItem('form_config', JSON.stringify(merged));
                 } catch { }
             }
+            setSbLoaded(true);
         };
         load();
     }, []);
 
     useEffect(() => {
+        if (!sbLoaded) return;
         localStorage.setItem('form_data', JSON.stringify(allData));
         sbUpsertR("daily_logs", { id: "all_data", data: allData });
-    }, [allData]);
+    }, [allData, sbLoaded]);
 
     useEffect(() => {
+        if (!sbLoaded) return;
         localStorage.setItem('form_config', JSON.stringify(config));
         sbUpsertR("user_config", { id: "singleton", data: config });
-    }, [config]);
+    }, [config, sbLoaded]);
 
     const key = todayKey();
     const rawDay = allData[key] || {};
