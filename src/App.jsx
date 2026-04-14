@@ -9,7 +9,7 @@ const sbGet = async (table) => { const r = await fetch(`${SB_URL}/rest/v1/${tabl
 const sbUpsert = async (table, rows) => fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(rows) });
 const sbDelete = async (table, id) => fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "DELETE", headers: sbH });
 const fmt = n => CUR + Number(n).toLocaleString("en-IN"), mk = d => d.slice(0, 7);
-const ml = k => { const [y, m] = k.split("-"); return new Date(y, m - 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" }) };
+const ml = k => { const [y, m] = k.split("-"); return new Date(y, m - 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }) };
 const dl = d => { const t = new Date().toISOString().slice(0, 10), y = new Date(Date.now() - 864e5).toISOString().slice(0, 10); return d === t ? "Today" : d === y ? "Yesterday" : new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) };
 const ls = { fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 6, display: "block", fontFamily: "var(--font-h)", fontWeight: 600 };
 const is = { background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "11px 14px", color: "var(--text)", fontSize: 14, fontFamily: "var(--font-b)", outline: "none", width: "100%", boxSizing: "border-box" };
@@ -279,7 +279,7 @@ export default function Nomad() {
   // Keep localStorage in sync as offline backup
   useEffect(() => { if (!loaded) return; try { localStorage.setItem("nomad-v5", JSON.stringify({ expenses: ex, incomes: inc, transfers: tr, settlements: stl, categories: cats, incomeSources: isrc, splits: sp, events: evs, recurring: rec, darkMode: dm, walletStartBal: wsb })) } catch { } }, [ex, inc, tr, stl, cats, isrc, sp, evs, rec, dm, wsb, loaded]);
 
-  const allM = useMemo(() => { const s = new Set(); ex.forEach(e => s.add(mk(e.date))); inc.forEach(i => s.add(mk(i.date))); return [...s].sort() }, [ex, inc]);
+  const allM = useMemo(() => { const s = new Set(); s.add(new Date().toISOString().slice(0, 7)); ex.forEach(e => s.add(mk(e.date))); inc.forEach(i => s.add(mk(i.date))); return [...s].sort() }, [ex, inc]);
   const flt = useMemo(() => fm === "all" ? { expenses: ex, incomes: inc } : { expenses: ex.filter(e => mk(e.date) === fm), incomes: inc.filter(i => mk(i.date) === fm) }, [ex, inc, fm]);
   const tI = flt.incomes.reduce((s, i) => s + i.amount, 0), tE = flt.expenses.reduce((s, e) => s + e.amount, 0);
 
