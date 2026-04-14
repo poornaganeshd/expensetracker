@@ -2095,9 +2095,9 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
         if (el) el.classList.toggle('dark', !!darkMode);
     }, [darkMode]);
 
-    // Load from Supabase on mount, fall back to localStorage
     const [sbLoaded, setSbLoaded] = useState(false);
 
+    // Load from Supabase on mount, fall back to localStorage
     useEffect(() => {
         const load = async () => {
             const [dbData, dbConfig] = await Promise.all([
