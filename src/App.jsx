@@ -5,8 +5,8 @@ const APP = "NOMAD", CUR = "₹", uid = () => Date.now().toString(36) + Math.ran
 const SB_URL = "https://zatwgngvsemgydaugaqr.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphdHdnbmd2c2VtZ3lkYXVnYXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDQ5MjMsImV4cCI6MjA5MTcyMDkyM30.8fVcKsFiMOABaMsglG0CDqoLJiCfH9jllQrH5raBR9U";
 const sbH = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` };
-const sbGet = async (table) => { const r = await fetch(`${SB_URL}/rest/v1/${table}?select=*`, { headers: sbH }); return r.ok ? r.json() : [] };
-const sbUpsert = async (table, rows) => fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(rows) });
+const sbGet = async (table) => { const r = await fetch(`${SB_URL}/rest/v1/${table}?select=*`, { headers: sbH }); if (!r.ok) { console.error("sbGet fail", table, r.status); return [] } return r.json() };
+const sbUpsert = async (table, rows) => { const r = await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(rows) }); if (!r.ok) r.text().then(t => console.error("sbUpsert fail", table, r.status, t)); return r };
 const sbDelete = async (table, id) => fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "DELETE", headers: sbH });
 const fmt = n => CUR + Number(n).toLocaleString("en-IN"), mk = d => d.slice(0, 7);
 const ml = k => { const [y, m] = k.split("-"); return new Date(y, m - 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" }) };
