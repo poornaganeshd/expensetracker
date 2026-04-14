@@ -225,24 +225,51 @@ export default function Nomad() {
 
   useEffect(() => {
     const load = async () => {
-      // Try Supabase first
       try {
-        const [dbEx, dbInc, dbTr, dbStl, dbSp, dbRec, dbEvs, dbSet, dbWsb] = await Promise.all([
+        const [dbEx, dbInc, dbTr, dbStl, dbSp, dbRec, dbWsb] = await Promise.all([
           sbGet("expenses"), sbGet("incomes"), sbGet("transfers"), sbGet("settlements"),
-          sbGet("splits"), sbGet("recurring"), sbGet("events"), sbGet("settings"), sbGet("wallet_balances")
+          sbGet("splits"), sbGet("recurring"), sbGet("wallet_balances")
         ]);
-        if (dbEx?.length) sEx(dbEx);
-        if (dbInc?.length) sInc(dbInc);
-        if (dbTr?.length) sTr(dbTr);
-        if (dbStl?.length) sStl(dbStl);
-        if (dbSp?.length) sSp(dbSp);
-        if (dbRec?.length) sRec(dbRec);
-        if (dbEvs?.length) sEvs(dbEvs);
-        if (dbSet?.length) { const dm2 = dbSet.find(s => s.key === "darkMode"); if (dm2) sDm(dm2.value === "true") }
-        if (dbWsb?.length) { const wb = { upi_lite: 0, bank: 0, cash: 0 }; dbWsb.forEach(r => { wb[r.wallet_id] = r.balance }); sWsb(wb) }
+        const hasCloud = dbEx?.length || dbInc?.length || dbTr?.length;
+        if (hasCloud) {
+          // Load from Supabase
+          if (dbEx?.length) sEx(dbEx);
+          if (dbInc?.length) sInc(dbInc);
+          if (dbTr?.length) sTr(dbTr);
+          if (dbStl?.length) sStl(dbStl);
+          if (dbSp?.length) sSp(dbSp);
+          if (dbRec?.length) sRec(dbRec);
+          if (dbWsb?.length) { const wb = { upi_lite: 0, bank: 0, cash: 0 }; dbWsb.forEach(r => { wb[r.wallet_id] = r.balance }); sWsb(wb) }
+        } else {
+          // Supabase empty — migrate from localStorage and push up
+          try {
+            const r = localStorage.getItem("nomad-v5"); if (r) {
+              const d = JSON.parse(r);
+              if (d.expenses?.length) { sEx(d.expenses); sbUpsert("expenses", d.expenses) }
+              if (d.incomes?.length) { sInc(d.incomes); sbUpsert("incomes", d.incomes) }
+              if (d.transfers?.length) { sTr(d.transfers); sbUpsert("transfers", d.transfers) }
+              if (d.settlements?.length) { sStl(d.settlements); sbUpsert("settlements", d.settlements) }
+              if (d.splits?.length) { sSp(d.splits); sbUpsert("splits", d.splits) }
+              if (d.recurring?.length) { sRec(d.recurring); sbUpsert("recurring", d.recurring) }
+              if (d.categories?.length) sCats(d.categories);
+              if (d.incomeSources?.length) sIsrc(d.incomeSources);
+              if (d.darkMode !== undefined) sDm(d.darkMode);
+              if (d.walletStartBal) sWsb(d.walletStartBal);
+            }
+          } catch { }
+        }
       } catch {
-        // Fallback to localStorage if offline
-        try { const r = localStorage.getItem("nomad-v5"); if (r) { const d = JSON.parse(r); if (d.expenses) sEx(d.expenses); if (d.incomes) sInc(d.incomes); if (d.transfers) sTr(d.transfers); if (d.settlements) sStl(d.settlements); if (d.categories?.length) sCats(d.categories); if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.splits) sSp(d.splits); if (d.events) sEvs(d.events); if (d.recurring) sRec(d.recurring); if (d.darkMode !== undefined) sDm(d.darkMode); if (d.walletStartBal) sWsb(d.walletStartBal) } } catch { }
+        // Offline — fallback to localStorage only
+        try {
+          const r = localStorage.getItem("nomad-v5"); if (r) {
+            const d = JSON.parse(r);
+            if (d.expenses) sEx(d.expenses); if (d.incomes) sInc(d.incomes); if (d.transfers) sTr(d.transfers);
+            if (d.settlements) sStl(d.settlements); if (d.categories?.length) sCats(d.categories);
+            if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.splits) sSp(d.splits);
+            if (d.recurring) sRec(d.recurring); if (d.darkMode !== undefined) sDm(d.darkMode);
+            if (d.walletStartBal) sWsb(d.walletStartBal);
+          }
+        } catch { }
       }
       sL(true);
       if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js").catch(() => { }) }
