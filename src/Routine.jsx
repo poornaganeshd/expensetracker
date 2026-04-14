@@ -1028,6 +1028,13 @@ const Panda = ({ msg, mode }) => (
     </div>
 );
 
+const PandaM = ({ message }) => (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, padding: '12px 0' }}>
+        <img src={PANDA_SRC} alt="panda" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+        <div style={{ background: 'var(--sf)', border: '1px solid var(--bd)', borderRadius: '14px 14px 14px 4px', padding: '10px 14px', fontSize: 13, color: 'var(--tx)', maxWidth: 220, fontFamily: 'var(--font)', lineHeight: 1.5 }}>{message}</div>
+    </div>
+);
+
 const Check = ({ on, onClick, teal }) => (
     <div className={`check ${on ? 'on' : ''} ${teal ? 'teal' : ''}`} onClick={onClick}>
         {on && <Icon name="check" />}
@@ -1191,7 +1198,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
             </div>
 
             <ProgressDots day={day} config={config} mode="food" />
-            <Panda msg={getPandaFoodMessage(day, config)} mode="food" />
+            <PandaM message={getPandaFoodMessage(day, config)} />
 
             {/* Morning water */}
             <div className={`card ${day.morningWater ? 'done' : ''}`}>
