@@ -3,13 +3,13 @@ const APP = "NOMAD", CUR = "₹", uid = () => Date.now().toString(36) + Math.ran
 
 // Supabase config
 const SB_URL = "https://zatwgngvsemgydaugaqr.supabase.co";
-const SB_KEY = "sb_publishable_53i8O-Tq-0iaanVJYr1L4w_Jo0xmBtu.";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphdHdnbmd2c2VtZ3lkYXVnYXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDQ5MjMsImV4cCI6MjA5MTcyMDkyM30.8fVcKsFiMOABaMsglG0CDqoLJiCfH9jllQrH5raBR9U";
 const sbH = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` };
 const sbGet = async (table) => { const r = await fetch(`${SB_URL}/rest/v1/${table}?select=*`, { headers: sbH }); return r.ok ? r.json() : [] };
 const sbUpsert = async (table, rows) => fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(rows) });
 const sbDelete = async (table, id) => fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "DELETE", headers: sbH });
 const fmt = n => CUR + Number(n).toLocaleString("en-IN"), mk = d => d.slice(0, 7);
-const ml = k => { const [y, m] = k.split("-"); return new Date(y, m - 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }) };
+const ml = k => { const [y, m] = k.split("-"); return new Date(y, m - 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" }) };
 const dl = d => { const t = new Date().toISOString().slice(0, 10), y = new Date(Date.now() - 864e5).toISOString().slice(0, 10); return d === t ? "Today" : d === y ? "Yesterday" : new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) };
 const ls = { fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 6, display: "block", fontFamily: "var(--font-h)", fontWeight: 600 };
 const is = { background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "11px 14px", color: "var(--text)", fontSize: 14, fontFamily: "var(--font-b)", outline: "none", width: "100%", boxSizing: "border-box" };
@@ -63,11 +63,9 @@ function LionM({ balance: bal, dancing }) {
 
 function Chart({ expenses: ex, incomes: inc, months: ms }) {
   if (ms.length < 1) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>Add transactions to see trends</p>;
-  const gd = m => ({ i: inc.filter(x => mk(x.date) === m).reduce((s, x) => s + x.amount, 0), e: ex.filter(x => mk(x.date) === m).reduce((s, x) => s + x.amount, 0) }); const data = ms.map(gd), realMax = Math.max(...data.flatMap(d => [d.i, d.e]));
-  if (realMax === 0) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>Add transactions to see trends</p>;
-  const mx = realMax, w = 320, h = 140, px = 44, py = 16, gw = w - px * 2, gh = h - py * 2;
+  const gd = m => ({ i: inc.filter(x => mk(x.date) === m).reduce((s, x) => s + x.amount, 0), e: ex.filter(x => mk(x.date) === m).reduce((s, x) => s + x.amount, 0) }); const data = ms.map(gd), mx = Math.max(...data.flatMap(d => [d.i, d.e]), 1), w = 320, h = 140, px = 44, py = 16, gw = w - px * 2, gh = h - py * 2;
   const tX = i => px + (ms.length === 1 ? gw / 2 : (i / (ms.length - 1)) * gw), tY = v => py + gh - (v / mx) * gh, mp = k => data.map((d, i) => `${i === 0 ? "M" : "L"}${tX(i)},${tY(d[k])}`).join(" ");
-  return <svg viewBox={`0 0 ${w} ${h + 48}`} width="100%" style={{ display: "block" }}>{[0, 0.5, 1].map((f, i) => <g key={i}><line x1={px} x2={w - px} y1={tY(mx * f)} y2={tY(mx * f)} stroke="var(--border)" strokeDasharray="3 3" /><text x={2} y={tY(mx * f) + 4} fill="var(--muted)" fontSize={9} fontFamily="var(--font-h)">{fmt(Math.round(mx * f))}</text></g>)}<path d={`${mp("i")} L${tX(data.length - 1)},${h - py} L${tX(0)},${h - py} Z`} fill="#6BAA75" opacity="0.08" /><path d={`${mp("e")} L${tX(data.length - 1)},${h - py} L${tX(0)},${h - py} Z`} fill="#E07A5F" opacity="0.08" /><path d={mp("i")} fill="none" stroke="#6BAA75" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" /><path d={mp("e")} fill="none" stroke="#E07A5F" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />{data.map((d, i) => <g key={i}><circle cx={tX(i)} cy={tY(d.i)} r={4} fill="var(--card)" stroke="#6BAA75" strokeWidth={2} /><circle cx={tX(i)} cy={tY(d.e)} r={4} fill="var(--card)" stroke="#E07A5F" strokeWidth={2} /><text x={tX(i)} y={h + 14} textAnchor="middle" fill="var(--muted)" fontSize={9} fontFamily="var(--font-h)">{ml(ms[i])}</text></g>)}<g transform={`translate(${w / 2 - 55},${h + 26})`}><circle cx={0} cy={8} r={4} fill="#6BAA75" /><text x={8} y={12} fill="var(--muted)" fontSize={10}>Income</text><circle cx={68} cy={8} r={4} fill="#E07A5F" /><text x={76} y={12} fill="var(--muted)" fontSize={10}>Spent</text></g></svg>
+  return <svg viewBox={`0 0 ${w} ${h + 28}`} width="100%" style={{ display: "block" }}>{[0, 0.5, 1].map((f, i) => <g key={i}><line x1={px} x2={w - px} y1={tY(mx * f)} y2={tY(mx * f)} stroke="var(--border)" strokeDasharray="3 3" /><text x={2} y={tY(mx * f) + 4} fill="var(--muted)" fontSize={9} fontFamily="var(--font-h)">{fmt(Math.round(mx * f))}</text></g>)}<path d={`${mp("i")} L${tX(data.length - 1)},${h - py} L${tX(0)},${h - py} Z`} fill="#6BAA75" opacity="0.08" /><path d={`${mp("e")} L${tX(data.length - 1)},${h - py} L${tX(0)},${h - py} Z`} fill="#E07A5F" opacity="0.08" /><path d={mp("i")} fill="none" stroke="#6BAA75" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" /><path d={mp("e")} fill="none" stroke="#E07A5F" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />{data.map((d, i) => <g key={i}><circle cx={tX(i)} cy={tY(d.i)} r={4} fill="var(--card)" stroke="#6BAA75" strokeWidth={2} /><circle cx={tX(i)} cy={tY(d.e)} r={4} fill="var(--card)" stroke="#E07A5F" strokeWidth={2} /><text x={tX(i)} y={h + 18} textAnchor="middle" fill="var(--muted)" fontSize={9} fontFamily="var(--font-h)">{ml(ms[i])}</text></g>)}<g transform={`translate(${w / 2 - 55},${h + 6})`}><circle cx={0} cy={16} r={4} fill="#6BAA75" /><text x={8} y={20} fill="var(--muted)" fontSize={10}>Income</text><circle cx={68} cy={16} r={4} fill="#E07A5F" /><text x={76} y={20} fill="var(--muted)" fontSize={10}>Spent</text></g></svg>
 }
 
 function Heatmap({ expenses: ex }) {
@@ -281,7 +279,7 @@ export default function Nomad() {
   // Keep localStorage in sync as offline backup
   useEffect(() => { if (!loaded) return; try { localStorage.setItem("nomad-v5", JSON.stringify({ expenses: ex, incomes: inc, transfers: tr, settlements: stl, categories: cats, incomeSources: isrc, splits: sp, events: evs, recurring: rec, darkMode: dm, walletStartBal: wsb })) } catch { } }, [ex, inc, tr, stl, cats, isrc, sp, evs, rec, dm, wsb, loaded]);
 
-  const allM = useMemo(() => { const s = new Set(); s.add(new Date().toISOString().slice(0, 7)); ex.forEach(e => s.add(mk(e.date))); inc.forEach(i => s.add(mk(i.date))); return [...s].sort() }, [ex, inc]);
+  const allM = useMemo(() => { const s = new Set(); ex.forEach(e => s.add(mk(e.date))); inc.forEach(i => s.add(mk(i.date))); return [...s].sort() }, [ex, inc]);
   const flt = useMemo(() => fm === "all" ? { expenses: ex, incomes: inc } : { expenses: ex.filter(e => mk(e.date) === fm), incomes: inc.filter(i => mk(i.date) === fm) }, [ex, inc, fm]);
   const tI = flt.incomes.reduce((s, i) => s + i.amount, 0), tE = flt.expenses.reduce((s, e) => s + e.amount, 0);
 
