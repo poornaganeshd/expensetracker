@@ -318,8 +318,6 @@ export default function Nomad() {
       sL(true);
     };
     load();
-    window.addEventListener("online", flushQueue);
-    return () => window.removeEventListener("online", flushQueue);
   }, []);
   // Keep localStorage in sync as offline backup
   useEffect(() => { if (!loaded) return; try { localStorage.setItem("nomad-v5", JSON.stringify({ expenses: ex, incomes: inc, transfers: tr, settlements: stl, categories: cats, incomeSources: isrc, splits: sp, events: evs, recurring: rec, darkMode: dm, walletStartBal: wsb })) } catch { } }, [ex, inc, tr, stl, cats, isrc, sp, evs, rec, dm, wsb, loaded]);
