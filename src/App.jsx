@@ -8,7 +8,7 @@ const SB_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const SB_ENABLED = Boolean(SB_URL && SB_KEY);
 const sbH = SB_ENABLED ? { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` } : {};
-const FETCH_TIMEOUT_MS = 1400;
+const FETCH_TIMEOUT_MS = 8000;
 const roundMoney = (value) => Math.round(Number(value || 0) * 100) / 100;
 const isoDate = (date) => new Date(date).toISOString().slice(0, 10);
 const dateOnly = (value) => new Date(`${value}T00:00:00`);
@@ -79,14 +79,14 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = FETCH_TIMEOUT_MS)
     clearTimeout(timer);
   }
 };
-const loadLocalBackup = ({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sDm, sWsb }) => {
+const loadLocalBackup = ({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sEvs, sDm, sWsb }) => {
   try {
     const r = localStorage.getItem("nomad-v5"); if (!r) return;
     const d = JSON.parse(r);
     if (d.expenses) sEx(d.expenses); if (d.incomes) sInc(d.incomes); if (d.transfers) sTr(d.transfers);
     if (d.settlements) sStl(d.settlements); if (d.categories?.length) sCats(d.categories);
     if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.splits) sSp(d.splits);
-    if (d.recurring) sRec(d.recurring); if (d.darkMode !== undefined) sDm(d.darkMode);
+    if (d.recurring) sRec(d.recurring); if (d.events) sEvs(d.events); if (d.darkMode !== undefined) sDm(d.darkMode);
     if (d.walletStartBal) sWsb(d.walletStartBal);
   } catch { }
 };
@@ -108,7 +108,7 @@ const sbWrite = async (path, { method = "POST", body, dedupeKey } = {}) => {
   const result = await sendSupabaseRequest({
     path,
     method,
-    headers: method === "POST" ? { ...sbH, "Prefer": "resolution=merge-duplicates" } : sbH,
+    headers: method === "POST" ? { ...sbH, "Prefer": "resolution=merge-duplicates,return=minimal" } : sbH,
     body: body ? JSON.stringify(body) : null,
     dedupeKey,
   });
@@ -372,7 +372,7 @@ export default function Nomad() {
   useEffect(() => {
     const load = async () => {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        loadLocalBackup({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sDm, sWsb });
+        loadLocalBackup({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sEvs, sDm, sWsb });
         sL(true);
         return;
       }
@@ -381,11 +381,40 @@ export default function Nomad() {
           sbGet("expenses"), sbGet("incomes"), sbGet("transfers"), sbGet("settlements"),
           sbGet("splits"), sbGet("recurring"), sbGet("wallet_balances"), sbGet("events")
         ]);
-        // Supabase is source of truth — always use it, even if empty
         const hadRemoteFailure = [dbEx, dbInc, dbTr, dbStl, dbSp, dbRec, dbWsb, dbEvs].some(x => x === null);
         if (hadRemoteFailure) {
-          loadLocalBackup({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sDm, sWsb });
+          loadLocalBackup({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sEvs, sDm, sWsb });
         } else {
+          // If Supabase is empty but localStorage has data, migrate it up (first-time connection)
+          const sbHasData = [dbEx, dbInc, dbTr, dbStl, dbSp, dbRec, dbEvs].some(x => x && x.length > 0);
+          if (!sbHasData) {
+            try {
+              const localRaw = localStorage.getItem("nomad-v5");
+              if (localRaw) {
+                const ld = JSON.parse(localRaw);
+                const hasLocal = ["expenses","incomes","transfers","settlements","splits","recurring","events"].some(k => ld[k]?.length > 0);
+                if (hasLocal) {
+                  const exL = ld.expenses || [], incL = ld.incomes || [], trL = ld.transfers || [];
+                  const stlL = ld.settlements || [], spL = ld.splits || [], recL = ld.recurring || [], evsL = ld.events || [];
+                  if (exL.length) sbUpsert("expenses", exL.map(e => toSB(e, ["id","amount","categoryId","walletId","note","date","eventId","groupId"])));
+                  if (incL.length) sbUpsert("incomes", incL.map(i => toSB(i, ["id","amount","sourceId","walletId","note","date"])));
+                  if (trL.length) sbUpsert("transfers", trL.map(t => toSB(t, ["id","amount","fromWallet","toWallet","note","date"])));
+                  if (stlL.length) sbUpsert("settlements", stlL.map(s => toSB(s, ["id","amount","splitName","splitId","direction","walletId","date","groupId","eventId"])));
+                  if (spL.length) sbUpsert("splits", spL.map(s => toSB(s, ["id","name","amount","direction","settled","eventId","groupId"])));
+                  if (recL.length) sbUpsert("recurring", recL.map(r => toSB(r, ["id","name","amount","categoryId","categoryName","walletId","frequency","dayOfMonth","intervalDays","yearMonth","yearDay","startDate","active","lastPaidDate","lastSkippedDate"])));
+                  if (evsL.length) sbUpsert("events", evsL.map(e => toSB(e, ["id","name","emoji","date","status"])));
+                  if (ld.walletStartBal) Object.entries(ld.walletStartBal).forEach(([wid, bal]) => sbUpsert("wallet_balances", [{ wallet_id: wid, balance: bal }], `wallet_balances:${wid}`));
+                  sEx(exL); sInc(incL); sTr(trL); sStl(stlL); sSp(spL); sRec(recL); sEvs(evsL);
+                  if (ld.categories?.length) sCats(ld.categories);
+                  if (ld.incomeSources?.length) sIsrc(ld.incomeSources);
+                  if (ld.darkMode !== undefined) sDm(ld.darkMode);
+                  if (ld.walletStartBal) sWsb(ld.walletStartBal);
+                  sL(true);
+                  return;
+                }
+              }
+            } catch { }
+          }
           sEx(dbEx || []);
           sInc(dbInc || []);
           sTr(dbTr || []);
@@ -396,8 +425,7 @@ export default function Nomad() {
           if (dbWsb?.length) { const wb = { upi_lite: 0, bank: 0, cash: 0 }; dbWsb.forEach(r => { wb[r.wallet_id] = r.balance }); sWsb(wb) }
         }
       } catch {
-        // Offline only — fallback to localStorage
-        loadLocalBackup({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sDm, sWsb });
+        loadLocalBackup({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sEvs, sDm, sWsb });
       }
       sL(true);
     };

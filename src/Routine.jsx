@@ -1002,7 +1002,7 @@ const SB_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const SB_ENABLED = Boolean(SB_URL && SB_KEY);
 const sbH = SB_ENABLED ? { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` } : {};
-const FETCH_TIMEOUT_MS = 1400;
+const FETCH_TIMEOUT_MS = 8000;
 const sbGetR = async (table, id) => {
     if (!SB_ENABLED) return null;
     try {
@@ -1015,7 +1015,7 @@ const sbGetR = async (table, id) => {
         return d[0] || null;
     } catch { return null }
 };
-const sbUpsertR = async (table, row, dedupeKey = null) => SB_ENABLED ? sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}`, method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(row), dedupeKey }) : { ok: false, queued: false, offline: false, response: null };
+const sbUpsertR = async (table, row, dedupeKey = null) => SB_ENABLED ? sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}`, method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(row), dedupeKey }) : { ok: false, queued: false, offline: false, response: null };
 const sbDeleteR = async (table, id) => SB_ENABLED ? sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}?id=eq.${id}`, method: "DELETE", headers: sbH, dedupeKey: `${table}:delete:${id}` }) : { ok: false, queued: false, offline: false, response: null };
 
 const BANNERS_KEY = 'form_banners';
