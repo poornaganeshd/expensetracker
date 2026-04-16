@@ -423,6 +423,13 @@ export default function Nomad() {
           sRec(dbRec || []);
           sEvs(dbEvs || []);
           if (dbWsb?.length) { const wb = { upi_lite: 0, bank: 0, cash: 0 }; dbWsb.forEach(r => { wb[r.wallet_id] = r.balance }); sWsb(wb) }
+          // Restore local-only preferences (not stored in Supabase)
+          try {
+            const lp = JSON.parse(localStorage.getItem("nomad-v5") || "{}");
+            if (lp.darkMode !== undefined) sDm(lp.darkMode);
+            if (lp.categories?.length) sCats(lp.categories);
+            if (lp.incomeSources?.length) sIsrc(lp.incomeSources);
+          } catch { }
         }
       } catch {
         loadLocalBackup({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sEvs, sDm, sWsb });
