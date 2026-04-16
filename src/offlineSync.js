@@ -105,10 +105,18 @@ export const flushSyncQueue = async () => {
         continue;
       }
 
-      if (response.status >= 500) {
+      // Keep failed items queued unless the server explicitly rejects them as client errors.
+      if (response.status >= 500 || response.status === 0) {
         remaining.push(item, ...queue.slice(index + 1));
         break;
       }
+
+      if (response.status >= 400) {
+        continue;
+      }
+
+      remaining.push(item, ...queue.slice(index + 1));
+      break;
     } catch {
       remaining.push(item, ...queue.slice(index + 1));
       break;
