@@ -920,6 +920,7 @@ const DEFAULT_DAY = {
     eggs: 0,
     snack: '',
     curd: false,
+    dailyChecks: {},
     amSkinDone: false,
     pmSkinDone: false,
     freeFoodLog: [],
@@ -952,6 +953,7 @@ const DEFAULT_CONFIG = {
     },
     snackOptions: ['Banana', 'Carrot', 'Cucumber', 'Guava', 'Apple', 'Pomegranate', 'Papaya', 'Other'],
     customProducts: DEFAULT_CUSTOM_PRODUCTS,
+    customDailyItems: [{ id: 'curd', label: 'Curd', emoji: '🥛' }],
     routines: DEFAULT_ROUTINES,
 };
 
@@ -977,6 +979,7 @@ const sanitizeConfig = (value) => {
         eggsTarget: clamp(Number(c.eggsTarget ?? DEFAULT_CONFIG.eggsTarget) || DEFAULT_CONFIG.eggsTarget, 1, 4),
         retinolPhase: clamp(Number(c.retinolPhase ?? DEFAULT_CONFIG.retinolPhase) || DEFAULT_CONFIG.retinolPhase, 1, 3),
         customProducts,
+        customDailyItems: Array.isArray(c.customDailyItems) ? c.customDailyItems : DEFAULT_CONFIG.customDailyItems,
         snackRotation: { ...DEFAULT_CONFIG.snackRotation, ...(c.snackRotation || {}) },
         routines: Object.fromEntries(
             Object.entries(DEFAULT_ROUTINES).map(([day, def]) => [
@@ -995,6 +998,10 @@ const sanitizeDayRecord = (record) => {
         merged.notes = '';
         merged.skinFeelChip = '';
         merged.energyChip = '';
+    }
+    // Migrate curd → dailyChecks.curd
+    if (merged.curd && !merged.dailyChecks?.curd) {
+        merged.dailyChecks = { ...merged.dailyChecks, curd: merged.curd };
     }
     // Migrate retinolReactionChip → reactionChip
     if (!merged.reactionChip && merged.retinolReactionChip) {
@@ -1065,7 +1072,8 @@ const getPandaFoodMessage = (day, config) => {
     if (day.eggs < config.eggsTarget && isAfterNoon()) return "Eggs. Don't skip them.";
     const mwL = parseMorningWater(day.morningWaterAmount);
     const total = mwL + day.water;
-    if (total >= config.waterTarget && day.eggs >= config.eggsTarget && day.curd)
+    const allDailyDone = (config.customDailyItems || []).every(it => day.dailyChecks?.[it.id]);
+    if (total >= config.waterTarget && day.eggs >= config.eggsTarget && allDailyDone)
         return "Clean day. That's the standard.";
     if (total >= config.waterTarget * 0.7) return "Water on track. Keep the pattern.";
     return "Ritual in progress.";
@@ -1137,12 +1145,16 @@ const ProgressDots = ({ day, config, mode }) => {
                 <div className="dot-lbl">Eggs</div>
                 <div className="dot-val">{day.eggs}/{config.eggsTarget}</div>
             </div>
-            <div className="prog-dot-sep" />
-            <div className="prog-dot">
-                <div className={`dot ${day.curd ? 'on' : ''}`} />
-                <div className="dot-lbl">Curd</div>
-                <div className="dot-val">{day.curd ? '✓' : '—'}</div>
-            </div>
+            {(config.customDailyItems || []).map(it => (
+                <React.Fragment key={it.id}>
+                    <div className="prog-dot-sep" />
+                    <div className="prog-dot">
+                        <div className={`dot ${day.dailyChecks?.[it.id] ? 'on' : ''}`} />
+                        <div className="dot-lbl">{it.label}</div>
+                        <div className="dot-val">{day.dailyChecks?.[it.id] ? '✓' : '—'}</div>
+                    </div>
+                </React.Fragment>
+            ))}
             <div className="prog-dot-sep" />
             <div className="prog-dot">
                 <div className={`dot ${day.snack ? 'on' : ''}`} />
@@ -1200,10 +1212,12 @@ const EodCard = ({ day, config }) => {
                     <span className={eggsOk ? 'eod-ok' : 'eod-miss'}>🥚</span>
                     <span>{day.eggs}/{config.eggsTarget}</span>
                 </div>
-                <div className="eod-item">
-                    <span className={day.curd ? 'eod-ok' : 'eod-miss'}>🥛</span>
-                    <span>{day.curd ? 'Curd ✓' : 'No curd'}</span>
-                </div>
+                {(config.customDailyItems || []).map(it => (
+                    <div key={it.id} className="eod-item">
+                        <span className={day.dailyChecks?.[it.id] ? 'eod-ok' : 'eod-miss'}>{it.emoji}</span>
+                        <span>{day.dailyChecks?.[it.id] ? it.label + ' ✓' : 'No ' + it.label.toLowerCase()}</span>
+                    </div>
+                ))}
                 <div className="eod-item">
                     <span className={day.snack ? 'eod-ok' : 'eod-miss'}>🍌</span>
                     <span>{day.snack || 'No snack'}</span>
@@ -1225,10 +1239,10 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
 
     const prevComplete = useRef(false);
     useEffect(() => {
-        const complete = day.morningWater && day.eggs >= config.eggsTarget && day.curd;
+        const complete = day.morningWater && day.eggs >= config.eggsTarget && (config.customDailyItems || []).every(it => day.dailyChecks?.[it.id]);
         if (complete && !prevComplete.current) onComplete('food');
         prevComplete.current = complete;
-    }, [day.morningWater, day.eggs, day.curd, config.eggsTarget]);
+    }, [day.morningWater, day.eggs, day.dailyChecks, config.eggsTarget, config.customDailyItems]);
 
     const [logInput, setLogInput] = useState('');
     const [logTag, setLogTag] = useState('breakfast');
@@ -1340,16 +1354,18 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                 </div>
             </div>
 
-            {/* Curd */}
-            <div className="card">
-                <div className="label">05 · Curd</div>
-                <div
-                    className={`tap-card ${day.curd ? 'on' : ''}`}
-                    onClick={() => { haptic(); update({ curd: !day.curd }); }}
-                >
-                    {day.curd ? '✓ Curd logged' : 'Tap when done'}
+            {/* Custom daily items */}
+            {(config.customDailyItems || []).map((it, idx) => (
+                <div key={it.id} className="card">
+                    <div className="label">{String(idx + 5).padStart(2, '0')} · {it.label}</div>
+                    <div
+                        className={`tap-card ${day.dailyChecks?.[it.id] ? 'on' : ''}`}
+                        onClick={() => { haptic(); update({ dailyChecks: { ...day.dailyChecks, [it.id]: !day.dailyChecks?.[it.id] } }); }}
+                    >
+                        {day.dailyChecks?.[it.id] ? `✓ ${it.label} logged` : 'Tap when done'}
+                    </div>
                 </div>
-            </div>
+            ))}
 
             {/* Free food log — flat running log with tags */}
             <div className="card">
@@ -1948,8 +1964,9 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
 
     const [newSnack, setNewSnack] = useState('');
     const [restoreMsg, setRestoreMsg] = useState('');
-    const [open, setOpen] = useState({ targets: true, skincare: false, routine: false, snackrot: false, snackopts: false, data: true });
+    const [open, setOpen] = useState({ targets: true, dailyitems: false, skincare: false, routine: false, snackrot: false, snackopts: false, data: true });
     const [newProduct, setNewProduct] = useState({ kind: '', name: '', slot: 'both' });
+    const [newDailyItem, setNewDailyItem] = useState({ label: '', emoji: '' });
     const toggle = (k) => setOpen(o => ({ ...o, [k]: !o[k] }));
     const SecHd = ({ label, k }) => (
         <div onClick={() => toggle(k)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: open[k] ? 14 : 0 }}>
@@ -2042,6 +2059,38 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
                             <button onClick={() => update({ eggsTarget: Math.min(4, config.eggsTarget + 1) })}>+</button>
                         </div>
                     </div>
+                </div>
+                </>}
+            </div>
+
+            {/* Daily items */}
+            <div className="sec">
+                <SecHd label="Daily items" k="dailyitems" />
+                {open.dailyitems && <>
+                {(config.customDailyItems || []).map((it) => (
+                    <div key={it.id} className="set-row" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 8 }}>
+                        <input className="inp" style={{ width: 44, textAlign: 'center', flexShrink: 0 }} value={it.emoji}
+                            onChange={(e) => update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, emoji: e.target.value } : x) })} />
+                        <input className="inp" style={{ flex: 1 }} value={it.label}
+                            onChange={(e) => update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, label: e.target.value } : x) })} />
+                        <button style={{ background: 'none', border: 'none', color: 'var(--txd)', fontSize: 18, cursor: 'pointer', flexShrink: 0, padding: '0 4px' }}
+                            onClick={() => update({ customDailyItems: config.customDailyItems.filter(x => x.id !== it.id) })}>×</button>
+                    </div>
+                ))}
+                <div className="set-row" style={{ padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 8 }}>
+                    <div className="lbl" style={{ marginBottom: 8 }}>Add item</div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                        <input className="inp" style={{ width: 52, textAlign: 'center', flexShrink: 0 }} placeholder="🥗" value={newDailyItem.emoji}
+                            onChange={(e) => setNewDailyItem(p => ({ ...p, emoji: e.target.value }))} />
+                        <input className="inp" style={{ flex: 1 }} placeholder="Label (e.g. Dry fruits)" value={newDailyItem.label}
+                            onChange={(e) => setNewDailyItem(p => ({ ...p, label: e.target.value }))} />
+                    </div>
+                    <button className="btn" style={{ marginTop: 0 }} onClick={() => {
+                        if (!newDailyItem.label.trim()) return;
+                        const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+                        update({ customDailyItems: [...(config.customDailyItems || []), { id, label: newDailyItem.label.trim(), emoji: newDailyItem.emoji || '✅' }] });
+                        setNewDailyItem({ label: '', emoji: '' });
+                    }}>Add item</button>
                 </div>
                 </>}
             </div>
