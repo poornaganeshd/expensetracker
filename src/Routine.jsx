@@ -974,7 +974,18 @@ const loadConfig = () => {
 const SB_URL = "https://zatwgngvsemgydaugaqr.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphdHdnbmd2c2VtZ3lkYXVnYXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDQ5MjMsImV4cCI6MjA5MTcyMDkyM30.8fVcKsFiMOABaMsglG0CDqoLJiCfH9jllQrH5raBR9U";
 const sbH = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` };
-const sbGetR = async (table, id) => { try { const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}&select=*`, { headers: sbH }); if (!r.ok) return null; const d = await r.json(); return d[0] || null } catch { return null } };
+const FETCH_TIMEOUT_MS = 1400;
+const sbGetR = async (table, id) => {
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+        const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}&select=*`, { headers: sbH, signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!r.ok) return null;
+        const d = await r.json();
+        return d[0] || null;
+    } catch { return null }
+};
 const sbUpsertR = async (table, row, dedupeKey = null) => sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}`, method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(row), dedupeKey });
 const sbDeleteR = async (table, id) => sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}?id=eq.${id}`, method: "DELETE", headers: sbH, dedupeKey: `${table}:delete:${id}` });
 

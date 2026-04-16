@@ -7,9 +7,30 @@ const APP = "NOMAD", CUR = "₹", uid = () => Date.now().toString(36) + Math.ran
 const SB_URL = "https://zatwgngvsemgydaugaqr.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphdHdnbmd2c2VtZ3lkYXVnYXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDQ5MjMsImV4cCI6MjA5MTcyMDkyM30.8fVcKsFiMOABaMsglG0CDqoLJiCfH9jllQrH5raBR9U";
 const sbH = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` };
+const FETCH_TIMEOUT_MS = 1400;
+const fetchWithTimeout = async (url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+};
+const loadLocalBackup = ({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sDm, sWsb }) => {
+  try {
+    const r = localStorage.getItem("nomad-v5"); if (!r) return;
+    const d = JSON.parse(r);
+    if (d.expenses) sEx(d.expenses); if (d.incomes) sInc(d.incomes); if (d.transfers) sTr(d.transfers);
+    if (d.settlements) sStl(d.settlements); if (d.categories?.length) sCats(d.categories);
+    if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.splits) sSp(d.splits);
+    if (d.recurring) sRec(d.recurring); if (d.darkMode !== undefined) sDm(d.darkMode);
+    if (d.walletStartBal) sWsb(d.walletStartBal);
+  } catch { }
+};
 const sbGet = async (table) => {
   try {
-    const r = await fetch(`${SB_URL}/rest/v1/${table}?select=*`, { headers: sbH });
+    const r = await fetchWithTimeout(`${SB_URL}/rest/v1/${table}?select=*`, { headers: sbH });
     if (!r.ok) {
       console.error("sbGet fail", table, r.status);
       return null;
@@ -276,6 +297,11 @@ export default function Nomad() {
 
   useEffect(() => {
     const load = async () => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        loadLocalBackup({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sDm, sWsb });
+        sL(true);
+        return;
+      }
       try {
         const [dbEx, dbInc, dbTr, dbStl, dbSp, dbRec, dbWsb, dbEvs] = await Promise.all([
           sbGet("expenses"), sbGet("incomes"), sbGet("transfers"), sbGet("settlements"),
@@ -284,14 +310,7 @@ export default function Nomad() {
         // Supabase is source of truth — always use it, even if empty
         const hadRemoteFailure = [dbEx, dbInc, dbTr, dbStl, dbSp, dbRec, dbWsb, dbEvs].some(x => x === null);
         if (hadRemoteFailure) {
-          const r = localStorage.getItem("nomad-v5"); if (r) {
-            const d = JSON.parse(r);
-            if (d.expenses) sEx(d.expenses); if (d.incomes) sInc(d.incomes); if (d.transfers) sTr(d.transfers);
-            if (d.settlements) sStl(d.settlements); if (d.categories?.length) sCats(d.categories);
-            if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.splits) sSp(d.splits);
-            if (d.recurring) sRec(d.recurring); if (d.darkMode !== undefined) sDm(d.darkMode);
-            if (d.walletStartBal) sWsb(d.walletStartBal);
-          }
+          loadLocalBackup({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sDm, sWsb });
         } else {
           sEx(dbEx || []);
           sInc(dbInc || []);
@@ -304,16 +323,7 @@ export default function Nomad() {
         }
       } catch {
         // Offline only — fallback to localStorage
-        try {
-          const r = localStorage.getItem("nomad-v5"); if (r) {
-            const d = JSON.parse(r);
-            if (d.expenses) sEx(d.expenses); if (d.incomes) sInc(d.incomes); if (d.transfers) sTr(d.transfers);
-            if (d.settlements) sStl(d.settlements); if (d.categories?.length) sCats(d.categories);
-            if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.splits) sSp(d.splits);
-            if (d.recurring) sRec(d.recurring); if (d.darkMode !== undefined) sDm(d.darkMode);
-            if (d.walletStartBal) sWsb(d.walletStartBal);
-          }
-        } catch { }
+        loadLocalBackup({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sDm, sWsb });
       }
       sL(true);
     };
@@ -368,7 +378,7 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
 #nomad-routine .skin-hd .date{display:none!important}
 `}</style>
 
-    {(!online || pendingSync > 0) && <div style={{ position: "sticky", top: 0, zIndex: 120, margin: "0 12px 10px", padding: "10px 14px", borderRadius: 14, background: online ? "#FFF3D6" : "#FDE7E4", border: `1px solid ${online ? "#F1C96B" : "#E7A39B"}`, color: online ? "#7A5600" : "#9F3E33", fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 600, letterSpacing: "0.02em" }}>{!online ? "Offline mode: changes are saved on this device and will sync when you're back online." : `${pendingSync} change${pendingSync === 1 ? "" : "s"} waiting to sync.`}</div>}
+    {(!online || pendingSync > 0) && <div style={{ position: "sticky", top: 0, zIndex: 120, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: online ? "#FFF3D6" : "#FDE7E4", border: `1px solid ${online ? "#F1C96B" : "#E7A39B"}`, color: online ? "#7A5600" : "#9F3E33", fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, letterSpacing: "0.01em", textAlign: "center" }}>{!online ? "Offline. Changes sync later." : `Syncing ${pendingSync} change${pendingSync === 1 ? "" : "s"}.`}</div>}
 
 
     {(() => {
