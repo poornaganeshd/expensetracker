@@ -7,8 +7,12 @@ const SB_URL = "https://zatwgngvsemgydaugaqr.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphdHdnbmd2c2VtZ3lkYXVnYXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDQ5MjMsImV4cCI6MjA5MTcyMDkyM30.8fVcKsFiMOABaMsglG0CDqoLJiCfH9jllQrH5raBR9U";
 const sbH = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` };
 const sbGet = async (table) => { const r = await fetch(`${SB_URL}/rest/v1/${table}?select=*`, { headers: sbH }); if (!r.ok) { console.error("sbGet fail", table, r.status); return [] } return r.json() };
-const sbUpsert = async (table, rows) => { const r = await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(rows) }); if (!r.ok) r.text().then(t => console.error("sbUpsert fail", table, r.status, t)); return r };
-const sbDelete = async (table, id) => fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "DELETE", headers: sbH });
+const OQ_KEY = "nomad-offline-queue";
+const oqGet = () => { try { return JSON.parse(localStorage.getItem(OQ_KEY) || "[]") } catch { return [] } };
+const oqSave = q => { try { localStorage.setItem(OQ_KEY, JSON.stringify(q)) } catch {} };
+const sbUpsert = async (table, rows) => { try { const r = await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(rows) }); if (!r.ok) r.text().then(t => console.error("sbUpsert fail", table, r.status, t)); return r } catch { const q = oqGet(); q.push({ op: "upsert", table, rows }); oqSave(q) } };
+const sbDelete = async (table, id) => { try { return await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "DELETE", headers: sbH }) } catch { const q = oqGet(); q.push({ op: "delete", table, id }); oqSave(q) } };
+const flushQueue = async () => { const q = oqGet(); if (!q.length) return; const failed = []; oqSave([]); for (const item of q) { try { let r; if (item.op === "upsert") r = await fetch(`${SB_URL}/rest/v1/${item.table}`, { method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(item.rows) }); else r = await fetch(`${SB_URL}/rest/v1/${item.table}?id=eq.${item.id}`, { method: "DELETE", headers: sbH }); if (!r?.ok) failed.push(item) } catch { failed.push(item) } } if (failed.length) oqSave(failed) };
 const fmt = n => CUR + Number(n).toLocaleString("en-IN"), mk = d => d.slice(0, 7);
 const ml = k => { const [y, m] = k.split("-"); return new Date(y, m - 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" }) };
 const dl = d => { const t = new Date().toISOString().slice(0, 10), y = new Date(Date.now() - 864e5).toISOString().slice(0, 10); return d === t ? "Today" : d === y ? "Yesterday" : new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) };
@@ -264,9 +268,10 @@ export default function Nomad() {
         } catch { }
       }
       sL(true);
-      if ("serviceWorker" in navigator) { navigator.serviceWorker.getRegistrations().then(r => r.forEach(sw => sw.unregister())) }
     };
     load();
+    window.addEventListener("online", flushQueue);
+    return () => window.removeEventListener("online", flushQueue);
   }, []);
   // Keep localStorage in sync as offline backup
   useEffect(() => { if (!loaded) return; try { localStorage.setItem("nomad-v5", JSON.stringify({ expenses: ex, incomes: inc, transfers: tr, settlements: stl, categories: cats, incomeSources: isrc, splits: sp, events: evs, recurring: rec, darkMode: dm, walletStartBal: wsb })) } catch { } }, [ex, inc, tr, stl, cats, isrc, sp, evs, rec, dm, wsb, loaded]);
