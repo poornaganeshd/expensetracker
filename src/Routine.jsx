@@ -1262,18 +1262,19 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                 <div className="water-big">{totalWater}<span className="u">L</span></div>
                 <div className="water-target">
                     Target · {config.waterTarget}L
-                    {mwL > 0 && <span style={{ marginLeft: 8, color: 'var(--txd)' }}>{mwL.toFixed(2)}L from morning</span>}
+                    {mwL > 0 && <span style={{ marginLeft: 8, color: 'var(--txd)' }}>{mwL.toFixed(1)}L from morning</span>}
                 </div>
                 <div className="track">
                     {waterPts.filter(p => p <= config.waterTarget + 0.01).map((p) => {
-                        const shown = (mwL + p).toFixed(1);
+                        const currentTotal = parseFloat((mwL + day.water).toFixed(1));
+                        const isOn = Math.abs(currentTotal - p) < 0.05;
                         return (
                             <div
                                 key={p}
-                                className={`track-pt ${Math.abs(day.water - p) < 0.01 ? 'on' : ''}`}
-                                onClick={() => update({ water: day.water === p ? 0 : p })}
+                                className={`track-pt ${isOn ? 'on' : ''}`}
+                                onClick={() => update({ water: isOn ? 0 : Math.max(0, parseFloat((p - mwL).toFixed(2))) })}
                             >
-                                {shown}L
+                                {p.toFixed(1)}L
                             </div>
                         );
                     })}
@@ -1918,6 +1919,14 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
 
     const [newSnack, setNewSnack] = useState('');
     const [restoreMsg, setRestoreMsg] = useState('');
+    const [open, setOpen] = useState({ targets: true, skincare: false, routine: false, snackrot: false, snackopts: false, data: false });
+    const toggle = (k) => setOpen(o => ({ ...o, [k]: !o[k] }));
+    const SecHd = ({ label, k }) => (
+        <div onClick={() => toggle(k)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: open[k] ? 14 : 0 }}>
+            <h3 style={{ margin: 0 }}>{label}</h3>
+            <span style={{ fontSize: 20, lineHeight: 1, color: 'var(--txm)', fontWeight: 300, userSelect: 'none' }}>{open[k] ? '−' : '+'}</span>
+        </div>
+    );
     const fileRef = useRef(null);
 
     const handleBackup = () => {
@@ -1976,7 +1985,8 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
             {/* Appearance — FIRST */}
             {/* Targets */}
             <div className="sec">
-                <h3>Targets</h3>
+                <SecHd label="Targets" k="targets" />
+                {open.targets && <>
                 <div className="set-row">
                     <div className="r">
                         <div>
@@ -2003,11 +2013,13 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
                         </div>
                     </div>
                 </div>
+                </>}
             </div>
 
             {/* Skincare */}
             <div className="sec">
-                <h3>Skincare</h3>
+                <SecHd label="Skincare" k="skincare" />
+                {open.skincare && <>
                 <div className="set-row">
                     <div className="lbl" style={{ marginBottom: 10 }}>Retinol phase</div>
                     <div className="seg">
@@ -2033,18 +2045,19 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
                         <div className={`toggle ${config.showProductNames ? 'on' : ''}`} onClick={() => update({ showProductNames: !config.showProductNames })} />
                     </div>
                 </div>
+                </>}
             </div>
 
             {/* Skin routine */}
             <div className="sec">
-                <h3>Skin routine</h3>
-                <RoutineEditor config={config} setConfig={setConfig} />
+                <SecHd label="Skin routine" k="routine" />
+                {open.routine && <RoutineEditor config={config} setConfig={setConfig} />}
             </div>
 
             {/* Snack rotation */}
             <div className="sec">
-                <h3>Snack rotation</h3>
-                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+                <SecHd label="Snack rotation" k="snackrot" />
+                {open.snackrot && ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
                     <div key={d} className="set-row">
                         <div className="r">
                             <div className="lbl" style={{ width: 42 }}>{d}</div>
@@ -2056,8 +2069,8 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
 
             {/* Snack options */}
             <div className="sec">
-                <h3>Snack options</h3>
-                <div className="set-row">
+                <SecHd label="Snack options" k="snackopts" />
+                {open.snackopts && <div className="set-row">
                     <div className="free-list" style={{ marginBottom: 10 }}>
                         {config.snackOptions.map((s, i) => (
                             <div key={i} className="chip">
@@ -2072,12 +2085,13 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
                             if (newSnack.trim()) { update({ snackOptions: [...config.snackOptions, newSnack.trim()] }); setNewSnack(''); }
                         }}>Add</button>
                     </div>
-                </div>
+                </div>}
             </div>
 
             {/* Data */}
             <div className="sec">
-                <h3>Data</h3>
+                <SecHd label="Data" k="data" />
+                {open.data && <>
                 <button className="btn ghost" onClick={handleBackup}>Backup data</button>
                 <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleRestore} />
                 <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => fileRef.current && fileRef.current.click()}>
@@ -2108,6 +2122,7 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
                         </div>
                     </div>
                 )}
+                </>}
             </div>
         </div>
     );
