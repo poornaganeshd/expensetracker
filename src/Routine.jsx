@@ -886,8 +886,22 @@ const migrateFreeFoodLog = (log) => {
     return [];
 };
 
-const PRODUCT_KEYS = ['cleanser', 'niacinamide', 'sunscreen', 'bhaSerum', 'retinol'];
-const PRODUCT_LABELS = { cleanser: 'Cleanser', niacinamide: 'Niacinamide', sunscreen: 'Sunscreen', bhaSerum: 'BHA serum', retinol: 'Retinol' };
+const PRODUCT_LABELS = { cleanser: 'Cleanser', niacinamide: 'Niacinamide', sunscreen: 'Sunscreen', bhaSerum: 'BHA Serum', retinol: 'Retinol' };
+
+const DEFAULT_CUSTOM_PRODUCTS = [
+    { id: 'cleanser',    kind: 'Cleanser',    name: 'Barclay Italy SA Face Wash',    slot: 'both' },
+    { id: 'niacinamide', kind: 'Niacinamide',  name: 'Minimalist Niacinamide 10%',   slot: 'both' },
+    { id: 'sunscreen',   kind: 'Sunscreen',    name: 'Barclay Italy Mineral SPF 50+', slot: 'am'   },
+    { id: 'bhaSerum',    kind: 'BHA Serum',    name: 'Barclay Italy SA Serum',        slot: 'pm'   },
+    { id: 'retinol',     kind: 'Retinol',      name: 'Minimalist Retinol 0.3%',       slot: 'pm'   },
+];
+
+// Resolve product info by ID — includes archived products so history still shows names
+const resolveProduct = (id, customProducts) => {
+    const p = (customProducts || []).find(p => p.id === id);
+    if (p) return p;
+    return { id, kind: PRODUCT_LABELS[id] || id, name: PRODUCT_LABELS[id] || id, slot: 'both' };
+};
 
 const DEFAULT_ROUTINES = {
     Mon: { am: ['cleanser', 'niacinamide', 'sunscreen'], pm: ['cleanser', 'retinol'] },
@@ -914,6 +928,7 @@ const DEFAULT_DAY = {
     energyChip: '',
     skinTodayChip: '',
     retinolReactionChip: '',
+    reactionChip: '',
     notes: '',
     skinNotes: '',
     notesConfirmed: false,
@@ -936,13 +951,7 @@ const DEFAULT_CONFIG = {
         Sun: 'Whatever looks fresh',
     },
     snackOptions: ['Banana', 'Carrot', 'Cucumber', 'Guava', 'Apple', 'Pomegranate', 'Papaya', 'Other'],
-    products: {
-        cleanser: 'Barclay Italy SA Face Wash',
-        niacinamide: 'Minimalist Niacinamide 10%',
-        sunscreen: 'Barclay Italy Mineral SPF 50+',
-        bhaSerum: 'Barclay Italy SA Serum',
-        retinol: 'Minimalist Retinol 0.3%',
-    },
+    customProducts: DEFAULT_CUSTOM_PRODUCTS,
     routines: DEFAULT_ROUTINES,
 };
 
@@ -950,13 +959,24 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const pickRoutineList = (saved, fallback) => Array.isArray(saved) ? saved : fallback;
 const sanitizeConfig = (value) => {
     const c = value || {};
+
+    // Migrate old products object → customProducts array
+    let customProducts = c.customProducts;
+    if (!Array.isArray(customProducts)) {
+        const oldProducts = c.products || {};
+        customProducts = DEFAULT_CUSTOM_PRODUCTS.map(def => ({
+            ...def,
+            name: oldProducts[def.id] || def.name,
+        }));
+    }
+
     return {
         ...DEFAULT_CONFIG,
         ...c,
         waterTarget: clamp(Number(c.waterTarget ?? DEFAULT_CONFIG.waterTarget) || DEFAULT_CONFIG.waterTarget, 0.5, 5),
         eggsTarget: clamp(Number(c.eggsTarget ?? DEFAULT_CONFIG.eggsTarget) || DEFAULT_CONFIG.eggsTarget, 1, 4),
         retinolPhase: clamp(Number(c.retinolPhase ?? DEFAULT_CONFIG.retinolPhase) || DEFAULT_CONFIG.retinolPhase, 1, 3),
-        products: { ...DEFAULT_CONFIG.products, ...(c.products || {}) },
+        customProducts,
         snackRotation: { ...DEFAULT_CONFIG.snackRotation, ...(c.snackRotation || {}) },
         routines: Object.fromEntries(
             Object.entries(DEFAULT_ROUTINES).map(([day, def]) => [
@@ -976,9 +996,14 @@ const sanitizeDayRecord = (record) => {
         merged.skinFeelChip = '';
         merged.energyChip = '';
     }
+    // Migrate retinolReactionChip → reactionChip
+    if (!merged.reactionChip && merged.retinolReactionChip) {
+        merged.reactionChip = merged.retinolReactionChip;
+    }
     if (!merged.skinNotesConfirmed) {
         merged.skinNotes = '';
         merged.skinTodayChip = '';
+        merged.reactionChip = '';
         merged.retinolReactionChip = '';
     }
     return merged;
@@ -1420,8 +1445,8 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
 
     const phaseLabel = { 1: 'Phase 1 · 2×/wk', 2: 'Phase 2 · 3×/wk', 3: 'Phase 3 · nightly' }[config.retinolPhase];
 
-    const amStepList = routine.am.map(k => ({ key: k, name: config.products[k] || k, kind: PRODUCT_LABELS[k] || k }));
-    const pmStepList = routine.pm.map(k => ({ key: k, name: config.products[k] || k, kind: PRODUCT_LABELS[k] || k }));
+    const amStepList = routine.am.map(id => { const p = resolveProduct(id, config.customProducts); return { key: id, name: p.name, kind: p.kind }; });
+    const pmStepList = routine.pm.map(id => { const p = resolveProduct(id, config.customProducts); return { key: id, name: p.name, kind: p.kind }; });
 
     const amLabel = `Morning routine · ${routine.am.length} step${routine.am.length !== 1 ? 's' : ''}`;
     const pmLabel = `Evening routine · ${routine.pm.length} step${routine.pm.length !== 1 ? 's' : ''}`;
@@ -1532,11 +1557,11 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                         </div>
                     ))}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Retinol reaction</div>
+                <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Skin reaction</div>
                 <div className="pills" style={{ marginBottom: 12, opacity: day.skinNotesConfirmed ? 0.6 : 1 }}>
                     {[['none', 'None'], ['mild', 'Mild dryness'], ['irritation', 'Irritation']].map(([k, l]) => (
-                        <div key={k} className={`pill ${day.retinolReactionChip === k ? 'on teal' : ''}`}
-                            onClick={() => !day.skinNotesConfirmed && update({ retinolReactionChip: day.retinolReactionChip === k ? '' : k })}>{l}</div>
+                        <div key={k} className={`pill ${day.reactionChip === k ? 'on teal' : ''}`}
+                            onClick={() => !day.skinNotesConfirmed && update({ reactionChip: day.reactionChip === k ? '' : k })}>{l}</div>
                     ))}
                 </div>
                 <textarea
@@ -1692,9 +1717,9 @@ const LogScreen = ({ allData, config }) => {
                     log.filter(e => e.tag === 'snack' || e.tag === 'other').map(e => e.text).join('; '),
                     d.skinFeelChip || '', d.energyChip || '',
                     d.amSkinDone ? 'yes' : 'no', d.pmSkinDone ? 'yes' : 'no',
-                    r2.am.map(pk => config.products[pk] || pk).join(', '),
-                    r2.pm.map(pk => config.products[pk] || pk).join(', '),
-                    d.skinTodayChip || '', d.retinolReactionChip || '',
+                    r2.am.map(pk => resolveProduct(pk, config.customProducts).name).join(', '),
+                    r2.pm.map(pk => resolveProduct(pk, config.customProducts).name).join(', '),
+                    d.skinTodayChip || '', d.reactionChip || d.retinolReactionChip || '',
                     d.notes || '', d.skinNotes || '',
                 ]);
             });
@@ -1703,7 +1728,7 @@ const LogScreen = ({ allData, config }) => {
             // Config sheet
             const cfgRows = [['Key', 'Value']];
             cfgRows.push(['waterTarget', config.waterTarget], ['eggsTarget', config.eggsTarget], ['retinolPhase', config.retinolPhase], ['showProductNames', config.showProductNames]);
-            Object.entries(config.products || {}).forEach(([k, v]) => cfgRows.push([`product.${k}`, v]));
+            (config.customProducts || []).forEach(p => cfgRows.push([`product.${p.id}`, `${p.kind} | ${p.name} | ${p.slot}${p.archived ? ' | archived' : ''}`]));
             Object.entries(config.snackRotation || {}).forEach(([k, v]) => cfgRows.push([`snack.${k}`, v]));
             Object.entries(config.routines || {}).forEach(([day, r]) => {
                 cfgRows.push([`routine.${day}.am`, r.am.join(', ')]);
@@ -1732,8 +1757,8 @@ const LogScreen = ({ allData, config }) => {
         const dow2 = dayOfWeek(new Date(key + 'T12:00:00'));
         const log = migrateFreeFoodLog(rec.freeFoodLog);
         const r2 = (config.routines && config.routines[dow2]) || { am: [], pm: [] };
-        const amNames = r2.am.map(pk => config.products[pk] || PRODUCT_LABELS[pk] || pk).join(', ');
-        const pmNames = r2.pm.map(pk => config.products[pk] || PRODUCT_LABELS[pk] || pk).join(', ');
+        const amNames = r2.am.map(pk => resolveProduct(pk, config.customProducts).name).join(', ');
+        const pmNames = r2.pm.map(pk => resolveProduct(pk, config.customProducts).name).join(', ');
 
         return (
             <>
@@ -1771,10 +1796,10 @@ const LogScreen = ({ allData, config }) => {
                         <span className="dk">PM</span>
                         <span className="dv">{rec.pmSkinDone ? '✓' : '—'} {pmNames && <span style={{ fontSize: 11, color: 'var(--txm)' }}>{pmNames}</span>}</span>
                     </div>
-                    {(rec.skinTodayChip || rec.retinolReactionChip) && (
+                    {(rec.skinTodayChip || rec.reactionChip || rec.retinolReactionChip) && (
                         <div className="sum-chips" style={{ marginTop: 8, marginBottom: 0 }}>
                             {rec.skinTodayChip && <div className="sum-chip">Skin today · {rec.skinTodayChip}</div>}
-                            {rec.retinolReactionChip && <div className="sum-chip">Retinol · {rec.retinolReactionChip}</div>}
+                            {(rec.reactionChip || rec.retinolReactionChip) && <div className="sum-chip">Reaction · {rec.reactionChip || rec.retinolReactionChip}</div>}
                         </div>
                     )}
                     {rec.skinNotes && <div style={{ fontSize: 12, color: 'var(--txm)', marginTop: 8, padding: '8px 10px', background: 'var(--sf)', border: '1px solid var(--bd)', borderRadius: 8 }}>{rec.skinNotes}</div>}
@@ -1862,6 +1887,8 @@ const RoutineEditor = ({ config, setConfig }) => {
         }));
     };
 
+    const activeProducts = (config.customProducts || []).filter(p => !p.archived);
+
     return (
         <div className="set-row">
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => {
@@ -1872,15 +1899,18 @@ const RoutineEditor = ({ config, setConfig }) => {
                         {['am', 'pm'].map((slot) => {
                             const keys = r[slot] || [];
                             const pickerOpen = picker && picker.day === day && picker.slot === slot;
-                            const available = PRODUCT_KEYS.filter(k => !keys.includes(k));
+                            const eligible = activeProducts.filter(p =>
+                                (slot === 'am' ? (p.slot === 'am' || p.slot === 'both') : (p.slot === 'pm' || p.slot === 'both'))
+                                && !keys.includes(p.id)
+                            );
                             return (
                                 <div key={slot} className="routine-sub">
                                     <div className="routine-sub-label">{slot.toUpperCase()}</div>
                                     <div style={{ flex: 1 }}>
                                         <div className="routine-chips">
-                                            {keys.map((k, i) => (
+                                            {keys.map((id, i) => (
                                                 <div key={i} className="routine-chip">
-                                                    {PRODUCT_LABELS[k] || k}
+                                                    {resolveProduct(id, config.customProducts).kind}
                                                     <button onClick={() => updateRoutine(day, slot, keys.filter((_, idx) => idx !== i))}>×</button>
                                                 </div>
                                             ))}
@@ -1890,11 +1920,11 @@ const RoutineEditor = ({ config, setConfig }) => {
                                         </div>
                                         {pickerOpen && (
                                             <div className="product-picker">
-                                                {available.length > 0 ? available.map(k => (
-                                                    <div key={k} className="product-picker-item" onClick={() => {
-                                                        updateRoutine(day, slot, [...keys, k]);
+                                                {eligible.length > 0 ? eligible.map(p => (
+                                                    <div key={p.id} className="product-picker-item" onClick={() => {
+                                                        updateRoutine(day, slot, [...keys, p.id]);
                                                         setPicker(null);
-                                                    }}>{PRODUCT_LABELS[k]}</div>
+                                                    }}>{p.kind}</div>
                                                 )) : <span style={{ fontSize: 11, color: 'var(--txm)' }}>All added</span>}
                                             </div>
                                         )}
@@ -1914,12 +1944,12 @@ const RoutineEditor = ({ config, setConfig }) => {
    ============================================================ */
 const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
     const update = (patch) => setConfig(sanitizeConfig({ ...config, ...patch }));
-    const updateProducts = (patch) => setConfig(sanitizeConfig({ ...config, products: { ...config.products, ...patch } }));
     const updateRotation = (day, val) => setConfig(sanitizeConfig({ ...config, snackRotation: { ...config.snackRotation, [day]: val } }));
 
     const [newSnack, setNewSnack] = useState('');
     const [restoreMsg, setRestoreMsg] = useState('');
-    const [open, setOpen] = useState({ targets: true, skincare: false, routine: false, snackrot: false, snackopts: false, data: false });
+    const [open, setOpen] = useState({ targets: true, skincare: false, routine: false, snackrot: false, snackopts: false, data: true });
+    const [newProduct, setNewProduct] = useState({ kind: '', name: '', slot: 'both' });
     const toggle = (k) => setOpen(o => ({ ...o, [k]: !o[k] }));
     const SecHd = ({ label, k }) => (
         <div onClick={() => toggle(k)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: open[k] ? 14 : 0 }}>
@@ -2030,12 +2060,50 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
                         ))}
                     </div>
                 </div>
-                {[['cleanser', 'Cleanser'], ['niacinamide', 'Niacinamide serum'], ['sunscreen', 'Sunscreen'], ['bhaSerum', 'BHA serum'], ['retinol', 'Retinol']].map(([k, label]) => (
-                    <div key={k} className="set-row">
-                        <div className="lbl" style={{ marginBottom: 6 }}>{label}</div>
-                        <input className="inp" value={config.products[k]} onChange={(e) => updateProducts({ [k]: e.target.value })} />
+                {/* Product list */}
+                {(config.customProducts || []).filter(p => !p.archived).map((p) => (
+                    <div key={p.id} className="set-row" style={{ marginBottom: 10, padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, padding: '2px 8px', borderRadius: 100, background: p.slot === 'am' ? 'var(--amber-sf)' : p.slot === 'pm' ? 'var(--teal-sf)' : 'var(--green-sf)', color: p.slot === 'am' ? 'var(--amber-deep)' : p.slot === 'pm' ? 'var(--teal-deep)' : 'var(--green-deep)', cursor: 'pointer', userSelect: 'none' }}
+                                onClick={() => {
+                                    const next = p.slot === 'am' ? 'pm' : p.slot === 'pm' ? 'both' : 'am';
+                                    update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, slot: next } : cp) });
+                                }}>
+                                {p.slot === 'both' ? 'AM+PM' : p.slot.toUpperCase()}
+                            </span>
+                            <button style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--txd)', fontSize: 18, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
+                                onClick={() => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, archived: true } : cp) })}>×</button>
+                        </div>
+                        <input className="inp" style={{ marginBottom: 6 }} placeholder="Type (e.g. Retinol)" value={p.kind}
+                            onChange={(e) => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, kind: e.target.value } : cp) })} />
+                        <input className="inp" placeholder="Brand name" value={p.name}
+                            onChange={(e) => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, name: e.target.value } : cp) })} />
                     </div>
                 ))}
+
+                {/* Add product */}
+                <div className="set-row" style={{ padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 10 }}>
+                    <div className="lbl" style={{ marginBottom: 8 }}>Add product</div>
+                    <input className="inp" style={{ marginBottom: 6 }} placeholder="Type (e.g. Vitamin C)" value={newProduct.kind}
+                        onChange={(e) => setNewProduct(np => ({ ...np, kind: e.target.value }))} />
+                    <input className="inp" style={{ marginBottom: 8 }} placeholder="Brand name (optional)" value={newProduct.name}
+                        onChange={(e) => setNewProduct(np => ({ ...np, name: e.target.value }))} />
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                        {['am', 'pm', 'both'].map(s => (
+                            <div key={s} onClick={() => setNewProduct(np => ({ ...np, slot: s }))}
+                                style={{ flex: 1, textAlign: 'center', padding: '5px 0', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: newProduct.slot === s ? (s === 'am' ? 'var(--amber-sf)' : s === 'pm' ? 'var(--teal-sf)' : 'var(--green-sf)') : 'var(--sf)', border: '1px solid var(--bd)', color: newProduct.slot === s ? (s === 'am' ? 'var(--amber-deep)' : s === 'pm' ? 'var(--teal-deep)' : 'var(--green-deep)') : 'var(--txm)' }}>
+                                {s === 'both' ? 'AM+PM' : s.toUpperCase()}
+                            </div>
+                        ))}
+                    </div>
+                    <button className="btn" style={{ marginTop: 0 }} onClick={() => {
+                        if (!newProduct.kind.trim()) return;
+                        const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                        update({ customProducts: [...(config.customProducts || []), { id, kind: newProduct.kind.trim(), name: newProduct.name.trim() || newProduct.kind.trim(), slot: newProduct.slot }] });
+                        setNewProduct({ kind: '', name: '', slot: 'both' });
+                    }}>Add product</button>
+                </div>
+
                 <div className="set-row">
                     <div className="r">
                         <div>
