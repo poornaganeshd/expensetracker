@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { sendSupabaseRequest } from './offlineSync';
 
 /* ============================================================
    FORM — Daily food & skincare ritual tracker  v6
@@ -974,8 +975,8 @@ const SB_URL = "https://zatwgngvsemgydaugaqr.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphdHdnbmd2c2VtZ3lkYXVnYXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDQ5MjMsImV4cCI6MjA5MTcyMDkyM30.8fVcKsFiMOABaMsglG0CDqoLJiCfH9jllQrH5raBR9U";
 const sbH = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` };
 const sbGetR = async (table, id) => { try { const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}&select=*`, { headers: sbH }); if (!r.ok) return null; const d = await r.json(); return d[0] || null } catch { return null } };
-const sbUpsertR = async (table, row) => { try { await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(row) }) } catch { } };
-const sbDeleteR = async (table, id) => { try { await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "DELETE", headers: sbH }) } catch { } };
+const sbUpsertR = async (table, row, dedupeKey = null) => sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}`, method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(row), dedupeKey });
+const sbDeleteR = async (table, id) => sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}?id=eq.${id}`, method: "DELETE", headers: sbH, dedupeKey: `${table}:delete:${id}` });
 
 const BANNERS_KEY = 'form_banners';
 const getBanners = () => { try { return JSON.parse(localStorage.getItem(BANNERS_KEY) || '{}'); } catch { return {}; } };
@@ -1900,8 +1901,8 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
                 const mergedConfig = { ...DEFAULT_CONFIG, ...parsed.config, products: { ...DEFAULT_CONFIG.products, ...(parsed.config.products || {}) }, routines: parsed.config.routines || DEFAULT_ROUTINES };
                 setAllData(parsed.data);
                 setConfig(mergedConfig);
-                sbUpsertR("daily_logs", { id: "all_data", data: parsed.data });
-                sbUpsertR("user_config", { id: "singleton", data: mergedConfig });
+                sbUpsertR("daily_logs", { id: "all_data", data: parsed.data }, "routine:daily_logs");
+                sbUpsertR("user_config", { id: "singleton", data: mergedConfig }, "routine:user_config");
                 setRestoreMsg('Restored ✓');
                 setTimeout(() => setRestoreMsg(''), 2500);
             } catch { setRestoreMsg('Failed to read ✗'); setTimeout(() => setRestoreMsg(''), 2500); }
@@ -2129,13 +2130,13 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     useEffect(() => {
         if (!sbLoaded) return;
         localStorage.setItem('form_data', JSON.stringify(allData));
-        sbUpsertR("daily_logs", { id: "all_data", data: allData });
+        sbUpsertR("daily_logs", { id: "all_data", data: allData }, "routine:daily_logs");
     }, [allData, sbLoaded]);
 
     useEffect(() => {
         if (!sbLoaded) return;
         localStorage.setItem('form_config', JSON.stringify(config));
-        sbUpsertR("user_config", { id: "singleton", data: config });
+        sbUpsertR("user_config", { id: "singleton", data: config }, "routine:user_config");
     }, [config, sbLoaded]);
 
     const key = todayKey();

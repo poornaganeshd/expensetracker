@@ -1,46 +1,54 @@
-const CACHE_NAME = 'nomad-v6';
-const ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Nunito:wght@400;500;600;700;800&display=swap'
-];
+const CACHE_NAME = 'nomad-app-v7';
+const APP_SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
-// Install — cache core assets
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
   );
   self.skipWaiting();
 });
 
-// Activate — clean old caches
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
     )
   );
   self.clients.claim();
 });
 
-// Fetch — cache-first for assets, network-first for pages
-self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
+const cacheResponse = async (request, response) => {
+  if (!response || (!response.ok && response.type !== 'opaque')) return response;
+  const cache = await caches.open(CACHE_NAME);
+  cache.put(request, response.clone());
+  return response;
+};
 
-  e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const fetchPromise = fetch(e.request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
 
-      return cached || fetchPromise;
-    })
-  );
+  const { request } = event;
+  const isNavigation = request.mode === 'navigate';
+  const isSameOrigin = new URL(request.url).origin === self.location.origin;
+  const isAsset = ['style', 'script', 'worker', 'font', 'image'].includes(request.destination);
+
+  if (isNavigation) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => cacheResponse(request, response))
+        .catch(async () => (await caches.match(request)) || caches.match('/'))
+    );
+    return;
+  }
+
+  if (isSameOrigin || isAsset) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const networkFetch = fetch(request)
+          .then((response) => cacheResponse(request, response))
+          .catch(() => cached);
+        return cached || networkFetch;
+      })
+    );
+  }
 });
