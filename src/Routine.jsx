@@ -860,7 +860,10 @@ const parseMorningWater = (s) => {
     const lMatch = str.match(/^([\d.]+)\s*l$/);
     if (lMatch) return parseFloat(lMatch[1]);
     const numOnly = parseFloat(str);
-    if (!isNaN(numOnly)) return numOnly < 10 ? numOnly : numOnly / 1000;
+    if (!isNaN(numOnly)) {
+        if (numOnly <= 10) return numOnly;
+        if (numOnly >= 100) return numOnly / 1000;
+    }
     return 0;
 };
 
@@ -943,39 +946,65 @@ const DEFAULT_CONFIG = {
     routines: DEFAULT_ROUTINES,
 };
 
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const pickRoutineList = (saved, fallback) => Array.isArray(saved) ? saved : fallback;
+const sanitizeConfig = (value) => {
+    const c = value || {};
+    return {
+        ...DEFAULT_CONFIG,
+        ...c,
+        waterTarget: clamp(Number(c.waterTarget ?? DEFAULT_CONFIG.waterTarget) || DEFAULT_CONFIG.waterTarget, 0.5, 5),
+        eggsTarget: clamp(Number(c.eggsTarget ?? DEFAULT_CONFIG.eggsTarget) || DEFAULT_CONFIG.eggsTarget, 1, 4),
+        retinolPhase: clamp(Number(c.retinolPhase ?? DEFAULT_CONFIG.retinolPhase) || DEFAULT_CONFIG.retinolPhase, 1, 3),
+        products: { ...DEFAULT_CONFIG.products, ...(c.products || {}) },
+        snackRotation: { ...DEFAULT_CONFIG.snackRotation, ...(c.snackRotation || {}) },
+        routines: Object.fromEntries(
+            Object.entries(DEFAULT_ROUTINES).map(([day, def]) => [
+                day,
+                {
+                    am: pickRoutineList(c.routines?.[day]?.am, def.am),
+                    pm: pickRoutineList(c.routines?.[day]?.pm, def.pm),
+                },
+            ])
+        ),
+    };
+};
+const sanitizeDayRecord = (record) => {
+    const merged = { ...DEFAULT_DAY, ...(record || {}), freeFoodLog: migrateFreeFoodLog(record?.freeFoodLog) };
+    if (!merged.notesConfirmed) {
+        merged.notes = '';
+        merged.skinFeelChip = '';
+        merged.energyChip = '';
+    }
+    if (!merged.skinNotesConfirmed) {
+        merged.skinNotes = '';
+        merged.skinTodayChip = '';
+        merged.retinolReactionChip = '';
+    }
+    return merged;
+};
+const sanitizeAllData = (data) => Object.fromEntries(Object.entries(data || {}).map(([k, v]) => [k, sanitizeDayRecord(v)]));
+
 const loadData = () => {
-    try { return JSON.parse(localStorage.getItem('form_data') || '{}'); } catch { return {}; }
+    try { return sanitizeAllData(JSON.parse(localStorage.getItem('form_data') || '{}')); } catch { return {}; }
 };
 
 const loadConfig = () => {
     try {
         const c = JSON.parse(localStorage.getItem('form_config') || 'null');
         if (!c) return DEFAULT_CONFIG;
-        const mergedRoutines = Object.fromEntries(
-            Object.entries(DEFAULT_ROUTINES).map(([day, def]) => [
-                day,
-                {
-                    am: c.routines?.[day]?.am || def.am,
-                    pm: c.routines?.[day]?.pm || def.pm,
-                },
-            ])
-        );
-        return {
-            ...DEFAULT_CONFIG,
-            ...c,
-            products: { ...DEFAULT_CONFIG.products, ...(c.products || {}) },
-            snackRotation: { ...DEFAULT_CONFIG.snackRotation, ...(c.snackRotation || {}) },
-            routines: mergedRoutines,
-        };
+        return sanitizeConfig(c);
     } catch { return DEFAULT_CONFIG; }
 };
 
 // Supabase
-const SB_URL = "https://zatwgngvsemgydaugaqr.supabase.co";
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphdHdnbmd2c2VtZ3lkYXVnYXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNDQ5MjMsImV4cCI6MjA5MTcyMDkyM30.8fVcKsFiMOABaMsglG0CDqoLJiCfH9jllQrH5raBR9U";
-const sbH = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` };
+const SB_URL = import.meta.env.VITE_SUPABASE_URL || "";
+const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const SB_ENABLED = Boolean(SB_URL && SB_KEY);
+const sbH = SB_ENABLED ? { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` } : {};
 const FETCH_TIMEOUT_MS = 1400;
 const sbGetR = async (table, id) => {
+    if (!SB_ENABLED) return null;
     try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
@@ -986,8 +1015,8 @@ const sbGetR = async (table, id) => {
         return d[0] || null;
     } catch { return null }
 };
-const sbUpsertR = async (table, row, dedupeKey = null) => sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}`, method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(row), dedupeKey });
-const sbDeleteR = async (table, id) => sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}?id=eq.${id}`, method: "DELETE", headers: sbH, dedupeKey: `${table}:delete:${id}` });
+const sbUpsertR = async (table, row, dedupeKey = null) => SB_ENABLED ? sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}`, method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(row), dedupeKey }) : { ok: false, queued: false, offline: false, response: null };
+const sbDeleteR = async (table, id) => SB_ENABLED ? sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}?id=eq.${id}`, method: "DELETE", headers: sbH, dedupeKey: `${table}:delete:${id}` }) : { ok: false, queued: false, offline: false, response: null };
 
 const BANNERS_KEY = 'form_banners';
 const getBanners = () => { try { return JSON.parse(localStorage.getItem(BANNERS_KEY) || '{}'); } catch { return {}; } };
@@ -1823,13 +1852,13 @@ const RoutineEditor = ({ config, setConfig }) => {
     const [picker, setPicker] = useState(null); // { day, slot } | null
 
     const updateRoutine = (day, slot, keys) => {
-        setConfig({
+        setConfig(sanitizeConfig({
             ...config,
             routines: {
                 ...config.routines,
                 [day]: { ...config.routines[day], [slot]: keys },
             },
-        });
+        }));
     };
 
     return (
@@ -1883,9 +1912,9 @@ const RoutineEditor = ({ config, setConfig }) => {
    SETTINGS SCREEN
    ============================================================ */
 const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
-    const update = (patch) => setConfig({ ...config, ...patch });
-    const updateProducts = (patch) => setConfig({ ...config, products: { ...config.products, ...patch } });
-    const updateRotation = (day, val) => setConfig({ ...config, snackRotation: { ...config.snackRotation, [day]: val } });
+    const update = (patch) => setConfig(sanitizeConfig({ ...config, ...patch }));
+    const updateProducts = (patch) => setConfig(sanitizeConfig({ ...config, products: { ...config.products, ...patch } }));
+    const updateRotation = (day, val) => setConfig(sanitizeConfig({ ...config, snackRotation: { ...config.snackRotation, [day]: val } }));
 
     const [newSnack, setNewSnack] = useState('');
     const [restoreMsg, setRestoreMsg] = useState('');
@@ -1909,10 +1938,11 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
             try {
                 const parsed = JSON.parse(ev.target.result);
                 if (!parsed.data || !parsed.config) { setRestoreMsg('Invalid file ✗'); setTimeout(() => setRestoreMsg(''), 2500); return; }
-                const mergedConfig = { ...DEFAULT_CONFIG, ...parsed.config, products: { ...DEFAULT_CONFIG.products, ...(parsed.config.products || {}) }, routines: parsed.config.routines || DEFAULT_ROUTINES };
-                setAllData(parsed.data);
+                const mergedConfig = sanitizeConfig(parsed.config);
+                const cleanData = sanitizeAllData(parsed.data);
+                setAllData(cleanData);
                 setConfig(mergedConfig);
-                sbUpsertR("daily_logs", { id: "all_data", data: parsed.data }, "routine:daily_logs");
+                sbUpsertR("daily_logs", { id: "all_data", data: cleanData }, "routine:daily_logs");
                 sbUpsertR("user_config", { id: "singleton", data: mergedConfig }, "routine:user_config");
                 setRestoreMsg('Restored ✓');
                 setTimeout(() => setRestoreMsg(''), 2500);
@@ -2117,18 +2147,13 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
                 sbGetR("user_config", "singleton"),
             ]);
             if (dbData?.data) {
-                setAllData(dbData.data);
-                localStorage.setItem('form_data', JSON.stringify(dbData.data));
+                const cleanData = sanitizeAllData(dbData.data);
+                setAllData(cleanData);
+                localStorage.setItem('form_data', JSON.stringify(cleanData));
             }
             if (dbConfig?.data) {
                 try {
-                    const c = dbConfig.data;
-                    const mergedRoutines = Object.fromEntries(
-                        Object.entries(DEFAULT_ROUTINES).map(([day, def]) => [
-                            day, { am: c.routines?.[day]?.am || def.am, pm: c.routines?.[day]?.pm || def.pm }
-                        ])
-                    );
-                    const merged = { ...DEFAULT_CONFIG, ...c, products: { ...DEFAULT_CONFIG.products, ...(c.products || {}) }, snackRotation: { ...DEFAULT_CONFIG.snackRotation, ...(c.snackRotation || {}) }, routines: mergedRoutines };
+                    const merged = sanitizeConfig(dbConfig.data);
                     setConfig(merged);
                     localStorage.setItem('form_config', JSON.stringify(merged));
                 } catch { }
@@ -2140,23 +2165,21 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
 
     useEffect(() => {
         if (!sbLoaded) return;
-        localStorage.setItem('form_data', JSON.stringify(allData));
-        sbUpsertR("daily_logs", { id: "all_data", data: allData }, "routine:daily_logs");
+        const cleanData = sanitizeAllData(allData);
+        localStorage.setItem('form_data', JSON.stringify(cleanData));
+        sbUpsertR("daily_logs", { id: "all_data", data: cleanData }, "routine:daily_logs");
     }, [allData, sbLoaded]);
 
     useEffect(() => {
         if (!sbLoaded) return;
-        localStorage.setItem('form_config', JSON.stringify(config));
-        sbUpsertR("user_config", { id: "singleton", data: config }, "routine:user_config");
+        const cleanConfig = sanitizeConfig(config);
+        localStorage.setItem('form_config', JSON.stringify(cleanConfig));
+        sbUpsertR("user_config", { id: "singleton", data: cleanConfig }, "routine:user_config");
     }, [config, sbLoaded]);
 
     const key = todayKey();
     const rawDay = allData[key] || {};
-    const day = {
-        ...DEFAULT_DAY,
-        ...rawDay,
-        freeFoodLog: migrateFreeFoodLog(rawDay.freeFoodLog),
-    };
+    const day = sanitizeDayRecord(rawDay);
     const updateDay = (patch) => setAllData(prev => ({ ...prev, [key]: { ...day, ...patch } }));
 
     const appStreak = useMemo(() => {

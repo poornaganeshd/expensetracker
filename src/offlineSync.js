@@ -50,6 +50,13 @@ const enqueueRequest = (item) => {
   return item;
 };
 
+const dropQueuedByDedupeKey = (dedupeKey) => {
+  if (!dedupeKey) return;
+  const queue = readQueue();
+  const next = queue.filter((queued) => queued.dedupeKey !== dedupeKey);
+  if (next.length !== queue.length) writeQueue(next);
+};
+
 const performRequest = (item) =>
   fetch(item.path, {
     method: item.method,
@@ -70,7 +77,10 @@ export const sendSupabaseRequest = async (request, options = {}) => {
 
   try {
     const response = await performRequest(item);
-    if (response.ok) return { ok: true, queued: false, offline: false, response };
+    if (response.ok) {
+      dropQueuedByDedupeKey(item.dedupeKey);
+      return { ok: true, queued: false, offline: false, response };
+    }
 
     if (response.status >= 500 && shouldQueue) {
       enqueueRequest(item);
