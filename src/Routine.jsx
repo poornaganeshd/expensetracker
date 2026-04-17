@@ -845,6 +845,16 @@ input[type=number].inp::-webkit-inner-spin-button {
 #nomad-routine .confirm-btn.teal { background: var(--teal); }
 `;
 
+// Inject CSS immediately at module load so styles exist before first paint.
+// Prevents the "header empty space" flash where elements render unstyled
+// for one frame before useEffect runs.
+if (typeof document !== 'undefined' && !document.getElementById('form-style')) {
+    const _s = document.createElement('style');
+    _s.id = 'form-style';
+    _s.textContent = CSS;
+    document.head.appendChild(_s);
+}
+
 /* ---------- helpers ---------- */
 const todayKey = (d = new Date()) => {
     const y = d.getFullYear();
@@ -1023,11 +1033,10 @@ const sanitizeConfigWithData = (config, allData) => {
 
 const sanitizeDayRecord = (record) => {
     const merged = { ...DEFAULT_DAY, ...(record || {}), freeFoodLog: migrateFreeFoodLog(record?.freeFoodLog) };
-    if (!merged.notesConfirmed) {
-        merged.notes = '';
-        merged.skinFeelChip = '';
-        merged.energyChip = '';
-    }
+    // NOTE: Do NOT wipe notes/chips when notesConfirmed/skinNotesConfirmed is false.
+    // This function runs on EVERY render via day = sanitizeDayRecord(rawDay), so wiping
+    // would clobber in-progress edits. Drafts persist in state until the user toggles
+    // back to confirmed or until app reload (which is fine — drafts survive within a session).
     // Migrate curd → dailyChecks.curd
     if (merged.curd && !merged.dailyChecks?.curd) {
         merged.dailyChecks = { ...merged.dailyChecks, curd: merged.curd };
@@ -1035,12 +1044,6 @@ const sanitizeDayRecord = (record) => {
     // Migrate retinolReactionChip → reactionChip
     if (!merged.reactionChip && merged.retinolReactionChip) {
         merged.reactionChip = merged.retinolReactionChip;
-    }
-    if (!merged.skinNotesConfirmed) {
-        merged.skinNotes = '';
-        merged.skinTodayChip = '';
-        merged.reactionChip = '';
-        merged.retinolReactionChip = '';
     }
     return merged;
 };
@@ -1911,7 +1914,13 @@ const LogScreen = ({ allData, config }) => {
                                 key={c.key}
                                 className={`cal-cell lvl${c.lvl} ${c.isToday ? 'today' : ''}`}
                                 onClick={() => c.rec && setActiveDay({ key: c.key, rec: c.rec })}
-                            >{c.d}</div>
+                                style={{ position: 'relative' }}
+                            >
+                                {c.d}
+                                {c.rec && (c.rec.notes || c.rec.skinNotes) && (
+                                    <div style={{ position: 'absolute', bottom: 3, right: 4, width: 4, height: 4, borderRadius: '50%', background: 'currentColor', opacity: 0.6 }} />
+                                )}
+                            </div>
                         )}
                     </div>
                 )}
@@ -2403,14 +2412,6 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     const [toast, setToast] = useState(null);
 
     const handleTabChange = (t) => { setActiveTab(t); if (onTabChange) onTabChange(t); };
-
-    useEffect(() => {
-        if (document.getElementById('form-style')) return;
-        const s = document.createElement('style');
-        s.id = 'form-style';
-        s.textContent = CSS;
-        document.head.appendChild(s);
-    }, []);
 
     useEffect(() => {
         const el = document.getElementById('nomad-routine');

@@ -277,7 +277,15 @@ function AddPage({ categories: cats, incomeSources: isrc, onAddExpense: oE, onAd
 
 function TxCard({ item: it, categories: cats, incomeSources: isrc, events: evs, onDelete: od }) {
   const isE = it.type === "expense", isI = it.type === "income", isTr = it.type === "transfer", isS = it.type === "settlement";
-  const cat = isE ? cats.find(c => c.id === it.categoryId) : isI ? isrc.find(s => s.id === it.sourceId) : null; const w = WALLETS.find(x => x.id === it.walletId), fW = WALLETS.find(x => x.id === it.fromWallet), tW = WALLETS.find(x => x.id === it.toWallet);
+  const isRec = isE && isFix(it);
+  let cat = isE ? cats.find(c => c.id === it.categoryId) : isI ? isrc.find(s => s.id === it.sourceId) : null;
+  // Fallback to recurring category list (RC) if not found in user categories
+  if (isE && !cat && isRec) {
+    const rcMatch = RC.find(c => c.id === it.categoryId);
+    if (rcMatch) cat = rcMatch;
+    else if (it.categoryId === "other_rec") cat = { id: "other_rec", name: "Other", color: "#8A8A9A", neon: "#A0A0B0" };
+  }
+  const w = WALLETS.find(x => x.id === it.walletId), fW = WALLETS.find(x => x.id === it.fromWallet), tW = WALLETS.find(x => x.id === it.toWallet);
   const ev = it.eventId ? evs?.find(e => e.id === it.eventId) : null, evT = ev ? `● ${ev.name}` : null;
   if (isTr) return <div style={{ ...cc, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}><div style={{ width: 44, height: 44, borderRadius: 12, background: "#7B8CDE14", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🔄</div><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)" }}>Transfer</div><div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 2 }}>{fW?.name} → {tW?.name} · {dl(it.date)}</div></div><div style={{ fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 15, color: "#7B8CDE" }}>{fmt(it.amount)}</div><button onClick={() => od(it.id, it.type)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.35 }}>✕</button></div>;
   if (isS) { const sW = WALLETS.find(x => x.id === it.walletId); return <div style={{ ...cc, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}><div style={{ width: 44, height: 44, borderRadius: 12, background: it.direction === "owed" ? "#6BAA7514" : "#E07A5F14", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{it.direction === "owed" ? "💰" : "💸"}</div><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)" }}>{it.direction === "owed" ? `${it.splitName} paid back` : `Paid ${it.splitName}`}</div><div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 2 }}>{sW?.name} · {dl(it.date)}</div></div><div style={{ fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 15, color: it.direction === "owed" ? "#6BAA75" : "#E07A5F" }}>{it.direction === "owed" ? "+" : "−"}{fmt(it.amount)}</div><button onClick={() => od(it.id, it.type)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.35 }}>✕</button></div> }
@@ -286,7 +294,11 @@ function TxCard({ item: it, categories: cats, incomeSources: isrc, events: evs, 
 
 function CalM({ wallet: w, currentBal: cb, onSave: os, onClose: cl }) {
   const [v, sV] = useState(cb.toString());
-  return <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={cl}><div onClick={e => e.stopPropagation()} style={{ background: "var(--card)", borderRadius: "20px 20px 0 0", padding: 28, width: "100%", maxWidth: 430 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}><DI2 id={w.id} accent={w.neon || w.color} size={20} /> Calibrate {w.name}</div><p style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-b)", marginBottom: 20, lineHeight: 1.5 }}>Enter your actual current balance.</p><label style={ls}>Current Balance ({CUR})</label><input type="number" value={v} onChange={e => sV(e.target.value)} autoFocus style={{ ...is, fontSize: 28, fontWeight: 700, fontFamily: "var(--font-h)", textAlign: "center", padding: "16px", color: w.color, borderColor: w.color, marginBottom: 16 }} /><div style={{ display: "flex", gap: 10 }}><button onClick={cl} style={{ flex: 1, padding: 14, border: "1.5px solid var(--border)", borderRadius: 12, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 14, cursor: "pointer" }}>Cancel</button><button onClick={() => { os(Number(v) || 0); cl() }} style={{ flex: 2, padding: 14, border: "none", borderRadius: 12, background: w.color, color: "#fff", fontFamily: "var(--font-h)", fontSize: 14, cursor: "pointer", fontWeight: 700 }}>Set Balance</button></div></div></div>
+  const numV = Number(v) || 0;
+  const isUpiLite = w.id === "upi_lite";
+  const overCap = isUpiLite && numV > 5000;
+  const isNeg = numV < 0;
+  return <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={cl}><div onClick={e => e.stopPropagation()} style={{ background: "var(--card)", borderRadius: "20px 20px 0 0", padding: 28, width: "100%", maxWidth: 430 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}><DI2 id={w.id} accent={w.neon || w.color} size={20} /> Calibrate {w.name}</div><p style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-b)", marginBottom: 20, lineHeight: 1.5 }}>Enter your actual current balance.{isUpiLite && " UPI Lite max ₹5000 (RBI)."}</p><label style={ls}>Current Balance ({CUR})</label><input type="number" value={v} onChange={e => sV(e.target.value)} autoFocus style={{ ...is, fontSize: 28, fontWeight: 700, fontFamily: "var(--font-h)", textAlign: "center", padding: "16px", color: (overCap || isNeg) ? "#D4726A" : w.color, borderColor: (overCap || isNeg) ? "#D4726A" : w.color, marginBottom: overCap || isNeg ? 6 : 16 }} />{overCap && <p style={{ fontSize: 11, color: "#D4726A", marginBottom: 14, fontFamily: "var(--font-h)", fontWeight: 600 }}>Exceeds ₹5000 UPI Lite cap</p>}{isNeg && <p style={{ fontSize: 11, color: "#D4726A", marginBottom: 14, fontFamily: "var(--font-h)", fontWeight: 600 }}>Cannot be negative</p>}<div style={{ display: "flex", gap: 10 }}><button onClick={cl} style={{ flex: 1, padding: 14, border: "1.5px solid var(--border)", borderRadius: 12, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 14, cursor: "pointer" }}>Cancel</button><button disabled={overCap || isNeg} onClick={() => { os(numV); cl() }} style={{ flex: 2, padding: 14, border: "none", borderRadius: 12, background: (overCap || isNeg) ? "#ccc" : w.color, color: "#fff", fontFamily: "var(--font-h)", fontSize: 14, cursor: (overCap || isNeg) ? "not-allowed" : "pointer", fontWeight: 700 }}>Set Balance</button></div></div></div>
 }
 
 const EI = [{ id: "film", svg: "M2 2h20v20H2zM7 2v20M17 2v20M2 12h20" }, { id: "plane", svg: "M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2" }, { id: "cake", svg: "M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2-1 2-1M2 21h20" }, { id: "sun", svg: "M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" }, { id: "dinner", svg: "M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3v7" }, { id: "party", svg: "M5.8 11.3L2 22l10.7-3.79M4 3h.01M22 8h.01M15 2h.01" }, { id: "camp", svg: "M3.5 21L14 3M20.5 21L10 3M2 21h20M7 21l5-7 5 7" }, { id: "cart", svg: "M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" }, { id: "game", svg: "M6 12h4M8 10v6 6h20v12H2z" }, { id: "sport", svg: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20" }, { id: "study", svg: "M22 10v6M2 10l10-5 10 5-10 5zM6 12v5c0 1.1 2.7 3 6 3s6-1.9 6-3v-5" }, { id: "cafe", svg: "M17 8h1a4 4 0 0 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" }];
@@ -367,11 +379,16 @@ const cc = { background: "var(--card)", border: "1px solid var(--border)", borde
 export default function Nomad() {
   const [module, setModule] = useState("finance");
   const [routineTab, setRoutineTab] = useState("food");
-  const [tab, sTab] = useState("dashboard"), [ex, sEx] = useState([]), [inc, sInc] = useState([]), [tr, sTr] = useState([]), [stl, sStl] = useState([]), [cats, sCats] = useState(DC), [isrc, sIsrc] = useState(DI), [sp, sSp] = useState([]), [evs, sEvs] = useState([]), [rec, sRec] = useState([]), [fm, sFm] = useState("all"), [loaded, sL] = useState(false), [ld, sLd] = useState(false), [dm, sDm] = useState(false), [toast, sToast] = useState(null), [nn, sNN] = useState(""), [ne2, sNE2] = useState("📁"), [nc, sNC] = useState("#E07A5F"), [mt, sMt] = useState("expense"), [clr, sClr] = useState(false), [nukeTxt, sNukeTxt] = useState(""), [spX, sSpX] = useState(false), [calW, sCalW] = useState(null), [wsb, sWsb] = useState({ upi_lite: 0, bank: 0, cash: 0 });
+  const [tab, sTab] = useState("dashboard"), [ex, sEx] = useState([]), [inc, sInc] = useState([]), [tr, sTr] = useState([]), [stl, sStl] = useState([]), [cats, sCats] = useState(DC), [isrc, sIsrc] = useState(DI), [sp, sSp] = useState([]), [evs, sEvs] = useState([]), [rec, sRec] = useState([]), [fm, sFm] = useState("all"), [loaded, sL] = useState(false), [ld, sLd] = useState(false), [dm, sDm] = useState(false), [toasts, sToasts] = useState([]), [nn, sNN] = useState(""), [ne2, sNE2] = useState("📁"), [nc, sNC] = useState("#E07A5F"), [mt, sMt] = useState("expense"), [clr, sClr] = useState(false), [nukeTxt, sNukeTxt] = useState(""), [spX, sSpX] = useState(false), [calW, sCalW] = useState(null), [wsb, sWsb] = useState({ upi_lite: 0, bank: 0, cash: 0 });
   const [pendingSync, sPendingSync] = useState(getPendingSyncCount());
   const [online, sOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   const [manageXp, sManageXp] = useState(false);
-  const showT = (msg, type = "info") => { sToast({ msg, type }); setTimeout(() => sToast(null), 2000) };
+  const showT = (msg, type = "info") => {
+    const id = Date.now() + Math.random();
+    sToasts(prev => [...prev, { id, msg, type }]);
+    setTimeout(() => sToasts(prev => prev.filter(t => t.id !== id)), 2000);
+  };
+  const dismissToast = (id) => sToasts(prev => prev.filter(t => t.id !== id));
 
   useEffect(() => subscribePendingSync(sPendingSync), []);
 
@@ -516,11 +533,33 @@ export default function Nomad() {
   };
   const addI = data => { const amt = roundMoney(data.amount); if (data.walletId === "upi_lite") { showT("UPI Lite is for spending only", "error"); return } if (amt <= 0) { showT("Enter a valid amount", "error"); return } const rec = { id: uid(), type: "income", ...data, amount: amt }; sInc(p => [rec, ...p]); sbUpsert("incomes", [toSB(rec, ["id", "amount", "sourceId", "walletId", "note", "date"])]); dance(); showT(online ? "Income added" : "Income saved offline", "success") };
   const addT = data => { const b = roundMoney(wBal[data.fromWallet] || 0), amt = roundMoney(data.amount); if (amt <= 0) { showT("Enter an amount above zero", "error"); return } if (b < amt) { showT(`Insufficient balance`, "error"); return } const rec = { id: uid(), type: "transfer", ...data, amount: amt }; sTr(p => [rec, ...p]); sbUpsert("transfers", [toSB(rec, ["id", "amount", "fromWallet", "toWallet", "note", "date"])]); dance(); showT(online ? "Transfer done" : "Transfer queued offline", "success") };
-  const settle = (sid, wid) => { const s = sp.find(x => x.id === sid); if (!s) return; if (s.direction === "owe") { if (wid === "upi_lite") { showT("UPI Lite is for spending only", "error"); return } const b = wBal[wid] || 0; if (b < s.amount) { showT("Not enough to settle", "error"); return } } if (s.direction === "owed" && wid === "upi_lite") { showT("UPI Lite is for spending only", "error"); return } const rec = { id: uid(), type: "settlement", splitName: s.name, splitId: s.id, amount: s.amount, direction: s.direction, walletId: wid, date: localDateKey(), ...(s.groupId && { groupId: s.groupId }), ...(s.eventId && { eventId: s.eventId }) }; sStl(p => [...p, rec]); sbUpsert("settlements", [toSB(rec, ["id", "amount", "splitName", "splitId", "direction", "walletId", "date", "groupId", "eventId"])]); sSp(p => p.map(x => x.id === sid ? { ...x, settled: true } : x)); sbUpsert("splits", [{ id: sid, settled: true }], `splits:${sid}`); showT(online ? "Settled" : "Settlement queued offline", "success") };
-  const undoBufferRef = useRef(null);
+  const settle = (sid, wid) => {
+    const s = sp.find(x => x.id === sid);
+    if (!s) return;
+    const today = localDateKey();
+    if (s.direction === "owe") {
+      // Paying someone back — UPI Lite allowed, but apply caps
+      const b = wBal[wid] || 0;
+      if (b < s.amount) { showT("Not enough to settle", "error"); return }
+      if (wid === "upi_lite") {
+        const u = upiLiteUsage(today);
+        if (u.day + s.amount > 5000) { showT(`UPI Lite daily cap ₹5000 exceeded (₹${u.day} used)`, "error"); return }
+        if (u.month + s.amount > 100000) { showT(`UPI Lite monthly cap ₹1L exceeded`, "error"); return }
+        if (u.day + s.amount > 4500) { showT(`Heads up: UPI Lite at ₹${roundMoney(u.day + s.amount)} today`, "info") }
+      }
+    }
+    if (s.direction === "owed" && wid === "upi_lite") { showT("UPI Lite cannot receive money", "error"); return }
+    const rec = { id: uid(), type: "settlement", splitName: s.name, splitId: s.id, amount: s.amount, direction: s.direction, walletId: wid, date: today, ...(s.groupId && { groupId: s.groupId }), ...(s.eventId && { eventId: s.eventId }) };
+    sStl(p => [...p, rec]);
+    sbUpsert("settlements", [toSB(rec, ["id", "amount", "splitName", "splitId", "direction", "walletId", "date", "groupId", "eventId"])]);
+    sSp(p => p.map(x => x.id === sid ? { ...x, settled: true } : x));
+    sbUpsert("splits", [{ id: sid, settled: true }], `splits:${sid}`);
+    showT(online ? "Settled" : "Settlement queued offline", "success");
+  };
+  const undoBuffersRef = useRef(new Map()); // toastId -> buffer
 
-  const undoLastDelete = () => {
-    const buf = undoBufferRef.current;
+  const undoDelete = (toastId) => {
+    const buf = undoBuffersRef.current.get(toastId);
     if (!buf) return;
     if (buf.type === "expense") {
       sEx(p => [buf.exp, ...p]);
@@ -530,12 +569,20 @@ export default function Nomad() {
     } else if (buf.type === "income") { sInc(p => [buf.exp, ...p]); sbUpsert("incomes", [toSB(buf.exp, ["id", "amount", "sourceId", "walletId", "note", "date"])]); }
     else if (buf.type === "transfer") { sTr(p => [buf.exp, ...p]); sbUpsert("transfers", [toSB(buf.exp, ["id", "amount", "fromWallet", "toWallet", "note", "date"])]); }
     else if (buf.type === "settlement") { sStl(p => [...p, buf.exp]); sbUpsert("settlements", [toSB(buf.exp, ["id", "amount", "splitName", "splitId", "direction", "walletId", "date", "groupId", "eventId"])]); if (buf.exp.splitId) { sSp(p => p.map(x => x.id === buf.exp.splitId ? { ...x, settled: true } : x)); sbUpsert("splits", [{ id: buf.exp.splitId, settled: true }], `splits:${buf.exp.splitId}`); } }
-    undoBufferRef.current = null;
-    sToast(null);
+    undoBuffersRef.current.delete(toastId);
+    dismissToast(toastId);
     showT("Restored", "success");
   };
 
-  const showUndoToast = (msg) => { sToast({ msg, type: "info", undo: true }); setTimeout(() => sToast(t => (t && t.undo ? null : t)), 5000); };
+  const showUndoToast = (msg, buffer) => {
+    const id = Date.now() + Math.random();
+    undoBuffersRef.current.set(id, buffer);
+    sToasts(prev => [...prev, { id, msg, type: "info", undo: true }]);
+    setTimeout(() => {
+      sToasts(prev => prev.filter(t => t.id !== id));
+      undoBuffersRef.current.delete(id);
+    }, 5000);
+  };
 
   const delItem = (id, type) => {
     if (type === "expense") {
@@ -543,7 +590,6 @@ export default function Nomad() {
       if (!exp) return;
       const splits = exp.groupId ? sp.filter(s => s.groupId === exp.groupId) : [];
       const settlements = exp.groupId ? stl.filter(s => s.groupId === exp.groupId) : [];
-      undoBufferRef.current = { type: "expense", exp, splits, settlements };
       sEx(p => p.filter(e => e.id !== id));
       sbDelete("expenses", id);
       if (exp.groupId) {
@@ -552,28 +598,38 @@ export default function Nomad() {
         sbDeleteWhere("splits", `group_id=eq.${exp.groupId}`);
         sbDeleteWhere("settlements", `group_id=eq.${exp.groupId}`);
       }
-      showUndoToast("Expense deleted");
+      showUndoToast("Expense deleted", { type: "expense", exp, splits, settlements });
     } else if (type === "income") {
       const exp = inc.find(i => i.id === id); if (!exp) return;
-      undoBufferRef.current = { type: "income", exp };
       sInc(p => p.filter(i => i.id !== id)); sbDelete("incomes", id);
-      showUndoToast("Income deleted");
+      showUndoToast("Income deleted", { type: "income", exp });
     } else if (type === "transfer") {
       const exp = tr.find(t => t.id === id); if (!exp) return;
-      undoBufferRef.current = { type: "transfer", exp };
       sTr(p => p.filter(t => t.id !== id)); sbDelete("transfers", id);
-      showUndoToast("Transfer deleted");
+      showUndoToast("Transfer deleted", { type: "transfer", exp });
     } else if (type === "settlement") {
       const stlRec = stl.find(s => s.id === id); if (!stlRec) return;
-      undoBufferRef.current = { type: "settlement", exp: stlRec };
       sStl(p => p.filter(s => s.id !== id)); sbDelete("settlements", id);
       if (stlRec.splitId) { sSp(p => p.map(x => x.id === stlRec.splitId ? { ...x, settled: false } : x)); sbUpsert("splits", [{ id: stlRec.splitId, settled: false }], `splits:${stlRec.splitId}`); }
-      showUndoToast("Settlement deleted");
+      showUndoToast("Settlement deleted", { type: "settlement", exp: stlRec });
     }
   };
   const addRec = r => { sRec(p => [...p, r]); sbUpsert("recurring", [toSB(r, ["id", "name", "amount", "categoryId", "categoryName", "walletId", "frequency", "dayOfMonth", "intervalDays", "yearMonth", "yearDay", "startDate", "active", "lastPaidDate", "lastSkippedDate"])]); showT(r.name + " added as recurring", "success"); };
   const addCust = () => { if (!nn.trim()) return; const id = nn.trim().toLowerCase().replace(/\s+/g, "_") + "_" + uid(), item = { id, name: nn.trim(), emoji: ne2, color: nc }; if (mt === "expense") sCats(p => [...p, item]); else sIsrc(p => [...p, item]); sNN(""); sNE2("📁"); sNC("#E07A5F") };
-  const handleCal = (wId, desired) => { const cur = wBal[wId], start = wsb[wId] || 0, newStart = start + (desired - cur); sWsb(p => ({ ...p, [wId]: newStart })); sbUpsert("wallet_balances", [{ wallet_id: wId, balance: newStart }], `wallet_balances:${wId}`); };
+  const handleCal = (wId, desired) => {
+    if (wId === "upi_lite" && desired > 5000) {
+      showT("UPI Lite max balance is ₹5000 (RBI rule)", "error");
+      return;
+    }
+    if (desired < 0) {
+      showT("Balance cannot be negative", "error");
+      return;
+    }
+    const cur = wBal[wId], start = wsb[wId] || 0, newStart = start + (desired - cur);
+    sWsb(p => ({ ...p, [wId]: newStart }));
+    sbUpsert("wallet_balances", [{ wallet_id: wId, balance: newStart }], `wallet_balances:${wId}`);
+    showT("Balance updated", "success");
+  };
   const expCSV = () => { let csv = "Type,Date,Amount,Category/Source,Wallet,Note\n"; inc.forEach(i => { csv += `Income,${i.date},${i.amount},"${isrc.find(s => s.id === i.sourceId)?.name || ""}","${WALLETS.find(x => x.id === i.walletId)?.name || "Bank"}","${i.note || ""}"\n` }); ex.forEach(e => { csv += `Expense,${e.date},${e.amount},"${cats.find(c => c.id === e.categoryId)?.name || ""}","${WALLETS.find(x => x.id === e.walletId)?.name || ""}","${e.note || ""}"\n` }); tr.forEach(t => { csv += `Transfer,${t.date},${t.amount},"${t.fromWallet}→${t.toWallet}","","${t.note || ""}"\n` }); stl.forEach(s => { csv += `Settlement,${s.date},${s.amount},"${s.splitName}","${WALLETS.find(w => w.id === s.walletId)?.name || ""}","${s.direction}"\n` }); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `nomad_${localDateKey()}.csv`; a.click() };
   const expBackup = () => { const data = JSON.stringify({ expenses: ex, incomes: inc, transfers: tr, settlements: stl, categories: cats, incomeSources: isrc, splits: sp, events: evs, recurring: rec, darkMode: dm, walletStartBal: wsb, _v: "nomad-v9", _date: new Date().toISOString() }, null, 2); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type: "application/json" })); a.download = `nomad_backup_${localDateKey()}.json`; a.click(); showT("Backup downloaded", "success") };
   const impBackup = (file) => { const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); if (!d._v || !d._v.startsWith("nomad")) { showT("Invalid backup file", "error"); return } const arrFields = ["expenses", "incomes", "transfers", "settlements", "splits", "recurring", "events", "categories", "incomeSources"]; for (const f of arrFields) { if (d[f] !== undefined && !Array.isArray(d[f])) { showT(`Backup corrupt: ${f}`, "error"); return; } } sEx(d.expenses || []); sInc(d.incomes || []); sTr(d.transfers || []); sStl(d.settlements || []); sSp(d.splits || []); sRec(d.recurring || []); sEvs(d.events || []); if (d.categories?.length) sCats(d.categories); if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.darkMode !== undefined) sDm(d.darkMode); if (d.walletStartBal && typeof d.walletStartBal === "object") sWsb(d.walletStartBal); showT("Backup restored on this device", "success") } catch { showT("Failed to read file", "error") } }; r.readAsText(file) };
@@ -661,6 +717,15 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
     {module === "finance" && <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--nav-bg)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "center", maxWidth: 430, margin: "0 auto", zIndex: 50, paddingBottom: "env(safe-area-inset-bottom)" }}>{[{ id: "dashboard", label: "Home" }, { id: "add", label: "Add" }, { id: "events", label: "Events" }, { id: "history", label: "History" }, { id: "settings", label: "Settings" }].map(n => <button key={n.id} onClick={() => sTab(n.id)} style={{ flex: 1, padding: "10px 0 8px", border: "none", background: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", opacity: tab === n.id ? 1 : 0.45 }}><NI type={n.id} active={tab === n.id} /><span style={{ fontFamily: "var(--font-h)", fontSize: 9, color: tab === n.id ? "#E07A5F" : "var(--muted)", fontWeight: tab === n.id ? 600 : 400 }}>{n.label}</span></button>)}</div>}
 
     {calW && <CalM wallet={calW} currentBal={wBal[calW.id] || 0} onSave={v => handleCal(calW.id, v)} onClose={() => sCalW(null)} />}
-    {toast && <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 300, background: toast.type === "error" ? "#D4726A" : toast.type === "success" ? "#6BAA75" : "#7B8CDE", color: "#fff", borderRadius: 50, padding: "9px 22px", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", textAlign: "center", whiteSpace: "nowrap", animation: "ti 0.25s ease-out", display: "flex", alignItems: "center", gap: 12 }}>{toast.msg}{toast.undo && <button onClick={undoLastDelete} style={{ background: "rgba(255,255,255,0.25)", color: "#fff", border: "none", borderRadius: 12, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>UNDO</button>}</div>}
+    {toasts.length > 0 && (
+      <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 300, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, pointerEvents: "none" }}>
+        {toasts.map(t => (
+          <div key={t.id} style={{ pointerEvents: "auto", background: t.type === "error" ? "#D4726A" : t.type === "success" ? "#6BAA75" : t.type === "warn" ? "#E07A5F" : "#7B8CDE", color: "#fff", borderRadius: 50, padding: "9px 22px", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", textAlign: "center", whiteSpace: "nowrap", animation: "ti 0.25s ease-out", display: "flex", alignItems: "center", gap: 12 }}>
+            {t.msg}
+            {t.undo && <button onClick={() => undoDelete(t.id)} style={{ background: "rgba(255,255,255,0.25)", color: "#fff", border: "none", borderRadius: 12, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>UNDO</button>}
+          </div>
+        ))}
+      </div>
+    )}
   </div>
 }
