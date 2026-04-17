@@ -924,7 +924,7 @@ const DEFAULT_ROUTINES = {
 
 const DEFAULT_DAY = {
     morningWater: false,
-    morningWaterAmount: '',
+    morningWaterAmount: '500ml',
     water: 0,
     eggs: 0,
     snack: '',
@@ -1326,20 +1326,12 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                 <div className="mw-row">
                     <Check on={day.morningWater} onClick={() => {
                         haptic();
-                        const wasOn = day.morningWater;
-                        const mwAmount = parseMorningWater(day.morningWaterAmount);
-                        const visibleTotal = (wasOn ? mwAmount : 0) + day.water;
-                        const newOn = !wasOn;
-                        const newMw = newOn ? mwAmount : 0;
-                        update({
-                            morningWater: newOn,
-                            water: Math.max(0, parseFloat((visibleTotal - newMw).toFixed(2)))
-                        });
+                        update({ morningWater: !day.morningWater });
                     }} />
                     <div className="txt">First glass of the day</div>
                     <input
                         className="mw-input"
-                        placeholder="700ml"
+                        placeholder="500ml"
                         value={day.morningWaterAmount}
                         onChange={(e) => update({ morningWaterAmount: e.target.value })}
                     />
