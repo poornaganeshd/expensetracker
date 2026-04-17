@@ -846,7 +846,12 @@ input[type=number].inp::-webkit-inner-spin-button {
 `;
 
 /* ---------- helpers ---------- */
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const todayKey = (d = new Date()) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+};
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const dayOfWeek = (d = new Date()) => DOW[d.getDay()];
 const isAfterNoon = () => new Date().getHours() >= 12;
@@ -854,18 +859,22 @@ const isAfterNoon = () => new Date().getHours() >= 12;
 /* Parse morning water amount string → litres */
 const parseMorningWater = (s) => {
     if (!s) return 0;
-    const str = s.trim().toLowerCase();
+    const str = String(s).trim().toLowerCase();
     const mlMatch = str.match(/^([\d.]+)\s*ml$/);
     if (mlMatch) return parseFloat(mlMatch[1]) / 1000;
     const lMatch = str.match(/^([\d.]+)\s*l$/);
     if (lMatch) return parseFloat(lMatch[1]);
     const numOnly = parseFloat(str);
     if (!isNaN(numOnly)) {
-        if (numOnly <= 10) return numOnly;
-        if (numOnly >= 100) return numOnly / 1000;
+        if (numOnly <= 5) return numOnly;        // ≤5: assume litres (realistic glass/bottle in L)
+        return numOnly / 1000;                    // anything else: treat as ml
     }
     return 0;
 };
+
+/* Effective morning water — only counts if checkbox is ON */
+const effectiveMorningWater = (day) =>
+    day && day.morningWater ? parseMorningWater(day.morningWaterAmount) : 0;
 
 /* Migrate freeFoodLog to flat [{text, tag}] format */
 const migrateFreeFoodLog = (log) => {
@@ -889,11 +898,11 @@ const migrateFreeFoodLog = (log) => {
 const PRODUCT_LABELS = { cleanser: 'Cleanser', niacinamide: 'Niacinamide', sunscreen: 'Sunscreen', bhaSerum: 'BHA Serum', retinol: 'Retinol' };
 
 const DEFAULT_CUSTOM_PRODUCTS = [
-    { id: 'cleanser',    kind: 'Cleanser',    name: 'Barclay Italy SA Face Wash',    slot: 'both' },
-    { id: 'niacinamide', kind: 'Niacinamide',  name: 'Minimalist Niacinamide 10%',   slot: 'both' },
-    { id: 'sunscreen',   kind: 'Sunscreen',    name: 'Barclay Italy Mineral SPF 50+', slot: 'am'   },
-    { id: 'bhaSerum',    kind: 'BHA Serum',    name: 'Barclay Italy SA Serum',        slot: 'pm'   },
-    { id: 'retinol',     kind: 'Retinol',      name: 'Minimalist Retinol 0.3%',       slot: 'pm'   },
+    { id: 'cleanser', kind: 'Cleanser', name: 'Barclay Italy SA Face Wash', slot: 'both' },
+    { id: 'niacinamide', kind: 'Niacinamide', name: 'Minimalist Niacinamide 10%', slot: 'both' },
+    { id: 'sunscreen', kind: 'Sunscreen', name: 'Barclay Italy Mineral SPF 50+', slot: 'am' },
+    { id: 'bhaSerum', kind: 'BHA Serum', name: 'Barclay Italy SA Serum', slot: 'pm' },
+    { id: 'retinol', kind: 'Retinol', name: 'Minimalist Retinol 0.3%', slot: 'pm' },
 ];
 
 // Resolve product info by ID — includes archived products so history still shows names
@@ -992,6 +1001,26 @@ const sanitizeConfig = (value) => {
         ),
     };
 };
+const sanitizeConfigWithData = (config, allData) => {
+    // Re-add any customDailyItem definitions that exist in past data but were deleted from config
+    if (!allData || typeof allData !== 'object') return config;
+    const existingIds = new Set((config.customDailyItems || []).map(it => it.id));
+    const orphaned = new Set();
+    for (const k in allData) {
+        const checks = allData[k]?.dailyChecks;
+        if (!checks) continue;
+        for (const id in checks) {
+            if (!existingIds.has(id)) orphaned.add(id);
+        }
+    }
+    if (orphaned.size === 0) return config;
+    const restored = [...(config.customDailyItems || [])];
+    orphaned.forEach(id => {
+        restored.push({ id, label: id, emoji: '✓', archived: true });
+    });
+    return { ...config, customDailyItems: restored };
+};
+
 const sanitizeDayRecord = (record) => {
     const merged = { ...DEFAULT_DAY, ...(record || {}), freeFoodLog: migrateFreeFoodLog(record?.freeFoodLog) };
     if (!merged.notesConfirmed) {
@@ -1070,7 +1099,7 @@ const Icon = ({ name }) => {
 const getPandaFoodMessage = (day, config) => {
     if (!day.morningWater) return "Start with morning water. Before anything else.";
     if (day.eggs < config.eggsTarget && isAfterNoon()) return "Eggs. Don't skip them.";
-    const mwL = parseMorningWater(day.morningWaterAmount);
+    const mwL = effectiveMorningWater(day);
     const total = mwL + day.water;
     const allDailyDone = (config.customDailyItems || []).every(it => day.dailyChecks?.[it.id]);
     if (total >= config.waterTarget && day.eggs >= config.eggsTarget && allDailyDone)
@@ -1116,11 +1145,22 @@ const Check = ({ on, onClick, teal }) => (
 );
 
 /* ---------- Haptic ---------- */
-const haptic = (ms = 8) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) { } };
+const prefersReducedMotion = () => {
+    try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+    catch { return false; }
+};
+const haptic = (ms = 8) => {
+    try {
+        if (prefersReducedMotion()) return;
+        const off = localStorage.getItem('form_haptic_off');
+        if (off === '1') return;
+        navigator.vibrate && navigator.vibrate(ms);
+    } catch (_) { }
+};
 
 /* ---------- Progress dots ---------- */
 const ProgressDots = ({ day, config, mode }) => {
-    const mwL = parseMorningWater(day.morningWaterAmount);
+    const mwL = effectiveMorningWater(day);
     const waterTotal = mwL + day.water;
     const waterOk = waterTotal >= config.waterTarget;
     const waterPct = Math.min(100, Math.round((waterTotal / config.waterTarget) * 100));
@@ -1195,7 +1235,7 @@ const ProgressDots = ({ day, config, mode }) => {
 
 /* ---------- End of day summary ---------- */
 const EodCard = ({ day, config }) => {
-    const mwL = parseMorningWater(day.morningWaterAmount);
+    const mwL = effectiveMorningWater(day);
     const waterTotal = (mwL + day.water).toFixed(1);
     const waterOk = (mwL + day.water) >= config.waterTarget;
     const eggsOk = day.eggs >= config.eggsTarget;
@@ -1233,7 +1273,7 @@ const EodCard = ({ day, config }) => {
 const FoodScreen = ({ day, update, config, onComplete, streak }) => {
     const suggested = config.snackRotation[dayOfWeek()] || 'Banana';
     const waterPts = [0.5, 1, 1.5, 2, 2.5, 3, 3.5];
-    const mwL = parseMorningWater(day.morningWaterAmount);
+    const mwL = effectiveMorningWater(day);
     const foodLog = migrateFreeFoodLog(day.freeFoodLog);
     const isEvening = new Date().getHours() >= 20;
 
@@ -1284,7 +1324,18 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
             <div className={`card ${day.morningWater ? 'done' : ''}`}>
                 <div className="label">01 · Morning water</div>
                 <div className="mw-row">
-                    <Check on={day.morningWater} onClick={() => { haptic(); update({ morningWater: !day.morningWater }); }} />
+                    <Check on={day.morningWater} onClick={() => {
+                        haptic();
+                        const wasOn = day.morningWater;
+                        const mwAmount = parseMorningWater(day.morningWaterAmount);
+                        const visibleTotal = (wasOn ? mwAmount : 0) + day.water;
+                        const newOn = !wasOn;
+                        const newMw = newOn ? mwAmount : 0;
+                        update({
+                            morningWater: newOn,
+                            water: Math.max(0, parseFloat((visibleTotal - newMw).toFixed(2)))
+                        });
+                    }} />
                     <div className="txt">First glass of the day</div>
                     <input
                         className="mw-input"
@@ -1301,17 +1352,21 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                 <div className="water-big">{totalWater}<span className="u">L</span></div>
                 <div className="water-target">
                     Target · {config.waterTarget}L
-                    {mwL > 0 && <span style={{ marginLeft: 8, color: 'var(--txd)' }}>{mwL.toFixed(1)}L from morning</span>}
+                    {mwL > 0 && day.morningWater && <span style={{ marginLeft: 8, color: 'var(--txd)' }}>{mwL.toFixed(1)}L from morning</span>}
                 </div>
                 <div className="track">
                     {waterPts.filter(p => p <= config.waterTarget + 0.01).map((p) => {
-                        const currentTotal = parseFloat((mwL + day.water).toFixed(1));
+                        const currentTotal = Math.round((mwL + day.water) * 10) / 10;
                         const isOn = Math.abs(currentTotal - p) < 0.05;
                         return (
                             <div
                                 key={p}
                                 className={`track-pt ${isOn ? 'on' : ''}`}
-                                onClick={() => update({ water: isOn ? 0 : Math.max(0, parseFloat((p - mwL).toFixed(2))) })}
+                                onClick={() => {
+                                    haptic();
+                                    const target = isOn ? 0 : Math.max(0, Math.round((p - mwL) * 100) / 100);
+                                    update({ water: target });
+                                }}
                             >
                                 {p.toFixed(1)}L
                             </div>
@@ -1621,7 +1676,7 @@ const LogScreen = ({ allData, config }) => {
         if (!d) return 0;
         let pts = 0;
         if (d.morningWater) pts++;
-        const mwL = parseMorningWater(d.morningWaterAmount);
+        const mwL = effectiveMorningWater(d);
         if ((mwL + (d.water || 0)) >= config.waterTarget) pts++;
         if ((d.eggs || 0) >= config.eggsTarget) pts++;
         if (d.curd) pts++;
@@ -1640,7 +1695,7 @@ const LogScreen = ({ allData, config }) => {
         let s = 0;
         const d = new Date();
         while (true) {
-            const key = d.toISOString().slice(0, 10);
+            const key = todayKey(d);
             const rec = allData[key];
             if (rec && dayLevel(rec) > 0) { s++; d.setDate(d.getDate() - 1); }
             else break;
@@ -1664,7 +1719,7 @@ const LogScreen = ({ allData, config }) => {
         let full = 0;
         for (let i = 1; i <= daysSoFar; i++) {
             const d = new Date(now.getFullYear(), now.getMonth(), i);
-            const key = d.toISOString().slice(0, 10);
+            const key = todayKey(d);
             if (allData[key] && dayLevel(allData[key]) >= 4) full++;
         }
         return Math.round((full / daysSoFar) * 100);
@@ -1674,10 +1729,10 @@ const LogScreen = ({ allData, config }) => {
         const now = new Date();
         let total = 0, count = 0;
         for (let i = 1; i <= now.getDate(); i++) {
-            const k = new Date(now.getFullYear(), now.getMonth(), i).toISOString().slice(0, 10);
+            const k = todayKey(new Date(now.getFullYear(), now.getMonth(), i));
             const rec = allData[k];
             if (rec) {
-                const mwL = parseMorningWater(rec.morningWaterAmount);
+                const mwL = effectiveMorningWater(rec);
                 total += mwL + (rec.water || 0);
                 count++;
             }
@@ -1689,7 +1744,7 @@ const LogScreen = ({ allData, config }) => {
     for (let i = 0; i < firstDayOfWeek; i++) cells.push({ empty: true, key: `e${i}` });
     for (let d = 1; d <= daysInMonth; d++) {
         const date = new Date(year, month, d);
-        const key = date.toISOString().slice(0, 10);
+        const key = todayKey(date);
         const rec = allData[key];
         const lvl = dayLevel(rec);
         const isToday = key === todayKey();
@@ -1711,13 +1766,15 @@ const LogScreen = ({ allData, config }) => {
             const XLSX = await loadXLSX();
             const wb = XLSX.utils.book_new();
 
-            // Daily sheet
+            // Daily sheet (cap at 10 years = ~3650 days for safety on low-RAM devices)
             const hdr = ['Date', 'Day', 'Water (L)', 'Water target', 'Morning water', 'Eggs', 'Eggs target', 'Curd', 'Snack', 'Breakfast', 'Lunch', 'Dinner', 'Other food', 'Skin feel', 'Energy', 'AM skin', 'PM skin', 'AM products', 'PM products', 'Skin today', 'Retinol reaction', 'Notes', 'Skin notes'];
             const rows = [hdr];
-            Object.keys(allData).sort().forEach((k) => {
+            const allKeys = Object.keys(allData).sort();
+            const exportKeys = allKeys.length > 3650 ? allKeys.slice(-3650) : allKeys;
+            exportKeys.forEach((k) => {
                 const d = allData[k];
                 const dow2 = dayOfWeek(new Date(k + 'T12:00:00'));
-                const mwL = parseMorningWater(d.morningWaterAmount);
+                const mwL = effectiveMorningWater(d);
                 const log = migrateFreeFoodLog(d.freeFoodLog);
                 const r2 = (config.routines && config.routines[dow2]) || { am: [], pm: [] };
                 rows.push([
@@ -1768,7 +1825,7 @@ const LogScreen = ({ allData, config }) => {
     };
 
     const renderDetail = (key, rec) => {
-        const mwL = parseMorningWater(rec.morningWaterAmount);
+        const mwL = effectiveMorningWater(rec);
         const totalW = (mwL + (rec.water || 0)).toFixed(1);
         const dow2 = dayOfWeek(new Date(key + 'T12:00:00'));
         const log = migrateFreeFoodLog(rec.freeFoodLog);
@@ -1958,12 +2015,12 @@ const RoutineEditor = ({ config, setConfig }) => {
 /* ============================================================
    SETTINGS SCREEN
    ============================================================ */
-const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
+const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = () => { } }) => {
     const update = (patch) => setConfig(sanitizeConfig({ ...config, ...patch }));
     const updateRotation = (day, val) => setConfig(sanitizeConfig({ ...config, snackRotation: { ...config.snackRotation, [day]: val } }));
 
     const [newSnack, setNewSnack] = useState('');
-    const [restoreMsg, setRestoreMsg] = useState('');
+    const [restoreMode, setRestoreMode] = useState('both'); // 'both' | 'data' | 'config'
     const [open, setOpen] = useState({ targets: true, dailyitems: false, skincare: false, routine: false, snackrot: false, snackopts: false, data: true });
     const [newProduct, setNewProduct] = useState({ kind: '', name: '', slot: 'both' });
     const [newDailyItem, setNewDailyItem] = useState({ label: '', emoji: '' });
@@ -1977,6 +2034,7 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
     const fileRef = useRef(null);
 
     const handleBackup = () => {
+        const dayCount = Object.keys(allData || {}).length;
         const json = JSON.stringify({ data: allData, config, version: 2 }, null, 2);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -1984,6 +2042,18 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
         a.href = url; a.download = `form-backup-${todayKey()}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        showToast(`Backup downloaded (${dayCount} day${dayCount === 1 ? '' : 's'})`, 'success');
+    };
+
+    const isValidDateKey = (k) => /^\d{4}-\d{2}-\d{2}$/.test(k) && !isNaN(new Date(k + 'T12:00:00').getTime());
+
+    const sanitizeRestoredData = (data) => {
+        if (!data || typeof data !== 'object') return {};
+        const clean = {};
+        for (const k in data) {
+            if (isValidDateKey(k)) clean[k] = data[k];
+        }
+        return sanitizeAllData(clean);
     };
 
     const handleRestore = (e) => {
@@ -1993,33 +2063,52 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
         reader.onload = (ev) => {
             try {
                 const parsed = JSON.parse(ev.target.result);
-                if (!parsed.data || !parsed.config) { setRestoreMsg('Invalid file ✗'); setTimeout(() => setRestoreMsg(''), 2500); return; }
-                const mergedConfig = sanitizeConfig(parsed.config);
-                const cleanData = sanitizeAllData(parsed.data);
-                setAllData(cleanData);
-                setConfig(mergedConfig);
-                sbUpsertR("daily_logs", { id: "all_data", data: cleanData }, "routine:daily_logs");
-                sbUpsertR("user_config", { id: "singleton", data: mergedConfig }, "routine:user_config");
-                setRestoreMsg('Restored ✓');
-                setTimeout(() => setRestoreMsg(''), 2500);
-            } catch { setRestoreMsg('Failed to read ✗'); setTimeout(() => setRestoreMsg(''), 2500); }
+                if (!parsed.data || !parsed.config) { showToast('Invalid backup file', 'error'); return; }
+                const ver = parsed.version || 1;
+                if (ver > 2) { showToast('Backup is newer than app — update first', 'error'); return; }
+                const now = Date.now();
+                let summary = [];
+                if (restoreMode === 'data' || restoreMode === 'both') {
+                    const cleanData = sanitizeRestoredData(parsed.data);
+                    setAllData(cleanData);
+                    localStorage.setItem('form_data_modified', String(now));
+                    localModRef.current = now;
+                    sbUpsertR("daily_logs", { id: "all_data", data: cleanData, last_modified_at: String(now) }, "routine:daily_logs");
+                    summary.push(`${Object.keys(cleanData).length} days`);
+                }
+                if (restoreMode === 'config' || restoreMode === 'both') {
+                    const mergedConfig = sanitizeConfig(parsed.config);
+                    setConfig(mergedConfig);
+                    localStorage.setItem('form_config_modified', String(now));
+                    configModRef.current = now;
+                    sbUpsertR("user_config", { id: "singleton", data: mergedConfig, last_modified_at: String(now) }, "routine:user_config");
+                    summary.push('config');
+                }
+                showToast(`Restored ${summary.join(' + ')}`, 'success');
+            } catch { showToast('Could not read file', 'error'); }
         };
         reader.readAsText(file);
         e.target.value = '';
     };
 
     const [nukeStep, setNukeStep] = useState(0); // 0=idle, 1=confirming
+    const [nukeText, setNukeText] = useState('');
 
     const handleNuke = () => {
-        if (nukeStep === 0) { setNukeStep(1); return; }
+        if (nukeStep === 0) { setNukeStep(1); setNukeText(''); return; }
+        if (nukeText !== 'DELETE') return;
         localStorage.removeItem('form_data');
         localStorage.removeItem('form_config');
         localStorage.removeItem(BANNERS_KEY);
+        localStorage.removeItem('form_data_modified');
+        localStorage.removeItem('form_config_modified');
         sbDeleteR("daily_logs", "all_data");
         sbDeleteR("user_config", "singleton");
         setAllData({});
         setConfig(DEFAULT_CONFIG);
         setNukeStep(0);
+        setNukeText('');
+        showToast('All data cleared', 'warn');
     };
 
     return (
@@ -2034,32 +2123,32 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
             <div className="sec">
                 <SecHd label="Targets" k="targets" />
                 {open.targets && <>
-                <div className="set-row">
-                    <div className="r">
-                        <div>
-                            <div className="lbl">Water target</div>
-                            <div className="desc">Daily goal in litres</div>
-                        </div>
-                        <div className="stepper">
-                            <button onClick={() => update({ waterTarget: Math.max(1.5, config.waterTarget - 0.5) })}>−</button>
-                            <div className="val">{config.waterTarget}L</div>
-                            <button onClick={() => update({ waterTarget: Math.min(5, config.waterTarget + 0.5) })}>+</button>
-                        </div>
-                    </div>
-                </div>
-                <div className="set-row">
-                    <div className="r">
-                        <div>
-                            <div className="lbl">Egg target</div>
-                            <div className="desc">Daily count</div>
-                        </div>
-                        <div className="stepper">
-                            <button onClick={() => update({ eggsTarget: Math.max(1, config.eggsTarget - 1) })}>−</button>
-                            <div className="val">{config.eggsTarget}</div>
-                            <button onClick={() => update({ eggsTarget: Math.min(4, config.eggsTarget + 1) })}>+</button>
+                    <div className="set-row">
+                        <div className="r">
+                            <div>
+                                <div className="lbl">Water target</div>
+                                <div className="desc">Daily goal in litres</div>
+                            </div>
+                            <div className="stepper">
+                                <button onClick={() => update({ waterTarget: Math.max(1.5, config.waterTarget - 0.5) })}>−</button>
+                                <div className="val">{config.waterTarget}L</div>
+                                <button onClick={() => update({ waterTarget: Math.min(5, config.waterTarget + 0.5) })}>+</button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                    <div className="set-row">
+                        <div className="r">
+                            <div>
+                                <div className="lbl">Egg target</div>
+                                <div className="desc">Daily count</div>
+                            </div>
+                            <div className="stepper">
+                                <button onClick={() => update({ eggsTarget: Math.max(1, config.eggsTarget - 1) })}>−</button>
+                                <div className="val">{config.eggsTarget}</div>
+                                <button onClick={() => update({ eggsTarget: Math.min(4, config.eggsTarget + 1) })}>+</button>
+                            </div>
+                        </div>
+                    </div>
                 </>}
             </div>
 
@@ -2067,31 +2156,36 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
             <div className="sec">
                 <SecHd label="Daily items" k="dailyitems" />
                 {open.dailyitems && <>
-                {(config.customDailyItems || []).map((it) => (
-                    <div key={it.id} className="set-row" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 8 }}>
-                        <input className="inp" style={{ width: 44, textAlign: 'center', flexShrink: 0 }} value={it.emoji}
-                            onChange={(e) => update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, emoji: e.target.value } : x) })} />
-                        <input className="inp" style={{ flex: 1 }} value={it.label}
-                            onChange={(e) => update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, label: e.target.value } : x) })} />
-                        <button style={{ background: 'none', border: 'none', color: 'var(--txd)', fontSize: 18, cursor: 'pointer', flexShrink: 0, padding: '0 4px' }}
-                            onClick={() => update({ customDailyItems: config.customDailyItems.filter(x => x.id !== it.id) })}>×</button>
+                    {(config.customDailyItems || []).map((it) => (
+                        <div key={it.id} className="set-row" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 8 }}>
+                            <input className="inp" style={{ width: 44, textAlign: 'center', flexShrink: 0 }} value={it.emoji}
+                                onChange={(e) => update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, emoji: e.target.value } : x) })} />
+                            <input className="inp" style={{ flex: 1 }} value={it.label}
+                                onChange={(e) => update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, label: e.target.value } : x) })} />
+                            <button style={{ background: 'none', border: 'none', color: 'var(--txd)', fontSize: 18, cursor: 'pointer', flexShrink: 0, padding: '0 4px' }}
+                                onClick={() => {
+                                    update({ customDailyItems: config.customDailyItems.filter(x => x.id !== it.id) });
+                                    showToast(`${it.label} removed`, 'info');
+                                }}>×</button>
+                        </div>
+                    ))}
+                    <div className="set-row" style={{ padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 8 }}>
+                        <div className="lbl" style={{ marginBottom: 8 }}>Add item</div>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                            <input className="inp" style={{ width: 52, textAlign: 'center', flexShrink: 0 }} placeholder="🥗" value={newDailyItem.emoji}
+                                onChange={(e) => setNewDailyItem(p => ({ ...p, emoji: e.target.value }))} />
+                            <input className="inp" style={{ flex: 1 }} placeholder="Label (e.g. Dry fruits)" value={newDailyItem.label}
+                                onChange={(e) => setNewDailyItem(p => ({ ...p, label: e.target.value }))} />
+                        </div>
+                        <button className="btn" style={{ marginTop: 0 }} onClick={() => {
+                            const label = newDailyItem.label.trim();
+                            if (!label) { showToast('Enter a label first', 'error'); return; }
+                            const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+                            update({ customDailyItems: [...(config.customDailyItems || []), { id, label, emoji: newDailyItem.emoji || '✅' }] });
+                            setNewDailyItem({ label: '', emoji: '' });
+                            showToast(`${label} added`, 'success');
+                        }}>Add item</button>
                     </div>
-                ))}
-                <div className="set-row" style={{ padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 8 }}>
-                    <div className="lbl" style={{ marginBottom: 8 }}>Add item</div>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                        <input className="inp" style={{ width: 52, textAlign: 'center', flexShrink: 0 }} placeholder="🥗" value={newDailyItem.emoji}
-                            onChange={(e) => setNewDailyItem(p => ({ ...p, emoji: e.target.value }))} />
-                        <input className="inp" style={{ flex: 1 }} placeholder="Label (e.g. Dry fruits)" value={newDailyItem.label}
-                            onChange={(e) => setNewDailyItem(p => ({ ...p, label: e.target.value }))} />
-                    </div>
-                    <button className="btn" style={{ marginTop: 0 }} onClick={() => {
-                        if (!newDailyItem.label.trim()) return;
-                        const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-                        update({ customDailyItems: [...(config.customDailyItems || []), { id, label: newDailyItem.label.trim(), emoji: newDailyItem.emoji || '✅' }] });
-                        setNewDailyItem({ label: '', emoji: '' });
-                    }}>Add item</button>
-                </div>
                 </>}
             </div>
 
@@ -2099,69 +2193,92 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
             <div className="sec">
                 <SecHd label="Skincare" k="skincare" />
                 {open.skincare && <>
-                <div className="set-row">
-                    <div className="lbl" style={{ marginBottom: 10 }}>Retinol phase</div>
-                    <div className="seg">
-                        {[1, 2, 3].map((p) => (
-                            <button key={p} className={config.retinolPhase === p ? 'on' : ''} onClick={() => update({ retinolPhase: p })}>
-                                {p === 1 ? '2×/wk' : p === 2 ? '3×/wk' : 'Nightly'}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                {/* Product list */}
-                {(config.customProducts || []).filter(p => !p.archived).map((p) => (
-                    <div key={p.id} className="set-row" style={{ marginBottom: 10, padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, padding: '2px 8px', borderRadius: 100, background: p.slot === 'am' ? 'var(--amber-sf)' : p.slot === 'pm' ? 'var(--teal-sf)' : 'var(--green-sf)', color: p.slot === 'am' ? 'var(--amber-deep)' : p.slot === 'pm' ? 'var(--teal-deep)' : 'var(--green-deep)', cursor: 'pointer', userSelect: 'none' }}
-                                onClick={() => {
-                                    const next = p.slot === 'am' ? 'pm' : p.slot === 'pm' ? 'both' : 'am';
-                                    update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, slot: next } : cp) });
-                                }}>
-                                {p.slot === 'both' ? 'AM+PM' : p.slot.toUpperCase()}
-                            </span>
-                            <button style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--txd)', fontSize: 18, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
-                                onClick={() => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, archived: true } : cp) })}>×</button>
+                    <div className="set-row">
+                        <div className="lbl" style={{ marginBottom: 10 }}>Retinol phase</div>
+                        <div className="seg">
+                            {[1, 2, 3].map((p) => (
+                                <button key={p} className={config.retinolPhase === p ? 'on' : ''} onClick={() => update({ retinolPhase: p })}>
+                                    {p === 1 ? '2×/wk' : p === 2 ? '3×/wk' : 'Nightly'}
+                                </button>
+                            ))}
                         </div>
-                        <input className="inp" style={{ marginBottom: 6 }} placeholder="Type (e.g. Retinol)" value={p.kind}
-                            onChange={(e) => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, kind: e.target.value } : cp) })} />
-                        <input className="inp" placeholder="Brand name" value={p.name}
-                            onChange={(e) => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, name: e.target.value } : cp) })} />
                     </div>
-                ))}
-
-                {/* Add product */}
-                <div className="set-row" style={{ padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 10 }}>
-                    <div className="lbl" style={{ marginBottom: 8 }}>Add product</div>
-                    <input className="inp" style={{ marginBottom: 6 }} placeholder="Type (e.g. Vitamin C)" value={newProduct.kind}
-                        onChange={(e) => setNewProduct(np => ({ ...np, kind: e.target.value }))} />
-                    <input className="inp" style={{ marginBottom: 8 }} placeholder="Brand name (optional)" value={newProduct.name}
-                        onChange={(e) => setNewProduct(np => ({ ...np, name: e.target.value }))} />
-                    <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                        {['am', 'pm', 'both'].map(s => (
-                            <div key={s} onClick={() => setNewProduct(np => ({ ...np, slot: s }))}
-                                style={{ flex: 1, textAlign: 'center', padding: '5px 0', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: newProduct.slot === s ? (s === 'am' ? 'var(--amber-sf)' : s === 'pm' ? 'var(--teal-sf)' : 'var(--green-sf)') : 'var(--sf)', border: '1px solid var(--bd)', color: newProduct.slot === s ? (s === 'am' ? 'var(--amber-deep)' : s === 'pm' ? 'var(--teal-deep)' : 'var(--green-deep)') : 'var(--txm)' }}>
-                                {s === 'both' ? 'AM+PM' : s.toUpperCase()}
+                    {/* Product list */}
+                    {(config.customProducts || []).filter(p => !p.archived).map((p) => (
+                        <div key={p.id} className="set-row" style={{ marginBottom: 10, padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, padding: '2px 8px', borderRadius: 100, background: p.slot === 'am' ? 'var(--amber-sf)' : p.slot === 'pm' ? 'var(--teal-sf)' : 'var(--green-sf)', color: p.slot === 'am' ? 'var(--amber-deep)' : p.slot === 'pm' ? 'var(--teal-deep)' : 'var(--green-deep)', cursor: 'pointer', userSelect: 'none' }}
+                                    onClick={() => {
+                                        const next = p.slot === 'am' ? 'pm' : p.slot === 'pm' ? 'both' : 'am';
+                                        update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, slot: next } : cp) });
+                                    }}>
+                                    {p.slot === 'both' ? 'AM+PM' : p.slot.toUpperCase()}
+                                </span>
+                                <button style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--txd)', fontSize: 18, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
+                                    onClick={() => {
+                                        update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, archived: true } : cp) });
+                                        showToast(`${p.name || p.kind} archived`, 'info');
+                                    }}>×</button>
                             </div>
-                        ))}
-                    </div>
-                    <button className="btn" style={{ marginTop: 0 }} onClick={() => {
-                        if (!newProduct.kind.trim()) return;
-                        const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-                        update({ customProducts: [...(config.customProducts || []), { id, kind: newProduct.kind.trim(), name: newProduct.name.trim() || newProduct.kind.trim(), slot: newProduct.slot }] });
-                        setNewProduct({ kind: '', name: '', slot: 'both' });
-                    }}>Add product</button>
-                </div>
-
-                <div className="set-row">
-                    <div className="r">
-                        <div>
-                            <div className="lbl">Show product names</div>
-                            <div className="desc">Off = show step types only</div>
+                            <input className="inp" style={{ marginBottom: 6 }} placeholder="Type (e.g. Retinol)" value={p.kind}
+                                onChange={(e) => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, kind: e.target.value } : cp) })} />
+                            <input className="inp" placeholder="Brand name" value={p.name}
+                                onChange={(e) => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, name: e.target.value } : cp) })} />
                         </div>
-                        <div className={`toggle ${config.showProductNames ? 'on' : ''}`} onClick={() => update({ showProductNames: !config.showProductNames })} />
+                    ))}
+
+                    {/* Add product */}
+                    <div className="set-row" style={{ padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 10 }}>
+                        <div className="lbl" style={{ marginBottom: 8 }}>Add product</div>
+                        <input className="inp" style={{ marginBottom: 6 }} placeholder="Type (e.g. Vitamin C)" value={newProduct.kind}
+                            onChange={(e) => setNewProduct(np => ({ ...np, kind: e.target.value }))} />
+                        <input className="inp" style={{ marginBottom: 8 }} placeholder="Brand name (optional)" value={newProduct.name}
+                            onChange={(e) => setNewProduct(np => ({ ...np, name: e.target.value }))} />
+                        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                            {['am', 'pm', 'both'].map(s => (
+                                <div key={s} onClick={() => setNewProduct(np => ({ ...np, slot: s }))}
+                                    style={{ flex: 1, textAlign: 'center', padding: '5px 0', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: newProduct.slot === s ? (s === 'am' ? 'var(--amber-sf)' : s === 'pm' ? 'var(--teal-sf)' : 'var(--green-sf)') : 'var(--sf)', border: '1px solid var(--bd)', color: newProduct.slot === s ? (s === 'am' ? 'var(--amber-deep)' : s === 'pm' ? 'var(--teal-deep)' : 'var(--green-deep)') : 'var(--txm)' }}>
+                                    {s === 'both' ? 'AM+PM' : s.toUpperCase()}
+                                </div>
+                            ))}
+                        </div>
+                        <button className="btn" style={{ marginTop: 0 }} onClick={() => {
+                            const kind = newProduct.kind.trim();
+                            if (!kind) { showToast('Enter a product type first', 'error'); return; }
+                            const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                            const finalName = newProduct.name.trim() || kind;
+                            update({ customProducts: [...(config.customProducts || []), { id, kind, name: finalName, slot: newProduct.slot }] });
+                            setNewProduct({ kind: '', name: '', slot: 'both' });
+                            showToast(`${finalName} added`, 'success');
+                        }}>Add product</button>
                     </div>
-                </div>
+
+                    <div className="set-row">
+                        <div className="r">
+                            <div>
+                                <div className="lbl">Show product names</div>
+                                <div className="desc">Off = show step types only</div>
+                            </div>
+                            <div className={`toggle ${config.showProductNames ? 'on' : ''}`} onClick={() => update({ showProductNames: !config.showProductNames })} />
+                        </div>
+                    </div>
+
+                    <div className="set-row">
+                        <div className="r">
+                            <div>
+                                <div className="lbl">Vibration on tap</div>
+                                <div className="desc">Off saves battery</div>
+                            </div>
+                            <div className={`toggle ${(localStorage.getItem('form_haptic_off') !== '1') ? 'on' : ''}`}
+                                onClick={() => {
+                                    const cur = localStorage.getItem('form_haptic_off');
+                                    const turningOff = cur !== '1';
+                                    localStorage.setItem('form_haptic_off', turningOff ? '1' : '0');
+                                    setConfig(c => ({ ...c })); // force re-render
+                                    showToast(turningOff ? 'Vibration off' : 'Vibration on', 'info');
+                                }} />
+                        </div>
+                    </div>
                 </>}
             </div>
 
@@ -2192,14 +2309,22 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
                         {config.snackOptions.map((s, i) => (
                             <div key={i} className="chip">
                                 {s}
-                                <button onClick={() => update({ snackOptions: config.snackOptions.filter((_, idx) => idx !== i) })}>×</button>
+                                <button onClick={() => {
+                                    update({ snackOptions: config.snackOptions.filter((_, idx) => idx !== i) });
+                                    showToast(`${s} removed`, 'info');
+                                }}>×</button>
                             </div>
                         ))}
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <input className="inp" placeholder="Add snack..." value={newSnack} onChange={(e) => setNewSnack(e.target.value)} />
                         <button className="btn" style={{ width: 'auto', marginTop: 0, padding: '0 16px' }} onClick={() => {
-                            if (newSnack.trim()) { update({ snackOptions: [...config.snackOptions, newSnack.trim()] }); setNewSnack(''); }
+                            const t = newSnack.trim();
+                            if (!t) { showToast('Enter a snack name', 'error'); return; }
+                            if (config.snackOptions.includes(t)) { showToast('Already in list', 'warn'); return; }
+                            update({ snackOptions: [...config.snackOptions, t] });
+                            setNewSnack('');
+                            showToast(`${t} added`, 'success');
                         }}>Add</button>
                     </div>
                 </div>}
@@ -2209,36 +2334,67 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData }) => {
             <div className="sec">
                 <SecHd label="Data" k="data" />
                 {open.data && <>
-                <button className="btn ghost" onClick={handleBackup}>Backup data</button>
-                <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleRestore} />
-                <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => fileRef.current && fileRef.current.click()}>
-                    {restoreMsg || 'Restore from backup'}
-                </button>
-
-                {nukeStep === 0 ? (
-                    <button className="btn danger" onClick={handleNuke} style={{ marginTop: 8 }}>
-                        Clear all data
-                    </button>
-                ) : (
-                    <div style={{ marginTop: 8, background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 'var(--rsm)', padding: '14px' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#991b1b', marginBottom: 4 }}>Clear all data?</div>
-                        <div style={{ fontSize: 12, color: '#b91c1c', marginBottom: 12 }}>This will permanently delete all your tracked days and reset settings. Cannot be undone.</div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <button
-                                onClick={handleNuke}
-                                style={{ flex: 1, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, padding: '10px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-                            >
-                                Yes, clear everything
-                            </button>
-                            <button
-                                onClick={() => setNukeStep(0)}
-                                style={{ flex: 1, background: 'var(--bg2)', color: 'var(--tx)', border: '1px solid var(--bd)', borderRadius: 8, padding: '10px', fontSize: 13, cursor: 'pointer' }}
-                            >
-                                Cancel
-                            </button>
-                        </div>
+                    <div style={{ fontSize: 11, color: 'var(--txm)', fontFamily: 'var(--mono, monospace)', marginBottom: 8 }}>
+                        {(() => {
+                            const m = parseInt(localStorage.getItem('form_data_modified') || '0', 10);
+                            if (!m) return 'Not synced yet';
+                            const ago = Math.floor((Date.now() - m) / 1000);
+                            if (ago < 60) return `Saved ${ago}s ago`;
+                            if (ago < 3600) return `Saved ${Math.floor(ago / 60)}m ago`;
+                            return `Saved ${Math.floor(ago / 3600)}h ago`;
+                        })()}
                     </div>
-                )}
+                    <button className="btn ghost" onClick={handleBackup}>Backup data</button>
+                    <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleRestore} />
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8, fontSize: 11 }}>
+                        {['both', 'data', 'config'].map(m => (
+                            <button key={m} onClick={() => setRestoreMode(m)}
+                                style={{
+                                    flex: 1, padding: '6px 8px', borderRadius: 6,
+                                    border: '1px solid var(--bd)', cursor: 'pointer',
+                                    background: restoreMode === m ? 'var(--tx)' : 'var(--bg2)',
+                                    color: restoreMode === m ? 'var(--bg)' : 'var(--tx)',
+                                    fontFamily: 'var(--mono, monospace)', textTransform: 'uppercase'
+                                }}>{m}</button>
+                        ))}
+                    </div>
+                    <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => fileRef.current && fileRef.current.click()}>
+                        Restore ({restoreMode})
+                    </button>
+
+                    {nukeStep === 0 ? (
+                        <button className="btn danger" onClick={handleNuke} style={{ marginTop: 8 }}>
+                            Clear all data
+                        </button>
+                    ) : (
+                        <div style={{ marginTop: 8, background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 'var(--rsm)', padding: '14px' }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#991b1b', marginBottom: 4 }}>Clear all data?</div>
+                            <div style={{ fontSize: 12, color: '#b91c1c', marginBottom: 8 }}>This will permanently delete all your tracked days and reset settings. Cannot be undone.</div>
+                            <div style={{ fontSize: 11, color: '#7f1d1d', marginBottom: 6 }}>Type <strong>DELETE</strong> to confirm:</div>
+                            <input
+                                value={nukeText}
+                                onChange={(e) => setNukeText(e.target.value)}
+                                placeholder="DELETE"
+                                autoCapitalize="characters"
+                                style={{ width: '100%', padding: '8px 10px', border: '1px solid #fca5a5', borderRadius: 6, marginBottom: 10, fontSize: 13, fontFamily: 'var(--mono, monospace)' }}
+                            />
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    onClick={handleNuke}
+                                    disabled={nukeText !== 'DELETE'}
+                                    style={{ flex: 1, background: nukeText === 'DELETE' ? '#dc2626' : '#fca5a5', color: '#fff', border: 'none', borderRadius: 8, padding: '10px', fontSize: 13, fontWeight: 600, cursor: nukeText === 'DELETE' ? 'pointer' : 'not-allowed' }}
+                                >
+                                    Yes, clear everything
+                                </button>
+                                <button
+                                    onClick={() => { setNukeStep(0); setNukeText(''); }}
+                                    style={{ flex: 1, background: 'var(--bg2)', color: 'var(--tx)', border: '1px solid var(--bd)', borderRadius: 8, padding: '10px', fontSize: 13, cursor: 'pointer' }}
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </>}
             </div>
         </div>
@@ -2270,8 +2426,13 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     }, [darkMode]);
 
     const [sbLoaded, setSbLoaded] = useState(false);
+    const [syncStatus, setSyncStatus] = useState(''); // '', 'syncing', 'synced', 'conflict'
+    const localModRef = useRef(parseInt(localStorage.getItem('form_data_modified') || '0', 10));
+    const configModRef = useRef(parseInt(localStorage.getItem('form_config_modified') || '0', 10));
+    const dataDebounceRef = useRef(null);
+    const configDebounceRef = useRef(null);
 
-    // Load from Supabase on mount, fall back to localStorage
+    // Load from Supabase on mount, fall back to localStorage. Conflict-aware.
     useEffect(() => {
         const load = async () => {
             const [dbData, dbConfig] = await Promise.all([
@@ -2279,15 +2440,34 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
                 sbGetR("user_config", "singleton"),
             ]);
             if (dbData?.data) {
-                const cleanData = sanitizeAllData(dbData.data);
-                setAllData(cleanData);
-                localStorage.setItem('form_data', JSON.stringify(cleanData));
+                const remoteMod = parseInt(dbData.last_modified_at || '0', 10);
+                const localMod = localModRef.current;
+                // Use remote if it's newer than local, or local has nothing
+                if (remoteMod >= localMod || localMod === 0) {
+                    const cleanData = sanitizeAllData(dbData.data);
+                    setAllData(cleanData);
+                    localStorage.setItem('form_data', JSON.stringify(cleanData));
+                    localStorage.setItem('form_data_modified', String(remoteMod || Date.now()));
+                    localModRef.current = remoteMod || Date.now();
+                } else {
+                    // Local is newer — keep local, will push on next change
+                    setSyncStatus('conflict');
+                    setTimeout(() => setSyncStatus(''), 4000);
+                }
             }
             if (dbConfig?.data) {
                 try {
-                    const merged = sanitizeConfig(dbConfig.data);
-                    setConfig(merged);
-                    localStorage.setItem('form_config', JSON.stringify(merged));
+                    const remoteMod = parseInt(dbConfig.last_modified_at || '0', 10);
+                    const localMod = configModRef.current;
+                    if (remoteMod >= localMod || localMod === 0) {
+                        let merged = sanitizeConfig(dbConfig.data);
+                        // Restore any orphaned customDailyItems from data
+                        if (dbData?.data) merged = sanitizeConfigWithData(merged, dbData.data);
+                        setConfig(merged);
+                        localStorage.setItem('form_config', JSON.stringify(merged));
+                        localStorage.setItem('form_config_modified', String(remoteMod || Date.now()));
+                        configModRef.current = remoteMod || Date.now();
+                    }
                 } catch { }
             }
             setSbLoaded(true);
@@ -2298,15 +2478,27 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     useEffect(() => {
         if (!sbLoaded) return;
         const cleanData = sanitizeAllData(allData);
+        const now = Date.now();
         localStorage.setItem('form_data', JSON.stringify(cleanData));
-        sbUpsertR("daily_logs", { id: "all_data", data: cleanData }, "routine:daily_logs");
+        localStorage.setItem('form_data_modified', String(now));
+        localModRef.current = now;
+        if (dataDebounceRef.current) clearTimeout(dataDebounceRef.current);
+        dataDebounceRef.current = setTimeout(() => {
+            sbUpsertR("daily_logs", { id: "all_data", data: cleanData, last_modified_at: String(now) }, "routine:daily_logs");
+        }, 1500);
     }, [allData, sbLoaded]);
 
     useEffect(() => {
         if (!sbLoaded) return;
         const cleanConfig = sanitizeConfig(config);
+        const now = Date.now();
         localStorage.setItem('form_config', JSON.stringify(cleanConfig));
-        sbUpsertR("user_config", { id: "singleton", data: cleanConfig }, "routine:user_config");
+        localStorage.setItem('form_config_modified', String(now));
+        configModRef.current = now;
+        if (configDebounceRef.current) clearTimeout(configDebounceRef.current);
+        configDebounceRef.current = setTimeout(() => {
+            sbUpsertR("user_config", { id: "singleton", data: cleanConfig, last_modified_at: String(now) }, "routine:user_config");
+        }, 1500);
     }, [config, sbLoaded]);
 
     const key = todayKey();
@@ -2319,7 +2511,7 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
             if (!d) return 0;
             let pts = 0;
             if (d.morningWater) pts++;
-            const mwL = parseMorningWater(d.morningWaterAmount);
+            const mwL = effectiveMorningWater(d);
             if ((mwL + (d.water || 0)) >= config.waterTarget) pts++;
             if ((d.eggs || 0) >= config.eggsTarget) pts++;
             if (d.curd) pts++;
@@ -2329,11 +2521,18 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
         };
         let s = 0;
         const d = new Date();
-        while (true) {
-            const k = d.toISOString().slice(0, 10);
+        // If today has no record yet, start counting from yesterday so streak doesn't show 0
+        const todayK = todayKey(d);
+        if (!allData[todayK] || dayLevel(allData[todayK]) === 0) {
+            d.setDate(d.getDate() - 1);
+        }
+        let safety = 0;
+        while (safety < 365) {
+            const k = todayKey(d);
             const rec = allData[k];
             if (rec && dayLevel(rec) > 0) { s++; d.setDate(d.getDate() - 1); }
             else break;
+            safety++;
         }
         return s;
     }, [allData, config]);
@@ -2350,13 +2549,29 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
         setTimeout(() => setToast(prev => (prev && prev.id === id ? null : prev)), 2500);
     };
 
+    // Generic toast for action confirmations (nuke, backup, add/delete custom items, etc.)
+    const showToast = (msg, variant = 'info') => {
+        const id = Date.now() + Math.random();
+        setToast({ msg, variant, id });
+        setTimeout(() => setToast(prev => (prev && prev.id === id ? null : prev)), 2500);
+    };
+
     return (
         <div id="nomad-routine">
             <div className="app" data-tab={activeTab}>
+                {syncStatus === 'conflict' && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 400,
+                        background: '#E07A5F', color: '#fff', padding: '8px 14px',
+                        fontSize: 12, fontFamily: 'var(--mono, monospace)', textAlign: 'center'
+                    }}>
+                        Local changes are newer than cloud. Your edits will sync next.
+                    </div>
+                )}
                 {activeTab === 'food' && <FoodScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
                 {activeTab === 'skin' && <SkinScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
                 {activeTab === 'log' && <LogScreen allData={allData} config={config} />}
-                {activeTab === 'settings' && <SettingsScreen config={config} setConfig={setConfig} allData={allData} setAllData={setAllData} />}
+                {activeTab === 'settings' && <SettingsScreen config={config} setConfig={setConfig} allData={allData} setAllData={setAllData} showToast={showToast} />}
 
                 {toast && (
                     <div
@@ -2369,20 +2584,30 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
                             zIndex: 300,
                             animation: 'toastPill 2.5s ease forwards',
                             pointerEvents: 'none',
+                            maxWidth: '90vw',
                         }}
                     >
                         <div style={{
                             padding: '10px 22px',
                             borderRadius: 100,
-                            background: toast.type === 'food' ? 'var(--green)' : 'var(--teal)',
+                            background: toast.msg
+                                ? (toast.variant === 'error' ? '#D4726A'
+                                    : toast.variant === 'success' ? 'var(--green, #6BAA75)'
+                                        : toast.variant === 'warn' ? '#E07A5F'
+                                            : '#7B8CDE')
+                                : (toast.type === 'food' ? 'var(--green)' : 'var(--teal)'),
                             color: '#fff',
                             fontSize: 13,
                             fontWeight: 500,
                             whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
                             boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
                             fontFamily: 'var(--font)',
                         }}>
-                            {toast.type === 'food' ? 'Food ritual complete ✓' : 'Skin ritual complete ✓'}
+                            {toast.msg
+                                ? toast.msg
+                                : (toast.type === 'food' ? 'Food ritual complete ✓' : 'Skin ritual complete ✓')}
                         </div>
                     </div>
                 )}
