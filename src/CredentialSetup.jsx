@@ -3,12 +3,14 @@ import { getCredentials, saveCredentials } from "./credentials";
 
 export default function CredentialSetup({ onDone, onCancel }) {
   const existing = getCredentials();
-  const [sbUrl, setSbUrl] = useState(existing.sbUrl || "");
-  const [sbKey, setSbKey] = useState(existing.sbKey || "");
-  const [cloudName, setCloudName] = useState(existing.cloudName || "");
+  const [sbUrl, setSbUrl]               = useState(existing.sbUrl || "");
+  const [sbKey, setSbKey]               = useState(existing.sbKey || "");
+  const [cloudName, setCloudName]       = useState(existing.cloudName || "");
   const [uploadPreset, setUploadPreset] = useState(existing.uploadPreset || "");
-  const [error, setError] = useState("");
-  const [showGuide, setShowGuide] = useState(false);
+  const [resendKey, setResendKey]       = useState(existing.resendKey || "");
+  const [resendFrom, setResendFrom]     = useState(existing.resendFrom || "");
+  const [error, setError]               = useState("");
+  const [showGuide, setShowGuide]       = useState(false);
 
   const importConfig = (file) => {
     if (!file) return;
@@ -17,7 +19,11 @@ export default function CredentialSetup({ onDone, onCancel }) {
       try {
         const d = JSON.parse(e.target.result);
         if (!d.sbUrl || !d.sbKey) { setError("Invalid config file — missing Supabase credentials."); return; }
-        saveCredentials({ sbUrl: d.sbUrl, sbKey: d.sbKey, cloudName: d.cloudName || "", uploadPreset: d.uploadPreset || "" });
+        saveCredentials({
+          sbUrl: d.sbUrl, sbKey: d.sbKey,
+          cloudName: d.cloudName || "", uploadPreset: d.uploadPreset || "",
+          resendKey: d.resendKey || "", resendFrom: d.resendFrom || "",
+        });
         onDone();
       } catch { setError("Failed to read config file."); }
     };
@@ -30,19 +36,19 @@ export default function CredentialSetup({ onDone, onCancel }) {
       return;
     }
     saveCredentials({
-      sbUrl: sbUrl.trim(),
-      sbKey: sbKey.trim(),
-      cloudName: cloudName.trim(),
-      uploadPreset: uploadPreset.trim(),
+      sbUrl: sbUrl.trim(), sbKey: sbKey.trim(),
+      cloudName: cloudName.trim(), uploadPreset: uploadPreset.trim(),
+      resendKey: resendKey.trim(), resendFrom: resendFrom.trim(),
     });
     onDone();
   };
 
-  const bg = { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F2F0EB", fontFamily: "'Plus Jakarta Sans', sans-serif", padding: "24px 20px", boxSizing: "border-box" };
-  const card = { background: "#fff", borderRadius: 24, padding: "28px 24px", maxWidth: 400, width: "100%", boxShadow: "0 4px 32px rgba(0,0,0,0.08)" };
-  const lbl = { display: "block", fontSize: 11, fontWeight: 600, color: "#8A8A9A", letterSpacing: "1px", marginBottom: 6, textTransform: "uppercase" };
-  const inp = { width: "100%", padding: "11px 14px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,0.08)", background: "#F2F0EB", color: "#1A1A2E", fontSize: 13, fontFamily: "'Nunito', sans-serif", outline: "none", boxSizing: "border-box", marginBottom: 14 };
+  const bg       = { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F2F0EB", fontFamily: "'Plus Jakarta Sans', sans-serif", padding: "24px 20px", boxSizing: "border-box" };
+  const card     = { background: "#fff", borderRadius: 24, padding: "28px 24px", maxWidth: 400, width: "100%", boxShadow: "0 4px 32px rgba(0,0,0,0.08)" };
+  const lbl      = { display: "block", fontSize: 11, fontWeight: 600, color: "#8A8A9A", letterSpacing: "1px", marginBottom: 6, textTransform: "uppercase" };
+  const inp      = { width: "100%", padding: "11px 14px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,0.08)", background: "#F2F0EB", color: "#1A1A2E", fontSize: 13, fontFamily: "'Nunito', sans-serif", outline: "none", boxSizing: "border-box", marginBottom: 14 };
   const secTitle = { fontSize: 12, fontWeight: 700, color: "#1A1A2E", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 };
+  const divider  = { borderTop: "1px solid rgba(0,0,0,0.06)", margin: "20px 0" };
 
   return (
     <div style={bg}>
@@ -54,6 +60,7 @@ export default function CredentialSetup({ onDone, onCancel }) {
           <div style={{ fontSize: 13, color: "#8A8A9A", marginTop: 6, lineHeight: 1.6 }}>Connect your own backend to keep<br />your data completely private.</div>
         </div>
 
+        {/* Supabase */}
         <div style={{ marginBottom: 20 }}>
           <div style={secTitle}>☁️ Supabase <span style={{ fontWeight: 400, fontSize: 11, color: "#8A8A9A" }}>(required)</span></div>
           <label style={lbl}>Project URL</label>
@@ -62,14 +69,29 @@ export default function CredentialSetup({ onDone, onCancel }) {
           <input style={{ ...inp, marginBottom: 0 }} value={sbKey} onChange={e => setSbKey(e.target.value)} placeholder="eyJhbGciOiJIUzI1NiIs..." autoComplete="off" spellCheck={false} />
         </div>
 
-        <div style={{ borderTop: "1px solid rgba(0,0,0,0.06)", margin: "20px 0" }} />
+        <div style={divider} />
 
+        {/* Cloudinary */}
         <div style={{ marginBottom: 8 }}>
           <div style={secTitle}>🖼️ Cloudinary <span style={{ fontWeight: 400, fontSize: 11, color: "#8A8A9A" }}>(optional — for receipt photos)</span></div>
           <label style={lbl}>Cloud Name</label>
           <input style={inp} value={cloudName} onChange={e => setCloudName(e.target.value)} placeholder="your-cloud-name" autoComplete="off" spellCheck={false} />
           <label style={lbl}>Upload Preset</label>
           <input style={{ ...inp, marginBottom: 0 }} value={uploadPreset} onChange={e => setUploadPreset(e.target.value)} placeholder="receipt_upload" autoComplete="off" spellCheck={false} />
+        </div>
+
+        <div style={divider} />
+
+        {/* Email Reports — owner only */}
+        <div style={{ marginBottom: 8 }}>
+          <div style={secTitle}>📧 Email Reports <span style={{ fontWeight: 400, fontSize: 11, color: "#8A8A9A" }}>(optional — owner only)</span></div>
+          <label style={lbl}>Resend API Key</label>
+          <input style={inp} value={resendKey} onChange={e => setResendKey(e.target.value)} placeholder="re_xxxxxxxxxxxxxxxxxxxx" autoComplete="off" spellCheck={false} />
+          <label style={lbl}>From Email</label>
+          <input style={{ ...inp, marginBottom: 0 }} value={resendFrom} onChange={e => setResendFrom(e.target.value)} placeholder="NOMAD Reports <reports@yourdomain.com>" autoComplete="off" spellCheck={false} />
+          <div style={{ fontSize: 11, color: "#8A8A9A", marginTop: 8, lineHeight: 1.7, background: "#F2F0EB", borderRadius: 8, padding: "10px 12px" }}>
+            ℹ️ Also add <strong>RESEND_API_KEY</strong>, <strong>RESEND_FROM_EMAIL</strong>, <strong>SUPABASE_SERVICE_ROLE_KEY</strong> and <strong>CRON_SECRET</strong> to your <strong>Vercel → Settings → Environment Variables</strong> for the email cron to work.
+          </div>
         </div>
 
         {error && <div style={{ fontSize: 12, color: "#D4726A", margin: "10px 0 4px", textAlign: "center", fontWeight: 600 }}>{error}</div>}
@@ -97,7 +119,15 @@ export default function CredentialSetup({ onDone, onCancel }) {
             <strong>Cloudinary (free, optional):</strong><br />
             1. Sign up at cloudinary.com<br />
             2. Dashboard → copy your "Cloud name"<br />
-            3. Settings → Upload → Add unsigned upload preset → copy preset name
+            3. Settings → Upload → Add unsigned upload preset → copy preset name<br /><br />
+            <strong>Email Reports (owner only):</strong><br />
+            1. Sign up at resend.com → API Keys → Create key<br />
+            2. Add a verified domain and create a from-address<br />
+            3. In Vercel → Project → Settings → Environment Variables add:<br />
+            &nbsp;&nbsp;• RESEND_API_KEY<br />
+            &nbsp;&nbsp;• RESEND_FROM_EMAIL<br />
+            &nbsp;&nbsp;• SUPABASE_SERVICE_ROLE_KEY (from Supabase → Settings → API)<br />
+            &nbsp;&nbsp;• CRON_SECRET (any random string)
           </div>
         )}
       </div>
