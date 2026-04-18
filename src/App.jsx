@@ -13,7 +13,7 @@ const APP = "NOMAD", CUR = "₹", uid = () => Date.now().toString(36) + Math.ran
 const _creds = getCredentials();
 const SB_URL = _creds.sbUrl || import.meta.env.VITE_SUPABASE_URL || "";
 const SB_KEY = _creds.sbKey || import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-const SB_ENABLED = Boolean(SB_URL && SB_KEY);
+const SB_ENABLED = Boolean(_creds.sbUrl && _creds.sbKey);
 const sbH = SB_ENABLED ? { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` } : {};
 const needsSetup = !_creds.sbUrl;
 const FETCH_TIMEOUT_MS = 8000;

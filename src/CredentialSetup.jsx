@@ -10,6 +10,20 @@ export default function CredentialSetup({ onDone, onCancel }) {
   const [error, setError] = useState("");
   const [showGuide, setShowGuide] = useState(false);
 
+  const importConfig = (file) => {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = (e) => {
+      try {
+        const d = JSON.parse(e.target.result);
+        if (!d.sbUrl || !d.sbKey) { setError("Invalid config file — missing Supabase credentials."); return; }
+        saveCredentials({ sbUrl: d.sbUrl, sbKey: d.sbKey, cloudName: d.cloudName || "", uploadPreset: d.uploadPreset || "" });
+        onDone();
+      } catch { setError("Failed to read config file."); }
+    };
+    r.readAsText(file);
+  };
+
   const save = () => {
     if (!sbUrl.trim() || !sbKey.trim()) {
       setError("Supabase URL and Anon Key are required.");
@@ -63,6 +77,11 @@ export default function CredentialSetup({ onDone, onCancel }) {
         <button style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", background: "#E07A5F", color: "#fff", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 700, cursor: "pointer", marginTop: 14 }} onClick={save}>
           Save & Continue →
         </button>
+
+        <label style={{ display: "block", width: "100%", padding: "13px", borderRadius: 12, border: "1.5px solid rgba(0,0,0,0.10)", background: "none", color: "#6BAA75", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "center", marginTop: 8, boxSizing: "border-box" }}>
+          Restore from config backup
+          <input type="file" accept=".json" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) importConfig(e.target.files[0]); e.target.value = ""; }} />
+        </label>
         {onCancel && <button onClick={onCancel} style={{ width: "100%", marginTop: 8, padding: "12px", border: "1.5px solid rgba(0,0,0,0.08)", borderRadius: 12, background: "none", color: "#8A8A9A", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, cursor: "pointer" }}>Cancel</button>}
 
         <button onClick={() => setShowGuide(v => !v)} style={{ width: "100%", marginTop: 12, padding: "10px", border: "none", background: "none", color: "#8A8A9A", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
