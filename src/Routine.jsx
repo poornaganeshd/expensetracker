@@ -74,6 +74,7 @@ const CSS = `
   display: flex;
   flex-direction: column;
   padding-bottom: 76px;
+  padding-top: 96px;
 }
 #nomad-routine .app[data-tab="food"] { background: var(--food-bg); }
 #nomad-routine .app[data-tab="skin"] { background: var(--skin-bg); }
@@ -2016,7 +2017,7 @@ const RoutineEditor = ({ config, setConfig }) => {
 /* ============================================================
    SETTINGS SCREEN
    ============================================================ */
-const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = () => { } }) => {
+const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = () => { }, localModRef, configModRef }) => {
     const update = (patch) => setConfig(sanitizeConfig({ ...config, ...patch }));
     const updateRotation = (day, val) => setConfig(sanitizeConfig({ ...config, snackRotation: { ...config.snackRotation, [day]: val } }));
 
@@ -2073,7 +2074,7 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
                     const cleanData = sanitizeRestoredData(parsed.data);
                     setAllData(cleanData);
                     localStorage.setItem('form_data_modified', String(now));
-                    localModRef.current = now;
+                    if (localModRef) localModRef.current = now;
                     sbUpsertR("daily_logs", { id: "all_data", data: cleanData, last_modified_at: String(now) }, "routine:daily_logs");
                     summary.push(`${Object.keys(cleanData).length} days`);
                 }
@@ -2081,7 +2082,7 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
                     const mergedConfig = sanitizeConfig(parsed.config);
                     setConfig(mergedConfig);
                     localStorage.setItem('form_config_modified', String(now));
-                    configModRef.current = now;
+                    if (configModRef) configModRef.current = now;
                     sbUpsertR("user_config", { id: "singleton", data: mergedConfig, last_modified_at: String(now) }, "routine:user_config");
                     summary.push('config');
                 }
@@ -2564,7 +2565,7 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
                 {activeTab === 'food' && <FoodScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
                 {activeTab === 'skin' && <SkinScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
                 {activeTab === 'log' && <LogScreen allData={allData} config={config} />}
-                {activeTab === 'settings' && <SettingsScreen config={config} setConfig={setConfig} allData={allData} setAllData={setAllData} showToast={showToast} />}
+                {activeTab === 'settings' && <SettingsScreen config={config} setConfig={setConfig} allData={allData} setAllData={setAllData} showToast={showToast} localModRef={localModRef} configModRef={configModRef} />}
 
                 {toast && (
                     <div
