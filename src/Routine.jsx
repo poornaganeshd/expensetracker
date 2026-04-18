@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { sendSupabaseRequest } from './offlineSync';
+import { getCredentials as _getCreds } from './credentials';
 
 /* ============================================================
    FORM — Daily food & skincare ritual tracker  v6
@@ -1061,9 +1062,10 @@ const loadConfig = () => {
     } catch { return DEFAULT_CONFIG; }
 };
 
-// Supabase
-const SB_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+// Supabase — localStorage credentials take priority over build-time env vars
+const _rc = _getCreds();
+const SB_URL = _rc.sbUrl || import.meta.env.VITE_SUPABASE_URL || "";
+const SB_KEY = _rc.sbKey || import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const SB_ENABLED = Boolean(SB_URL && SB_KEY);
 const sbH = SB_ENABLED ? { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` } : {};
 const FETCH_TIMEOUT_MS = 8000;

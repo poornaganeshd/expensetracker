@@ -1,5 +1,4 @@
-const CLOUD_NAME = "df1vedbox";
-const UPLOAD_PRESET = "receipt_upload";
+import { getCredentials } from "./credentials";
 const MAX_WIDTH = 800;
 const QUALITY = 0.7;
 
@@ -27,11 +26,15 @@ export function compressImage(file) {
 
 // Compress + upload to Cloudinary, returns secure_url
 export async function uploadReceipt(file) {
+  const creds = getCredentials();
+  const cloudName = creds.cloudName || "df1vedbox";
+  const uploadPreset = creds.uploadPreset || "receipt_upload";
+  if (!cloudName) throw new Error("Cloudinary not configured. Add your Cloud Name in Settings → Backend.");
   const blob = await compressImage(file);
   const form = new FormData();
   form.append("file", blob, "receipt.jpg");
-  form.append("upload_preset", UPLOAD_PRESET);
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+  form.append("upload_preset", uploadPreset);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
     method: "POST",
     body: form,
   });
