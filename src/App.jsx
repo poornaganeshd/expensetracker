@@ -610,7 +610,7 @@ export default function Nomad() {
   const mBal = Object.values(wBal).reduce((s, v) => s + v, 0);
 
   const dance = () => { sLd(true); setTimeout(() => sLd(false), 1800) };
-  const toSB = (obj, keys) => Object.fromEntries(keys.filter(k => obj[k] !== undefined).map(k => [k, obj[k]]));
+  const toSB = (obj, keys) => Object.fromEntries(keys.map(k => [k, obj[k] ?? null]));
   // Compute historical balance up to and including a given date for a wallet
   const balanceOnDate = (walletId, date) => {
     const start = wsb[walletId] || 0;
