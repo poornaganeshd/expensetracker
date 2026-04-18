@@ -470,6 +470,17 @@ export default function Nomad() {
   const [showSetup, setShowSetup] = useState(needsSetup);
   const [routineTab, setRoutineTab] = useState("food");
   const [backendOpen, sBackendOpen] = useState(false);
+  const [reportOpen, sReportOpen] = useState(false);
+  const [reportEmail, sReportEmail] = useState("");
+  const [reportFreq, sReportFreq] = useState("monthly");
+  const [reportCustomDays, sReportCustomDays] = useState(14);
+  const [reportSendHour, sReportSendHour] = useState(6);
+  const [reportIncExp, sReportIncExp] = useState(true);
+  const [reportIncInc, sReportIncInc] = useState(true);
+  const [reportIncTr, sReportIncTr] = useState(false);
+  const [reportSelCats, sReportSelCats] = useState([]);
+  const [reportActive, sReportActive] = useState(false);
+  const [reportSaving, sReportSaving] = useState(false);
   const [trendPeriod, sTrendPeriod] = useState("month");
   const [recCats, sRecCats] = useState(RC);
   const [tab, sTab] = useState("dashboard"), [ex, sEx] = useState([]), [inc, sInc] = useState([]), [tr, sTr] = useState([]), [stl, sStl] = useState([]), [cats, sCats] = useState(DC), [isrc, sIsrc] = useState(DI), [sp, sSp] = useState([]), [evs, sEvs] = useState([]), [rec, sRec] = useState([]), [fm, sFm] = useState("all"), [loaded, sL] = useState(false), [ld, sLd] = useState(false), [dm, sDm] = useState(false), [toasts, sToasts] = useState([]), [nn, sNN] = useState(""), [ne2, sNE2] = useState("📁"), [nc, sNC] = useState("#E07A5F"), [mt, sMt] = useState("expense"), [clr, sClr] = useState(false), [nukeTxt, sNukeTxt] = useState(""), [spX, sSpX] = useState(false), [calW, sCalW] = useState(null), [wsb, sWsb] = useState({ upi_lite: 0, bank: 0, cash: 0 });
@@ -752,6 +763,71 @@ export default function Nomad() {
   };
   const expCSV = () => { let csv = "Type,Date,Amount,Category/Source,Wallet,Note\n"; inc.forEach(i => { csv += `Income,${i.date},${i.amount},"${isrc.find(s => s.id === i.sourceId)?.name || ""}","${WALLETS.find(x => x.id === i.walletId)?.name || "Bank"}","${i.note || ""}"\n` }); ex.forEach(e => { csv += `Expense,${e.date},${e.amount},"${cats.find(c => c.id === e.categoryId)?.name || ""}","${WALLETS.find(x => x.id === e.walletId)?.name || ""}","${e.note || ""}"\n` }); tr.forEach(t => { csv += `Transfer,${t.date},${t.amount},"${t.fromWallet}→${t.toWallet}","","${t.note || ""}"\n` }); stl.forEach(s => { csv += `Settlement,${s.date},${s.amount},"${s.splitName}","${WALLETS.find(w => w.id === s.walletId)?.name || ""}","${s.direction}"\n` }); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `nomad_${localDateKey()}.csv`; a.click() };
   const expBackup = () => { const data = JSON.stringify({ expenses: ex, incomes: inc, transfers: tr, settlements: stl, categories: cats, incomeSources: isrc, splits: sp, events: evs, recurring: rec, darkMode: dm, walletStartBal: wsb, _v: "nomad-v9", _date: new Date().toISOString() }, null, 2); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type: "application/json" })); a.download = `nomad_backup_${localDateKey()}.json`; a.click(); showT("Backup downloaded", "success") };
+  const loadReportSchedule = () => {
+    if (!SB_ENABLED) return;
+    const uid = SB_URL.replace("https://", "").split(".")[0];
+    fetch(`${SB_URL}/rest/v1/report_schedules?user_id=eq.${uid}&select=*&limit=1`, { headers: sbH })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => {
+        if (!d[0]) return;
+        const s = d[0];
+        sReportEmail(s.email ?? "");
+        sReportFreq(s.frequency ?? "monthly");
+        sReportCustomDays(s.custom_days ?? 14);
+        sReportSendHour(s.send_hour ?? 6);
+        sReportIncExp(s.include_expenses ?? true);
+        sReportIncInc(s.include_incomes ?? true);
+        sReportIncTr(s.include_transfers ?? false);
+        sReportSelCats(s.selected_categories ?? []);
+        sReportActive(s.is_active ?? false);
+      })
+      .catch(() => {});
+  };
+  const saveReportSchedule = async () => {
+    if (!reportEmail.trim()) { showT("Enter an email address", "error"); return; }
+    if (!SB_ENABLED) { showT("Supabase not configured", "error"); return; }
+    sReportSaving(true);
+    const uid = SB_URL.replace("https://", "").split(".")[0];
+    const next = new Date();
+    if (reportFreq === "weekly") next.setUTCDate(next.getUTCDate() + 7);
+    else if (reportFreq === "monthly") next.setUTCMonth(next.getUTCMonth() + 1);
+    else if (reportFreq === "quarterly") next.setUTCMonth(next.getUTCMonth() + 3);
+    else next.setUTCDate(next.getUTCDate() + (reportCustomDays || 7));
+    next.setUTCHours(reportSendHour, 0, 0, 0);
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/report_schedules`, {
+        method: "POST",
+        headers: { ...sbH, "Prefer": "resolution=merge-duplicates" },
+        body: JSON.stringify([{
+          user_id: uid,
+          email: reportEmail.trim(),
+          frequency: reportFreq,
+          custom_days: reportFreq === "custom" ? (reportCustomDays || 7) : null,
+          send_hour: reportSendHour,
+          include_expenses: reportIncExp,
+          include_incomes: reportIncInc,
+          include_transfers: reportIncTr,
+          selected_categories: reportSelCats.length ? reportSelCats : null,
+          next_send_at: next.toISOString(),
+          is_active: reportActive,
+        }])
+      });
+      if (r.ok) {
+        showT("Report schedule saved", "success");
+        // Register this user's Supabase in the owner's central registry
+        const registryUrl = import.meta.env.VITE_SUPABASE_URL;
+        const registryKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        if (registryUrl && registryKey) {
+          fetch(`${registryUrl}/rest/v1/user_registry`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "apikey": registryKey, "Authorization": `Bearer ${registryKey}`, "Prefer": "resolution=merge-duplicates" },
+            body: JSON.stringify([{ supabase_url: SB_URL, anon_key: _creds.sbKey }])
+          }).catch(() => {});
+        }
+      } else showT("Failed to save — run supabase_setup_reports.sql first", "error");
+    } catch { showT("Failed to save schedule", "error"); }
+    sReportSaving(false);
+  };
   const impBackup = (file) => { const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); if (!d._v || !d._v.startsWith("nomad")) { showT("Invalid backup file", "error"); return } const arrFields = ["expenses", "incomes", "transfers", "settlements", "splits", "recurring", "events", "categories", "incomeSources"]; for (const f of arrFields) { if (d[f] !== undefined && !Array.isArray(d[f])) { showT(`Backup corrupt: ${f}`, "error"); return; } } sEx(d.expenses || []); sInc(d.incomes || []); sTr(d.transfers || []); sStl(d.settlements || []); sSp(d.splits || []); sRec(d.recurring || []); sEvs(d.events || []); if (d.categories?.length) sCats(d.categories); if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.darkMode !== undefined) sDm(d.darkMode); if (d.walletStartBal && typeof d.walletStartBal === "object") sWsb(d.walletStartBal); showT("Backup restored on this device", "success") } catch { showT("Failed to read file", "error") } }; r.readAsText(file) };
 
   if (showSetup) return <CredentialSetup onDone={() => window.location.reload()} onCancel={needsSetup ? undefined : () => setShowSetup(false)} />;
@@ -828,6 +904,60 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
         <div style={{ ...cc, padding: "16px 18px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}><div><div style={{ fontFamily: "var(--font-h)", fontSize: 13, color: "var(--text)", fontWeight: 600 }}>{dm ? "🌙" : "☀️"} Dark Mode</div><div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{dm ? "Dark" : "Light"}</div></div><div onClick={() => sDm(!dm)} style={{ width: 48, height: 26, borderRadius: 13, background: dm ? "#E07A5F" : "var(--border)", cursor: "pointer", position: "relative" }}><div style={{ width: 20, height: 20, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: dm ? 25 : 3, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }} /></div></div>
         <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Export</div><button onClick={expCSV} style={{ width: "100%", padding: "13px", border: "none", borderRadius: 10, background: "#E07A5F", color: "#fff", fontFamily: "var(--font-h)", fontSize: 14, cursor: "pointer", fontWeight: 600 }}>Download CSV</button><p style={{ fontSize: 12, color: "var(--muted)", marginTop: 10, lineHeight: 1.6, fontStyle: "italic" }}>Upload to ChatGPT or Claude for analysis.</p></div>
         <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Backup & Restore</div><div style={{ display: "flex", gap: 8, marginBottom: 12 }}><button onClick={expBackup} style={{ flex: 1, padding: "13px", border: "none", borderRadius: 10, background: "#6BAA75", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>📥 Backup</button><label style={{ flex: 1, padding: "13px", border: "1.5px solid #7B8CDE", borderRadius: 10, background: "#7B8CDE12", color: "#7B8CDE", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600, textAlign: "center" }}>📤 Restore<input type="file" accept=".json" onChange={e => { if (e.target.files[0]) impBackup(e.target.files[0]); e.target.value = "" }} style={{ display: "none" }} /></label></div><p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6, fontStyle: "italic" }}>Backup saves all data as JSON. Restore replaces current data with the backup file.</p></div>
+        <div style={{ ...cc, padding: "14px 20px", marginBottom: 14 }}>
+          <div onClick={() => { if (!reportOpen) loadReportSchedule(); sReportOpen(v => !v); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+            <div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", letterSpacing: "0.5px", fontWeight: 600 }}>Email Reports</div>
+            <span style={{ fontSize: 11, color: "var(--muted)" }}>{reportOpen ? "▲" : "▼"}</span>
+          </div>
+          {reportOpen && <div style={{ marginTop: 16 }}>
+            {!SB_ENABLED && <div style={{ fontSize: 12, color: "#FBBF24", marginBottom: 12, fontFamily: "var(--font-h)", fontWeight: 600, background: "#FBBF2412", borderRadius: 8, padding: "8px 12px" }}>⚠️ Configure Supabase first</div>}
+
+            {/* Email */}
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", letterSpacing: "1px", marginBottom: 6, textTransform: "uppercase" }}>Email</label>
+            <input type="email" value={reportEmail} onChange={e => sReportEmail(e.target.value)} placeholder="you@email.com" style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: "1.5px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "var(--font-b)", outline: "none", boxSizing: "border-box", marginBottom: 14 }} />
+
+            {/* Frequency */}
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", letterSpacing: "1px", marginBottom: 6, textTransform: "uppercase" }}>Frequency</label>
+            <div style={{ display: "flex", gap: 6, marginBottom: reportFreq === "custom" ? 8 : 14, flexWrap: "wrap" }}>
+              {["weekly", "monthly", "quarterly", "custom"].map(f => <button key={f} onClick={() => sReportFreq(f)} style={{ flex: 1, padding: "9px 4px", borderRadius: 10, fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, border: `1.5px solid ${reportFreq === f ? "#c9a96e" : "var(--border)"}`, background: reportFreq === f ? "#c9a96e18" : "var(--card)", color: reportFreq === f ? "#c9a96e" : "var(--muted)", cursor: "pointer", minWidth: 60 }}>{f.charAt(0).toUpperCase() + f.slice(1)}</button>)}
+            </div>
+            {reportFreq === "custom" && <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "10px 14px", background: "var(--bg)", borderRadius: 10, border: "1px solid var(--border)" }}>
+              <span style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-h)" }}>Every</span>
+              <input type="number" min="1" max="365" value={reportCustomDays} onChange={e => sReportCustomDays(Number(e.target.value))} style={{ width: 60, padding: "6px 10px", borderRadius: 8, border: "1.5px solid #c9a96e", background: "var(--bg)", color: "#c9a96e", fontSize: 14, fontWeight: 700, fontFamily: "var(--font-h)", textAlign: "center", outline: "none" }} />
+              <span style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-h)" }}>days</span>
+            </div>}
+
+            {/* Send Time */}
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", letterSpacing: "1px", marginBottom: 6, textTransform: "uppercase" }}>Send Time (UTC)</label>
+            <select value={reportSendHour} onChange={e => sReportSendHour(Number(e.target.value))} style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: "1.5px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "var(--font-h)", outline: "none", marginBottom: 14, cursor: "pointer" }}>
+              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h === 0 ? "12:00 AM" : h < 12 ? `${h}:00 AM` : h === 12 ? "12:00 PM" : `${h - 12}:00 PM`} UTC</option>)}
+            </select>
+
+            {/* Content */}
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", letterSpacing: "1px", marginBottom: 8, textTransform: "uppercase" }}>Include in Report</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+              {[["Expenses", reportIncExp, sReportIncExp], ["Incomes", reportIncInc, sReportIncInc], ["Transfers", reportIncTr, sReportIncTr]].map(([label, val, setter]) => (
+                <div key={label} onClick={() => setter(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", background: "var(--bg)", borderRadius: 10, border: `1px solid ${val ? "#c9a96e44" : "var(--border)"}`, cursor: "pointer" }}>
+                  <span style={{ fontSize: 13, fontFamily: "var(--font-h)", fontWeight: 600, color: "var(--text)" }}>{label}</span>
+                  <div style={{ width: 38, height: 20, borderRadius: 10, background: val ? "#c9a96e" : "var(--border)", position: "relative", flexShrink: 0 }}><div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: val ? 21 : 3, transition: "left 0.2s" }} /></div>
+                </div>
+              ))}
+            </div>
+
+            {/* Category filter */}
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", letterSpacing: "1px", marginBottom: 8, textTransform: "uppercase" }}>Categories <span style={{ fontWeight: 400, textTransform: "none", fontSize: 10 }}>(empty = all)</span></label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+              {cats.map(c => { const on = reportSelCats.includes(c.id); return <button key={c.id} onClick={() => sReportSelCats(p => on ? p.filter(x => x !== c.id) : [...p, c.id])} style={{ padding: "6px 12px", borderRadius: 8, fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, border: `1.5px solid ${on ? c.color : "var(--border)"}`, background: on ? c.color + "22" : "var(--card)", color: on ? c.color : "var(--muted)", cursor: "pointer" }}>{c.name}</button>; })}
+            </div>
+
+            {/* Active + Save */}
+            <div onClick={() => sReportActive(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, padding: "10px 12px", background: "var(--bg)", borderRadius: 10, border: "1px solid var(--border)", cursor: "pointer" }}>
+              <span style={{ fontSize: 13, fontFamily: "var(--font-h)", fontWeight: 600, color: "var(--text)" }}>Active</span>
+              <div style={{ width: 44, height: 24, borderRadius: 12, background: reportActive ? "#c9a96e" : "var(--border)", position: "relative", flexShrink: 0 }}><div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: reportActive ? 23 : 3, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} /></div>
+            </div>
+            <button onClick={saveReportSchedule} disabled={reportSaving} style={{ width: "100%", padding: "12px", border: "none", borderRadius: 10, background: reportSaving ? "#c9a96e88" : "#c9a96e", color: "#1a1a1a", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, cursor: reportSaving ? "not-allowed" : "pointer" }}>{reportSaving ? "Saving…" : "Save Report Schedule"}</button>
+          </div>}
+        </div>
         <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Recurring ({rec.length})</div>{rec.length === 0 && <p style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", padding: "12px 0", fontStyle: "italic" }}>No recurring expenses set up yet.</p>}{rec.map(r => { const rc = RC.find(c => c.id === r.categoryId) || { name: r.categoryName || r.categoryId, color: "#8A8A9A", neon: "#A0A0B0", id: r.categoryId }; const fl = r.frequency === "monthly" ? `Every month on the ${r.dayOfMonth}${[, "st", "nd", "rd"][r.dayOfMonth] || "th"}` : r.frequency === "yearly" ? `Yearly on ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][(r.yearMonth || 1) - 1]} ${r.yearDay}` : `Every ${r.intervalDays} days`; return <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--bg)", borderRadius: 10, marginBottom: 6, border: "1px solid var(--border)", opacity: r.active ? 1 : 0.45 }}><DI2 id={rc.id} accent={rc.neon || rc.color} size={18} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600, fontFamily: "var(--font-h)", color: "var(--text)" }}>{r.name} — {fmt(r.amount)}</div><div style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 1 }}>{fl}</div></div><div onClick={() => { const updated = rec.map(x => x.id === r.id ? { ...x, active: !x.active } : x); sRec(updated); sbUpsert("recurring", [toSB(updated.find(x => x.id === r.id), ["id", "name", "amount", "categoryId", "categoryName", "walletId", "frequency", "dayOfMonth", "intervalDays", "yearMonth", "yearDay", "startDate", "active", "lastPaidDate", "lastSkippedDate"])]) }} style={{ width: 36, height: 20, borderRadius: 10, background: r.active ? "#A78BFA" : "var(--border)", cursor: "pointer", position: "relative", flexShrink: 0 }}><div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: r.active ? 19 : 3, transition: "left 0.2s" }} /></div>{recDelConfirm === r.id ? <div style={{ display: "flex", gap: 4, flexShrink: 0, alignItems: "center" }}><span style={{ fontSize: 10, color: "#D4726A", fontFamily: "var(--font-h)", fontWeight: 600, whiteSpace: "nowrap" }}>Delete?</span><button onClick={() => sRecDelConfirm(null)} style={{ background: "none", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 8px", fontSize: 10, color: "var(--muted)", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 600 }}>No</button><button onClick={() => { sRec(p => p.filter(x => x.id !== r.id)); sbDelete("recurring", r.id); sRecDelConfirm(null); showT(r.name + " deleted", "info") }} style={{ background: "#D4726A", border: "none", borderRadius: 6, padding: "3px 8px", fontSize: 10, color: "#fff", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 600 }}>Yes</button></div> : <button onClick={() => sRecDelConfirm(r.id)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.5, flexShrink: 0 }}>✕</button>}</div> })}</div>
         {(() => { const list = mt === "expense" ? cats : isrc; const shown = manageXp ? list : list.slice(0, 2); return <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Manage</div><div style={{ display: "flex", gap: 6, marginBottom: 16 }}>{["expense", "income", "recurring"].map(t => <button key={t} onClick={() => { sMt(t); sManageXp(false) }} style={{ flex: 1, padding: "9px", borderRadius: 10, fontSize: 11, fontFamily: "var(--font-h)", border: `1.5px solid ${mt === t ? (t === "expense" ? "#E07A5F" : t === "income" ? "#6BAA75" : "#A78BFA") : "var(--border)"}`, background: mt === t ? (t === "expense" ? "#E07A5F" : t === "income" ? "#6BAA75" : "#A78BFA") : "var(--card)", color: mt === t ? "#fff" : "var(--muted)", cursor: "pointer", fontWeight: 500 }}>{t === "expense" ? "Categories" : t === "income" ? "Income" : "Recurring"}</button>)}</div>{mt === "recurring" ? <>{(manageXp ? recCats : recCats.slice(0, 2)).map(c => <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--bg)", borderRadius: 10, marginBottom: 6, border: "1px solid var(--border)" }}><DI2 id={c.id} accent={c.neon || c.color} size={18} /><span style={{ flex: 1, fontSize: 13, color: "var(--text)", fontWeight: 500, fontFamily: "var(--font-h)" }}>{c.name}</span><span style={{ width: 14, height: 14, borderRadius: "50%", background: c.color, flexShrink: 0 }} /><button onClick={() => { if (RC.find(d => d.id === c.id)) return; sRecCats(p => p.filter(x => x.id !== c.id)); }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, padding: "2px 6px", opacity: RC.find(d => d.id === c.id) ? 0.15 : 0.5 }}>✕</button></div>)}{recCats.length > 2 && <button onClick={() => sManageXp(!manageXp)} style={{ width: "100%", padding: "8px", border: "1px dashed var(--border)", borderRadius: 8, background: "none", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, cursor: "pointer", marginBottom: 6 }}>{manageXp ? `Show less ▲` : `Show all ${recCats.length} ▼`}</button>}<div style={{ borderTop: "1px solid var(--border)", marginTop: 14, paddingTop: 14 }}><label style={ls}>Add New</label><div style={{ display: "flex", gap: 6, marginBottom: 10 }}><input value={ne2} onChange={e => sNE2(e.target.value)} maxLength={2} style={{ ...is, width: 48, textAlign: "center", flexShrink: 0 }} /><input value={nn} onChange={e => sNN(e.target.value)} placeholder="Name…" style={is} /><input type="color" value={nc} onChange={e => sNC(e.target.value)} style={{ width: 42, height: 42, border: "none", cursor: "pointer", borderRadius: 8, flexShrink: 0 }} /></div><button onClick={() => { if (!nn.trim()) return; const id = nn.trim().toLowerCase().replace(/\s+/g, "_") + "_" + uid(); sRecCats(p => [...p, { id, name: nn.trim(), emoji: ne2, color: nc, neon: nc }]); sNN(""); sNE2("📁"); sNC("#E07A5F"); }} style={{ width: "100%", padding: "11px", border: "none", borderRadius: 10, background: "#A78BFA", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>+ Add Category</button></div></> : <>{shown.map(c => <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--bg)", borderRadius: 10, marginBottom: 6, border: "1px solid var(--border)" }}><DI2 id={c.id} accent={c.neon || c.color} size={18} /><span style={{ flex: 1, fontSize: 13, color: "var(--text)", fontWeight: 500, fontFamily: "var(--font-h)" }}>{c.name}</span><span style={{ width: 14, height: 14, borderRadius: "50%", background: c.color }} /><button onClick={() => { const defs = mt === "expense" ? DC : DI; if (defs.find(d => d.id === c.id)) return; if (mt === "expense") sCats(p => p.filter(x => x.id !== c.id)); else sIsrc(p => p.filter(x => x.id !== c.id)) }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, padding: "2px 6px", opacity: (mt === "expense" ? DC : DI).find(d => d.id === c.id) ? 0.15 : 0.5 }}>✕</button></div>)}{list.length > 2 && <button onClick={() => sManageXp(!manageXp)} style={{ width: "100%", padding: "8px", border: "1px dashed var(--border)", borderRadius: 8, background: "none", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, cursor: "pointer", marginBottom: 6 }}>{manageXp ? `Show less ▲` : `Show all ${list.length} ▼`}</button>}<div style={{ borderTop: "1px solid var(--border)", marginTop: 14, paddingTop: 14 }}><label style={ls}>Add New</label><div style={{ display: "flex", gap: 6, marginBottom: 10 }}><input value={ne2} onChange={e => sNE2(e.target.value)} maxLength={2} style={{ ...is, width: 48, textAlign: "center", flexShrink: 0 }} /><input value={nn} onChange={e => sNN(e.target.value)} placeholder="Name…" style={is} /><input type="color" value={nc} onChange={e => sNC(e.target.value)} style={{ width: 42, height: 42, border: "none", cursor: "pointer", borderRadius: 8, flexShrink: 0 }} /></div><button onClick={addCust} style={{ width: "100%", padding: "11px", border: "none", borderRadius: 10, background: "#7B8CDE", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>+ Add {mt === "expense" ? "Category" : "Source"}</button></div></> }</div> })()}
         <div style={{ ...cc, padding: "14px 20px", marginBottom: 14 }}><div onClick={() => sBackendOpen(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", letterSpacing: "0.5px", fontWeight: 600 }}>Backend</div><span style={{ fontSize: 11, color: "var(--muted)" }}>{backendOpen ? "▲" : "▼"}</span></div>{backendOpen && <div style={{ marginTop: 14 }}><div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}><div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--bg)", borderRadius: 10, border: "1px solid var(--border)" }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: _creds.sbUrl ? "#6BAA75" : "#FBBF24", flexShrink: 0 }} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--font-h)", color: "var(--text)" }}>Supabase</div><div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{_creds.sbUrl ? _creds.sbUrl.replace("https://", "").replace(".supabase.co", "") + ".supabase.co" : "Not configured"}</div></div></div><div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--bg)", borderRadius: 10, border: "1px solid var(--border)" }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: _creds.cloudName ? "#6BAA75" : "#FBBF24", flexShrink: 0 }} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--font-h)", color: "var(--text)" }}>Cloudinary</div><div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 1 }}>{_creds.cloudName || "Not configured"}</div></div></div></div><div style={{ display: "flex", gap: 8, marginBottom: 8 }}><button onClick={() => { const data = JSON.stringify(_creds, null, 2); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type: "application/json" })); a.download = "nomad_credentials.json"; a.click(); showT("Credentials exported", "success"); }} style={{ flex: 1, padding: "11px", border: "1.5px solid #6BAA75", borderRadius: 10, background: "#6BAA7512", color: "#6BAA75", fontFamily: "var(--font-h)", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>Export</button><label style={{ flex: 1, padding: "11px", border: "1.5px solid #7B8CDE", borderRadius: 10, background: "#7B8CDE12", color: "#7B8CDE", fontFamily: "var(--font-h)", fontSize: 12, cursor: "pointer", fontWeight: 600, textAlign: "center" }}>Import<input type="file" accept=".json" style={{ display: "none" }} onChange={e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = ev => { try { const d = JSON.parse(ev.target.result); if (!d.sbUrl || !d.sbKey) { showT("Invalid credentials file", "error"); return; } localStorage.setItem("nomad-credentials", JSON.stringify(d)); showT("Credentials imported — reloading…", "success"); setTimeout(() => window.location.reload(), 1000); } catch { showT("Failed to read file", "error"); } }; r.readAsText(f); e.target.value = ""; }} /></label></div><button onClick={() => setShowSetup(true)} style={{ width: "100%", padding: "11px", border: "1.5px solid var(--border)", borderRadius: 10, background: "var(--card)", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>Edit Credentials</button></div>}</div>
