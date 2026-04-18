@@ -74,7 +74,6 @@ const CSS = `
   display: flex;
   flex-direction: column;
   padding-bottom: 76px;
-  padding-top: 96px;
 }
 #nomad-routine .app[data-tab="food"] { background: var(--food-bg); }
 #nomad-routine .app[data-tab="skin"] { background: var(--skin-bg); }
