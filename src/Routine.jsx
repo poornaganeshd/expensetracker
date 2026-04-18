@@ -2554,15 +2554,6 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     return (
         <div id="nomad-routine">
             <div className="app" data-tab={activeTab}>
-                {syncStatus === 'conflict' && (
-                    <div style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 400,
-                        background: '#E07A5F', color: '#fff', padding: '8px 14px',
-                        fontSize: 12, fontFamily: 'var(--mono, monospace)', textAlign: 'center'
-                    }}>
-                        Local changes are newer than cloud. Your edits will sync next.
-                    </div>
-                )}
                 {activeTab === 'food' && <FoodScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
                 {activeTab === 'skin' && <SkinScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
                 {activeTab === 'log' && <LogScreen allData={allData} config={config} />}

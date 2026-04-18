@@ -262,7 +262,7 @@ const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "JPY", "AUD", "CAD
 const getCurrencyFlag = c => { if (c === "EUR") return "🇪🇺"; try { return String.fromCodePoint(...[...c.slice(0, 2).toUpperCase()].map(x => 127397 + x.charCodeAt(0))); } catch { return "🏳"; } };
 
 function AddPage({ categories: cats, incomeSources: isrc, onAddExpense: oE, onAddIncome: oI, onAddTransfer: oT, onAddRec: oR }) {
-  const [type, sType] = useState("expense"), [amt, sAmt] = useState("0"), [catId, sCat] = useState(cats[0]?.id || ""), [srcId, sSrc] = useState(isrc[0]?.id || ""), [wid, sW] = useState("upi_lite"), [iwid, sIW] = useState("bank"), [tFrom, sTF] = useState("bank"), [tTo, sTT] = useState("upi_lite"), [date, sDate] = useState(localDateKey()), [note, sNote] = useState("");
+  const [type, sType] = useState("expense"), [amt, sAmt] = useState("0"), [catId, sCat] = useState(cats[0]?.id || ""), [srcId, sSrc] = useState(isrc[0]?.id || ""), [wid, sW] = useState("bank"), [iwid, sIW] = useState("bank"), [tFrom, sTF] = useState("bank"), [tTo, sTT] = useState("upi_lite"), [date, sDate] = useState(localDateKey()), [note, sNote] = useState("");
   const [rName, sRN] = useState(""), [rAmt, sRA] = useState(""), [rCat, sRC] = useState("rent"), [rWal, sRW] = useState("bank"), [rFreq, sRF] = useState("monthly"), [rDay, sRD] = useState(1), [rInt, sRI] = useState(30), [rStart, sRS] = useState(localDateKey()), [rOther, sRO] = useState(""), [rYM, sRYM] = useState(1), [rYD, sRYD] = useState(1);
   const [fxCur, setFxCur] = useState("INR"), [fxRate, setFxRate] = useState(null), [fxFetching, setFxFetching] = useState(false);
   const [fxExpanded, setFxExpanded] = useState(false), [fxSearch, setFxSearch] = useState("");
@@ -338,9 +338,9 @@ function EvIcon({ id, size = 18 }) { const ic = EI.find(i => i.id === id); if (!
 
 function Events({ events: evs, expenses: ex, splits: sp, settlements: stl, categories: cats, onCreate: oC, onAddExp: oE, onAddSplit: oS, onSettleSplit: oSS, onDeleteSplit: oDS, onMarkDone: oMD }) {
   const [view, sV] = useState("list"), [selId, sSel] = useState(null), [nn, sNN] = useState(""), [ne, sNE] = useState("film");
-  const [ea, sEA] = useState(""), [ec, sEC] = useState(cats[0]?.id || ""), [ew, sEW] = useState("upi_lite"), [en, sEN] = useState("");
+  const [ea, sEA] = useState(""), [ec, sEC] = useState(cats[0]?.id || ""), [ew, sEW] = useState("bank"), [en, sEN] = useState("");
   const [sn, sSN] = useState(""), [sa, sSA] = useState(""), [sd, sSD] = useState("owed"), [stgt, sSTgt] = useState(null);
-  const [bsOpen, sBsO] = useState(false), [bsMode, sBsM] = useState("equal"), [bsTotal, sBsT] = useState(""), [bsPpl, sBsP] = useState([{ name: "", amount: "" }]), [bsCat, sBsC] = useState(cats[0]?.id || ""), [bsW, sBsW] = useState("upi_lite"), [bsNote, sBsN] = useState(""), [bsStep, sBsS] = useState(1);
+  const [bsOpen, sBsO] = useState(false), [bsMode, sBsM] = useState("equal"), [bsTotal, sBsT] = useState(""), [bsPpl, sBsP] = useState([{ name: "", amount: "" }]), [bsCat, sBsC] = useState(cats[0]?.id || ""), [bsW, sBsW] = useState("bank"), [bsNote, sBsN] = useState(""), [bsStep, sBsS] = useState(1);
   const sel = evs.find(e => e.id === selId);
   const create = () => { if (!nn.trim()) return; oC({ id: uid(), name: nn.trim(), emoji: ne, date: localDateKey(), status: "active" }); sNN(""); sNE("film"); sV("list") };
   const addExp = () => { const a = parseFloat(ea); if (!a || a <= 0 || !sel) return; const ok = oE({ amount: a, categoryId: ec, walletId: ew, note: en, date: localDateKey(), eventId: sel.id }); if (ok !== false) { sEA(""); sEN("") } };
