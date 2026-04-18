@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { ComposedChart, Bar, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import RoutineApp from "./Routine";
 import { flushSyncQueue, getPendingSyncCount, sendSupabaseRequest, subscribePendingSync } from "./offlineSync";
 import { checkBillReminders } from "./billReminders";
@@ -197,41 +198,74 @@ function LionM({ balance: bal, dancing }) {
 
 function Chart({ expenses: ex, incomes: inc, settlements: stl, months: ms, period = "month" }) {
   const sumAmt = arr => arr.reduce((s, x) => s + x.amount, 0);
-  const netExp = (dateFilter) => Math.max(0, sumAmt(ex.filter(dateFilter)) + sumAmt(stl.filter(x => dateFilter(x) && x.direction === "owe")) - sumAmt(stl.filter(x => dateFilter(x) && x.direction === "owed")));
-  let points = [], labels = [];
+  const netExp = (f) => Math.max(0, sumAmt(ex.filter(f)) + sumAmt(stl.filter(x => f(x) && x.direction === "owe")) - sumAmt(stl.filter(x => f(x) && x.direction === "owed")));
+  let rawPts = [], labels = [];
   if (period === "day") {
     const today = new Date();
     const days = Array.from({ length: 14 }, (_, i) => { const d = new Date(today); d.setDate(d.getDate() - (13 - i)); return localDateKey(d); });
-    labels = days.map(d => { const dt = new Date(d + "T00:00:00"); return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }); });
-    points = days.map(day => ({ i: sumAmt(inc.filter(x => x.date === day)), e: netExp(x => x.date === day) }));
+    labels = days.map(d => new Date(d + "T00:00:00").getDate().toString());
+    rawPts = days.map(day => ({ i: sumAmt(inc.filter(x => x.date === day)), e: netExp(x => x.date === day) }));
   } else if (period === "week") {
     const today = new Date(), dow = today.getDay();
     const cwStart = new Date(today); cwStart.setDate(today.getDate() - dow);
     const wStarts = Array.from({ length: 8 }, (_, i) => { const d = new Date(cwStart); d.setDate(cwStart.getDate() - (7 - i) * 7); return localDateKey(d); });
-    labels = wStarts.map(ws => { const d = new Date(ws + "T00:00:00"); return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); });
-    points = wStarts.map(ws => { const we = new Date(ws + "T00:00:00"); we.setDate(we.getDate() + 6); const weStr = localDateKey(we); return { i: sumAmt(inc.filter(x => x.date >= ws && x.date <= weStr)), e: netExp(x => x.date >= ws && x.date <= weStr) }; });
+    labels = wStarts.map(ws => new Date(ws + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+    rawPts = wStarts.map(ws => { const we = new Date(ws + "T00:00:00"); we.setDate(we.getDate() + 6); const weStr = localDateKey(we); return { i: sumAmt(inc.filter(x => x.date >= ws && x.date <= weStr)), e: netExp(x => x.date >= ws && x.date <= weStr) }; });
   } else if (period === "month") {
     if (ms.length < 1) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>Add transactions to see trends</p>;
     labels = ms.map(m => ml(m));
-    points = ms.map(m => ({ i: sumAmt(inc.filter(x => mk(x.date) === m)), e: netExp(x => mk(x.date) === m) }));
+    rawPts = ms.map(m => ({ i: sumAmt(inc.filter(x => mk(x.date) === m)), e: netExp(x => mk(x.date) === m) }));
   } else if (period === "year") {
     const yrs = [...new Set([...ex, ...inc, ...stl].map(x => x.date?.slice(0, 4)).filter(Boolean))].sort();
     if (yrs.length < 1) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>Add transactions to see trends</p>;
     labels = yrs;
-    points = yrs.map(yr => ({ i: sumAmt(inc.filter(x => x.date?.startsWith(yr))), e: netExp(x => x.date?.startsWith(yr)) }));
+    rawPts = yrs.map(yr => ({ i: sumAmt(inc.filter(x => x.date?.startsWith(yr))), e: netExp(x => x.date?.startsWith(yr)) }));
   }
-  if (!points.length || points.every(p => p.i === 0 && p.e === 0)) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>No data for this period</p>;
-  const mx = Math.max(...points.flatMap(d => [d.i, d.e]), 1), w = 320, h = 150, px = 48, py = 16, gw = w - px * 2, gh = h - py * 2;
-  const tX = i => px + (points.length === 1 ? gw / 2 : (i / (points.length - 1)) * gw), tY = v => py + gh - (v / mx) * gh, mp = k => points.map((d, i) => `${i === 0 ? "M" : "L"}${tX(i)},${tY(d[k])}`).join(" ");
-  const legendY = h + 40;
-  return <svg viewBox={`0 0 ${w} ${h + 52}`} width="100%" style={{ display: "block" }}>{[0, 0.5, 1].map((f, i) => <g key={i}><line x1={px} x2={w - px} y1={tY(mx * f)} y2={tY(mx * f)} stroke="var(--border)" strokeDasharray="3 3" /><text x={2} y={tY(mx * f) + 4} fill="var(--muted)" fontSize={9} fontFamily="var(--font-h)">{fmt(Math.round(mx * f))}</text></g>)}
-    <path d={`${mp("i")} L${tX(points.length - 1)},${h - py} L${tX(0)},${h - py} Z`} fill="#6BAA75" opacity="0.08" />
-    <path d={`${mp("e")} L${tX(points.length - 1)},${h - py} L${tX(0)},${h - py} Z`} fill="#E07A5F" opacity="0.08" />
-    <path d={mp("i")} fill="none" stroke="#6BAA75" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-    <path d={mp("e")} fill="none" stroke="#E07A5F" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-    {points.map((d, i) => <g key={i}><circle cx={tX(i)} cy={tY(d.i)} r={4} fill="var(--card)" stroke="#6BAA75" strokeWidth={2} /><circle cx={tX(i)} cy={tY(d.e)} r={4} fill="var(--card)" stroke="#E07A5F" strokeWidth={2} /><text x={tX(i)} y={h + 22} textAnchor="middle" fill="var(--muted)" fontSize={9} fontFamily="var(--font-h)">{labels[i]}</text></g>)}
-    <g transform={`translate(${w / 2 - 52},${legendY})`}><circle cx={0} cy={5} r={4} fill="#6BAA75" /><text x={10} y={9} fill="var(--muted)" fontSize={10} fontFamily="var(--font-h)">Income</text><circle cx={72} cy={5} r={4} fill="#E07A5F" /><text x={82} y={9} fill="var(--muted)" fontSize={10} fontFamily="var(--font-h)">Spent</text></g>
-  </svg>
+  if (!rawPts.length || rawPts.every(p => p.i === 0 && p.e === 0)) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>No data for this period</p>;
+
+  const data = rawPts.map((p, idx) => ({ label: labels[idx], income: p.i, spent: p.e, net: Math.max(0, p.i - p.e), hasData: p.i > 0 || p.e > 0 }));
+
+  if (period === "day") {
+    data.forEach((d, i) => { d.rollingAvg = i >= 6 ? data.slice(i - 6, i + 1).reduce((s, x) => s + x.spent, 0) / 7 : undefined; });
+  }
+
+  const allVals = data.flatMap(d => [d.income, d.spent]).filter(v => v > 0);
+  const sorted = [...allVals].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)] || 1;
+  const maxVal = Math.max(...allVals, 1);
+  const useLog = maxVal > 5 * median && allVals.length > 3;
+
+  const fmtY = v => { if (!v || v < 1) return ""; if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`; if (v >= 1000) return `₹${(v / 1000).toFixed(0)}k`; return `₹${Math.round(v)}`; };
+
+  const IncomeDot = ({ cx, cy, payload }) => payload.hasData
+    ? <circle cx={cx} cy={cy} r={4} fill="var(--card)" stroke="#6BAA75" strokeWidth={2} />
+    : <circle cx={cx} cy={cy} r={3} fill="var(--muted)" opacity={0.28} />;
+
+  const xInterval = period === "day" ? 2 : period === "week" ? 1 : 0;
+
+  return (
+    <ResponsiveContainer width="100%" height={210}>
+      <ComposedChart data={data} margin={{ top: 10, right: 4, bottom: 20, left: 0 }}>
+        <defs>
+          <linearGradient id="netGreen" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#6BAA75" stopOpacity={0.22} />
+            <stop offset="95%" stopColor="#6BAA75" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <XAxis dataKey="label" tick={{ fontSize: 9, fontFamily: "var(--font-h)", fill: "var(--muted)" }} tickLine={false} axisLine={false} interval={xInterval} />
+        <YAxis scale={useLog ? "log" : "auto"} domain={useLog ? [1, "auto"] : [0, "auto"]} tickFormatter={fmtY} tick={{ fontSize: 9, fontFamily: "var(--font-h)", fill: "var(--muted)" }} tickLine={false} axisLine={false} width={44} allowDataOverflow={useLog} />
+        <Tooltip content={({ active, payload, label }) => {
+          if (!active || !payload?.length) return null;
+          const ip = payload.find(p => p.dataKey === "income"), sp = payload.find(p => p.dataKey === "spent");
+          return <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontFamily: "var(--font-h)", fontSize: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.1)" }}><div style={{ fontWeight: 700, marginBottom: 4, color: "var(--ts)", fontSize: 11 }}>{label}</div>{ip && <div style={{ color: "#6BAA75", fontWeight: 600 }}>Income: {fmt(ip.value || 0)}</div>}{sp && <div style={{ color: "#E07A5F", fontWeight: 600 }}>Spent: {fmt(sp.value || 0)}</div>}</div>;
+        }} />
+        <Area dataKey="net" fill="url(#netGreen)" stroke="none" />
+        <Bar dataKey="spent" fill="#E07A5F" fillOpacity={0.82} radius={[4, 4, 0, 0]} maxBarSize={18} />
+        <Line dataKey="income" stroke="#6BAA75" strokeWidth={2.5} dot={<IncomeDot />} activeDot={{ r: 5, fill: "#6BAA75" }} />
+        {period === "day" && data.some(d => d.rollingAvg !== undefined) && <Line dataKey="rollingAvg" stroke="#7B8CDE" strokeWidth={1.5} strokeDasharray="4 3" dot={false} activeDot={false} />}
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
 }
 
 function Heatmap({ expenses: ex }) {
@@ -278,6 +312,7 @@ function Splits({ splits: sp, onAdd, onSettle: os, onDelete: od, expanded: exp, 
 }
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "JPY", "AUD", "CAD", "CHF", "CNY", "HKD", "NZD", "MYR", "THB", "PHP", "IDR", "KRW", "TWD", "SAR", "KWD", "QAR", "BHD", "OMR", "EGP", "ZAR", "NGN", "SEK", "NOK", "DKK", "PLN", "TRY", "RUB", "PKR", "BDT", "LKR", "NPR", "MXN", "BRL", "ARS"];
+const CURRENCY_COUNTRIES = { INR:"India", USD:"United States", EUR:"Eurozone", GBP:"United Kingdom", AED:"UAE", SGD:"Singapore", JPY:"Japan", AUD:"Australia", CAD:"Canada", CHF:"Switzerland", CNY:"China", HKD:"Hong Kong", NZD:"New Zealand", MYR:"Malaysia", THB:"Thailand", PHP:"Philippines", IDR:"Indonesia", KRW:"South Korea", TWD:"Taiwan", SAR:"Saudi Arabia", KWD:"Kuwait", QAR:"Qatar", BHD:"Bahrain", OMR:"Oman", EGP:"Egypt", ZAR:"South Africa", NGN:"Nigeria", SEK:"Sweden", NOK:"Norway", DKK:"Denmark", PLN:"Poland", TRY:"Turkey", RUB:"Russia", PKR:"Pakistan", BDT:"Bangladesh", LKR:"Sri Lanka", NPR:"Nepal", MXN:"Mexico", BRL:"Brazil", ARS:"Argentina" };
 const getCurrencyFlag = c => { if (c === "EUR") return "🇪🇺"; try { return String.fromCodePoint(...[...c.slice(0, 2).toUpperCase()].map(x => 127397 + x.charCodeAt(0))); } catch { return "🏳"; } };
 
 function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, onAddExpense: oE, onAddIncome: oI, onAddTransfer: oT, onAddRec: oR }) {
@@ -287,6 +322,9 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
   const [fxExpanded, setFxExpanded] = useState(false), [fxSearch, setFxSearch] = useState("");
   const receiptUrlRef = useRef(null);
   const [submitKey, setSubmitKey] = useState(0);
+  const flagBlobsRef = useRef({});
+  const [flagSrcs, setFlagSrcs] = useState({});
+  useEffect(() => { CURRENCIES.forEach(async c => { if (flagBlobsRef.current[c]) return; try { const r = await fetch(`https://flagcdn.com/32x24/${c.slice(0,2).toLowerCase()}.png`); const blob = await r.blob(); const url = URL.createObjectURL(blob); flagBlobsRef.current[c] = url; setFlagSrcs(p => ({ ...p, [c]: url })); } catch {} }); }, []);
   useEffect(() => { const c = fxCur.trim().toUpperCase(); if (c.length !== 3 || c === "INR") { setFxRate(null); return; } setFxFetching(true); getINRRate(c).then(r => { setFxRate(r); setFxFetching(false); }).catch(() => { setFxRate(null); setFxFetching(false); }); }, [fxCur]);
   const ts = useRef(null), tc = type === "expense" ? "#E07A5F" : type === "income" ? "#6BAA75" : type === "transfer" ? "#7B8CDE" : "#A78BFA";
   const submit = () => { const a = parseFloat(amt); if (!a || a <= 0) return; const isFX = fxCur.trim().toUpperCase() !== "INR" && fxRate > 0; const inrAmt = isFX ? roundMoney(a * fxRate) : a; const rUrl = receiptUrlRef.current; if (type === "expense") { const txId = uid(); if (isFX) saveCurrencyMeta(txId, fxCur, a, fxRate); oE({ id: txId, amount: inrAmt, categoryId: catId, date, note, walletId: wid, ...(rUrl ? { receipt_url: rUrl } : {}) }); } else if (type === "income") { const txId = uid(); if (isFX) saveCurrencyMeta(txId, fxCur, a, fxRate); oI({ id: txId, amount: inrAmt, sourceId: srcId, date, note, walletId: iwid, ...(rUrl ? { receipt_url: rUrl } : {}) }); } else if (type === "transfer") { if (tFrom === tTo) return; oT({ amount: a, fromWallet: tFrom, toWallet: tTo, date, note }) } receiptUrlRef.current = null; setSubmitKey(k => k + 1); sAmt("0"); sNote(""); };
@@ -298,14 +336,14 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
       {/* Merged amount + currency box */}
       <div style={{ position: "relative", display: "flex", alignItems: "center", background: "var(--card)", border: `1.5px solid ${tc}`, borderRadius: 10, overflow: "hidden" }}>
         {/* ₹ prefix — always shows INR symbol regardless of selected currency */}
-        <span style={{ paddingLeft: 16, fontSize: 26, fontWeight: 400, color: "var(--muted)", opacity: 0.45, flexShrink: 0, lineHeight: 1, userSelect: "none" }}>₹</span>
+        {type !== "transfer" && <img src={flagSrcs[fxCur] || `https://flagcdn.com/32x24/${fxCur.slice(0,2).toLowerCase()}.png`} alt={fxCur} style={{ marginLeft: 16, height: 22, flexShrink: 0, userSelect: "none", objectFit: "contain", borderRadius: 2 }} />}
         <input type="number" value={amt === "0" ? "" : amt} onChange={e => sAmt(e.target.value || "0")} placeholder="0" autoFocus style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 32, fontWeight: 600, fontFamily: "var(--font-h)", textAlign: "center", padding: "18px 8px", color: tc, minWidth: 0 }} />
         {/* Currency badge — tappable, opens the picker */}
         {type !== "transfer" && !fxExpanded && <button onClick={() => setFxExpanded(true)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", margin: "0 8px", borderRadius: 20, border: `1.5px solid ${fxCur !== "INR" ? tc : "var(--border)"}`, background: fxCur !== "INR" ? tc + "14" : "var(--bg)", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 12, color: fxCur !== "INR" ? tc : "var(--muted)", letterSpacing: 0.5, flexShrink: 0, whiteSpace: "nowrap" }}><span style={{ fontSize: 13, lineHeight: 1 }}>{getCurrencyFlag(fxCur)}</span>{fxCur}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}><polyline points="9 18 15 12 9 6" /></svg></button>}
         {type !== "transfer" && fxExpanded && <button onClick={() => { setFxExpanded(false); setFxSearch(""); }} style={{ display: "inline-flex", alignItems: "center", padding: "7px 10px", margin: "0 8px", borderRadius: 20, border: "1.5px solid var(--border)", background: "var(--bg)", cursor: "pointer", fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", flexShrink: 0 }}>✕</button>}
       </div>
       {/* Currency picker — expands below the amount box when badge is tapped */}
-      {type !== "transfer" && fxExpanded && <div style={{ marginTop: 10 }}><div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}><input value={fxSearch} onChange={e => setFxSearch(e.target.value.toUpperCase())} placeholder="Search (e.g. USD)…" autoFocus maxLength={3} style={{ ...is, flex: 1, marginBottom: 0, padding: "8px 12px", fontSize: 13 }} /></div><div style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", paddingBottom: 6 }}>{(fxSearch.trim() ? CURRENCIES.filter(c => c.startsWith(fxSearch.trim())) : CURRENCIES).map(c => <button key={c} onClick={() => { setFxCur(c); setFxExpanded(false); setFxSearch(""); }} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 20, border: `1.5px solid ${fxCur === c ? tc : "var(--border)"}`, background: fxCur === c ? tc + "18" : "var(--card)", color: fxCur === c ? tc : "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: fxCur === c ? 700 : 500, whiteSpace: "nowrap", cursor: "pointer", flexShrink: 0 }}><span style={{ fontSize: 13, lineHeight: 1 }}>{getCurrencyFlag(c)}</span>{c}</button>)}</div>{fxFetching && <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-h)", marginTop: 6 }}>Fetching rate…</div>}{!fxFetching && fxRate && fxCur !== "INR" && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>{parseFloat(amt) > 0 && <span style={{ fontSize: 15, color: tc, fontFamily: "var(--font-h)", fontWeight: 700 }}>≈ {fmt(roundMoney(parseFloat(amt) * fxRate))}</span>}<span style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 500, letterSpacing: "0.3px" }}>1 {fxCur} = ₹{fxRate.toFixed(2)}</span></div>}</div>}
+      {type !== "transfer" && fxExpanded && <div style={{ marginTop: 10 }}><div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}><input value={fxSearch} onChange={e => setFxSearch(e.target.value)} placeholder="Search currency or country…" autoFocus style={{ ...is, flex: 1, marginBottom: 0, padding: "8px 12px", fontSize: 13 }} /></div><div style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", paddingBottom: 6 }}>{(fxSearch.trim() ? CURRENCIES.filter(c => { const q = fxSearch.trim().toLowerCase(); return c.toLowerCase().includes(q) || (CURRENCY_COUNTRIES[c]||"").toLowerCase().includes(q); }) : CURRENCIES).map(c => <button key={c} onClick={() => { setFxCur(c); setFxExpanded(false); setFxSearch(""); }} style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "7px 12px", borderRadius: 12, border: `1.5px solid ${fxCur === c ? tc : "var(--border)"}`, background: fxCur === c ? tc + "18" : "var(--card)", color: fxCur === c ? tc : "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: fxCur === c ? 700 : 500, whiteSpace: "nowrap", cursor: "pointer", flexShrink: 0 }}><span style={{ fontSize: 13, lineHeight: 1 }}>{getCurrencyFlag(c)}</span>{c}{CURRENCY_COUNTRIES[c] && <span style={{ fontSize: 9, opacity: 0.65, fontWeight: 400, maxWidth: 60, overflow: "hidden", textOverflow: "ellipsis" }}>{CURRENCY_COUNTRIES[c]}</span>}</button>)}</div>{fxFetching && <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-h)", marginTop: 6 }}>Fetching rate…</div>}{!fxFetching && fxRate && fxCur !== "INR" && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>{parseFloat(amt) > 0 && <span style={{ fontSize: 15, color: tc, fontFamily: "var(--font-h)", fontWeight: 700 }}>≈ {fmt(roundMoney(parseFloat(amt) * fxRate))}</span>}<span style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 500, letterSpacing: "0.3px" }}>1 {fxCur} = ₹{fxRate.toFixed(2)}</span></div>}</div>}
       {/* Collapsed rate hint — shown below box when a foreign currency is selected */}
       {type !== "transfer" && !fxExpanded && fxCur !== "INR" && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, paddingLeft: 2 }}>{fxFetching && <span style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-h)" }}>Fetching rate…</span>}{!fxFetching && fxRate && <><span style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 500, letterSpacing: "0.3px" }}>1 {fxCur} = ₹{fxRate.toFixed(2)}</span>{parseFloat(amt) > 0 && <span style={{ fontSize: 14, fontFamily: "var(--font-h)", fontWeight: 700, color: tc }}>≈ {fmt(roundMoney(parseFloat(amt) * fxRate))}</span>}</>}</div>}
     </div>
