@@ -513,12 +513,15 @@ export default function Nomad() {
         const row = d[0];
         if (!row?.last_sent_at) return;
         const seen = localStorage.getItem("nomad-last-seen-sent");
+        if (!seen) {
+          // First open on this device — record baseline silently, no toast
+          localStorage.setItem("nomad-last-seen-sent", row.last_sent_at);
+          return;
+        }
         if (seen === row.last_sent_at) return;
         const age = Date.now() - new Date(row.last_sent_at).getTime();
-        if (age < 86400000) {
-          showT(`Report emailed to ${row.email}`, "success");
-          localStorage.setItem("nomad-last-seen-sent", row.last_sent_at);
-        }
+        if (age < 86400000) showT(`Report emailed to ${row.email}`, "success");
+        localStorage.setItem("nomad-last-seen-sent", row.last_sent_at);
       }).catch(() => {});
   }, [loaded]);
 

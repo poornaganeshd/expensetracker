@@ -1,218 +1,62 @@
 import { useState } from "react";
 import { getCredentials, saveCredentials } from "./credentials";
 
-/* ─────────────────────────────────────────────
-   STYLES
-───────────────────────────────────────────── */
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,opsz,wght@0,8..18,400;0,8..18,500;0,8..18,600;0,8..18,700;0,8..18,800;1,8..18,400&display=swap');
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  /* ── Page ── */
   .ns-root {
     min-height: 100vh;
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    background: #EAE3D0;
+    background: #F4F0EA;
     font-family: 'Plus Jakarta Sans', sans-serif;
     padding: 48px 20px 80px;
-    position: relative;
-    overflow: hidden;
   }
 
-  /* ── Film grain overlay ── */
-  .ns-root::before {
-    content: '';
-    position: fixed; inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-    background-size: 160px;
-    pointer-events: none; z-index: 0; opacity: 0.55;
-  }
+  .ns-col { width: 100%; max-width: 420px; }
 
-  /* ── Warm lightbox center-glow ── */
-  .ns-root::after {
-    content: '';
-    position: fixed;
-    top: 30%; left: 50%; transform: translate(-50%, -50%);
-    width: 600px; height: 500px;
-    background: radial-gradient(ellipse, rgba(255,240,200,0.28) 0%, transparent 70%);
-    pointer-events: none; z-index: 0;
-  }
-
-  .ns-col { width: 100%; max-width: 440px; position: relative; z-index: 2; }
-
-  /* ─────────────────────────────────────────
-     DECORATIVE SLIDE FRAMES (background)
-  ───────────────────────────────────────── */
-  .ns-slide {
-    position: fixed;
-    font-family: 'IBM Plex Mono', monospace;
-    pointer-events: none; z-index: 1;
-    user-select: none;
-  }
-
-  .ns-slide-mount {
-    background: #E2D9C4;
-    border-radius: 10px;
-    padding: 30px 13px 40px;
-    box-shadow:
-      0 2px 8px rgba(0,0,0,0.18),
-      0 8px 28px rgba(0,0,0,0.12),
-      inset 0 1px 0 rgba(255,255,255,0.5);
-    position: relative;
-  }
-
-  /* top label sticker — sits centered in the top perf strip */
-  .ns-slide-tag {
-    position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
-    background: #fff; border-radius: 3px;
-    padding: 1px 9px; z-index: 2;
-    font-size: 9.5px; font-weight: 600; letter-spacing: 1.5px;
-    color: #2A2018; white-space: nowrap;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.14);
-  }
-  .ns-slide-letter {
-    position: absolute; top: 4px; right: 10px; z-index: 2;
-    font-size: 11px; font-weight: 500; color: #6A5E48;
-  }
-  /* film aperture (dark rectangle) */
-  .ns-slide-film {
-    width: 100%;
-    border-radius: 3px;
-    border: 2.5px solid #2A2318;
-    overflow: hidden; position: relative;
-  }
-
-  /* perforations strip on top/bottom of mount */
-  .ns-perf-row {
-    position: absolute; left: 0; right: 0;
-    display: flex; justify-content: space-around; align-items: center;
-    height: 20px;
-    background: #D5CCBA;
-  }
-  .ns-perf-row.top { top: 0; border-radius: 10px 10px 0 0; }
-  .ns-perf-row.bot { bottom: 0; border-radius: 0 0 10px 10px; }
-  .ns-perf {
-    width: 6px; height: 10px;
-    border-radius: 2px;
-    background: #EAE3D0;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.18);
-  }
-
-  /* bottom text (title + meta) — sits in the padding gap below film, above bottom perf */
-  .ns-slide-title {
-    position: absolute; bottom: 22px; left: 12px;
-    font-size: 8.5px; font-weight: 700; letter-spacing: 1.2px;
-    color: #3A3028; text-transform: uppercase; line-height: 1.6;
-    pointer-events: none;
-  }
-  .ns-slide-meta { font-weight: 400; font-size: 7.5px; color: #6A5E48; }
-  .ns-slide-num { position: absolute; bottom: 22px; right: 11px; font-size: 10px; color: #7A6E56; }
-
-  /* slide left (large, tilted) */
-  .ns-slide-l {
-    left: -90px; top: 15vh;
-    transform: rotate(-14deg);
-    opacity: 0.82;
-    width: 220px;
-  }
-  .ns-slide-l .ns-slide-film { height: 130px; }
-
-  /* slide right (medium, tilted other way) */
-  .ns-slide-r {
-    right: -80px; top: 22vh;
-    transform: rotate(11deg);
-    opacity: 0.78;
-    width: 200px;
-  }
-  .ns-slide-r .ns-slide-film { height: 118px; }
-
-  /* slide bottom-left (small, steep tilt) */
-  .ns-slide-bl {
-    left: -60px; bottom: 8vh;
-    transform: rotate(-22deg);
-    opacity: 0.55;
-    width: 175px;
-  }
-  .ns-slide-bl .ns-slide-film { height: 100px; }
-
-  /* ─────────────────────────────────────────
-     HEADER
-  ───────────────────────────────────────── */
-  .ns-head { text-align: center; margin-bottom: 30px; }
-
-  /* slide-style ID label above NOMAD */
-  .ns-head-label {
-    display: inline-block;
-    background: #fff;
-    border-radius: 5px;
-    padding: 3px 14px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px; font-weight: 600; letter-spacing: 2px;
-    color: #2A2018;
-    margin-bottom: 14px;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.04);
-  }
+  /* ── Header ── */
+  .ns-head { text-align: center; margin-bottom: 32px; }
 
   .ns-title {
-    font-size: 28px; font-weight: 800; letter-spacing: 7px;
-    color: #2A2018;
+    font-size: 23px; font-weight: 800; letter-spacing: 6px;
+    color: #2C1F0E; margin-bottom: 8px;
     text-transform: uppercase;
-    margin-bottom: 6px;
   }
-
   .ns-subtitle {
-    font-size: 12px; color: #7A6E56; line-height: 1.7; font-weight: 400;
-    letter-spacing: 0.1px;
-  }
-  .ns-subtitle-meta {
-    display: inline-block; margin-top: 5px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px; color: #A0947C; letter-spacing: 1px;
+    font-size: 13px; color: #8C7B62; line-height: 1.7; font-weight: 400;
   }
 
-  /* ─────────────────────────────────────────
-     CARDS  (kept from previous design)
-  ───────────────────────────────────────── */
+  /* ── Cards ── */
   .ns-card {
-    background: rgba(255, 252, 245, 0.80);
-    backdrop-filter: blur(18px) saturate(1.6);
-    -webkit-backdrop-filter: blur(18px) saturate(1.6);
-    border: 1.5px solid rgba(255,255,255,0.95);
-    border-radius: 20px;
+    background: #FFFFFF;
+    border: 1.5px solid rgba(0,0,0,0.07);
+    border-radius: 18px;
     padding: 22px 22px 24px;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
     position: relative;
     overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
     transition: box-shadow 0.2s;
-  }
-  .ns-card-sb {
-    box-shadow: 0 4px 24px rgba(52,211,153,0.10), 0 1px 6px rgba(0,0,0,0.05);
-  }
-  .ns-card-sb:hover {
-    box-shadow: 0 6px 32px rgba(52,211,153,0.18), 0 2px 8px rgba(0,0,0,0.06);
   }
   .ns-card-sb::before {
     content: '';
     position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
-    background: linear-gradient(180deg, #34D399, #059669);
-    border-radius: 20px 0 0 20px;
+    background: linear-gradient(180deg, #5AAB87, #2E8B5A);
+    border-radius: 18px 0 0 18px;
   }
-  .ns-card-cl {
-    box-shadow: 0 4px 24px rgba(167,139,250,0.12), 0 1px 6px rgba(0,0,0,0.05);
-  }
-  .ns-card-cl:hover {
-    box-shadow: 0 6px 32px rgba(167,139,250,0.22), 0 2px 8px rgba(0,0,0,0.06);
-  }
+  .ns-card-sb:hover { box-shadow: 0 4px 20px rgba(46,139,90,0.12); }
+
   .ns-card-cl::before {
     content: '';
     position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
-    background: linear-gradient(180deg, #A78BFA, #7C3AED);
-    border-radius: 20px 0 0 20px;
+    background: linear-gradient(180deg, #B8845A, #8B5E3C);
+    border-radius: 18px 0 0 18px;
   }
+  .ns-card-cl:hover { box-shadow: 0 4px 20px rgba(139,94,60,0.12); }
 
   .ns-card-head {
     display: flex; align-items: center; gap: 10px;
@@ -224,15 +68,15 @@ const STYLES = `
     flex-shrink: 0;
   }
   .ns-card-sb .ns-card-icon-wrap {
-    background: linear-gradient(135deg, #D1FAE5, #A7F3D0);
-    box-shadow: 0 2px 10px rgba(52,211,153,0.25);
+    background: #E8F5EE;
+    box-shadow: 0 1px 6px rgba(46,139,90,0.15);
   }
   .ns-card-cl .ns-card-icon-wrap {
-    background: linear-gradient(135deg, #EDE9FE, #DDD6FE);
-    box-shadow: 0 2px 10px rgba(167,139,250,0.25);
+    background: #F5EDE4;
+    box-shadow: 0 1px 6px rgba(139,94,60,0.15);
   }
   .ns-card-name {
-    font-size: 14px; font-weight: 700; color: #1A1033;
+    font-size: 14px; font-weight: 700; color: #1E1209;
     letter-spacing: 0.2px; flex: 1;
   }
 
@@ -242,14 +86,12 @@ const STYLES = `
     text-transform: uppercase; flex-shrink: 0;
   }
   .ns-badge-req {
-    background: linear-gradient(120deg, #FEE2E2, #FCE7F3);
-    color: #BE185D;
-    box-shadow: 0 1px 6px rgba(244,114,182,0.2);
+    background: #FDEEE4;
+    color: #9B4E1A;
   }
   .ns-badge-opt {
-    background: linear-gradient(120deg, #EDE9FE, #E0E7FF);
-    color: #6D28D9;
-    box-shadow: 0 1px 6px rgba(167,139,250,0.18);
+    background: #EEF0E6;
+    color: #6B7340;
   }
 
   /* ── Fields ── */
@@ -258,143 +100,129 @@ const STYLES = `
 
   .ns-label {
     display: block; font-size: 12px; font-weight: 600;
-    color: #4B3F6B; margin-bottom: 6px;
+    color: #4A3728; margin-bottom: 6px;
   }
   .ns-hint {
-    font-size: 11px; color: #A79EC0; font-weight: 400;
-    font-style: italic; margin-bottom: 16px; line-height: 1.55;
-    display: block;
+    font-size: 11px; color: #A8967E; font-style: italic;
+    margin-bottom: 16px; line-height: 1.55; display: block;
   }
 
   .ns-input {
     width: 100%; padding: 11px 14px;
-    border-radius: 11px;
-    border: 1.5px solid rgba(180,160,220,0.25);
-    background: rgba(255,255,255,0.65);
-    color: #1A1033;
+    border-radius: 10px;
+    border: 1.5px solid #E0D8CE;
+    background: #FAF7F4;
+    color: #1E1209;
     font-size: 13px; font-family: 'Plus Jakarta Sans', sans-serif;
     outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
     -webkit-appearance: none;
   }
-  .ns-input::placeholder { color: #C4B8D8; }
+  .ns-input::placeholder { color: #C5B8A8; }
 
   .ns-card-sb .ns-input:focus {
-    border-color: rgba(52,211,153,0.5);
-    background: rgba(240,255,249,0.9);
-    box-shadow: 0 0 0 3px rgba(52,211,153,0.12), inset 3px 0 0 #34D399;
+    border-color: #5AAB87;
+    box-shadow: 0 0 0 3px rgba(90,171,135,0.12), inset 3px 0 0 #5AAB87;
+    background: #F5FBF8;
   }
   .ns-card-cl .ns-input:focus {
-    border-color: rgba(167,139,250,0.5);
-    background: rgba(246,243,255,0.9);
-    box-shadow: 0 0 0 3px rgba(167,139,250,0.14), inset 3px 0 0 #A78BFA;
+    border-color: #B8845A;
+    box-shadow: 0 0 0 3px rgba(184,132,90,0.12), inset 3px 0 0 #B8845A;
+    background: #FBF7F3;
   }
 
   /* ── Error ── */
   .ns-error {
-    font-size: 12px; font-weight: 600;
-    color: #BE185D;
-    padding: 10px 14px;
-    background: linear-gradient(120deg, rgba(254,226,226,0.85), rgba(252,231,243,0.85));
-    border-radius: 10px;
-    border: 1px solid rgba(244,114,182,0.2);
-    text-align: center;
-    margin: 4px 0 8px;
-    backdrop-filter: blur(6px);
+    font-size: 12px; font-weight: 600; color: #9B4E1A;
+    padding: 10px 14px; background: #FDF0E8;
+    border: 1px solid #F0C8A8; border-radius: 10px;
+    text-align: center; margin: 4px 0 8px;
   }
 
   /* ── Footer ── */
   .ns-footer { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
 
   .ns-btn-primary {
-    width: 100%; padding: 15px;
-    border-radius: 14px; border: none;
-    background: linear-gradient(120deg, #A78BFA 0%, #F472B6 100%);
-    color: #fff;
+    width: 100%; padding: 14px;
+    border-radius: 12px; border: none;
+    background: #7C4A2A;
+    color: #FDF6EE;
     font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: 14px; font-weight: 700;
-    cursor: pointer; letter-spacing: 0.2px;
-    box-shadow: 0 4px 20px rgba(167,139,250,0.40), 0 2px 8px rgba(244,114,182,0.24);
-    transition: box-shadow 0.18s, transform 0.1s;
+    cursor: pointer; letter-spacing: 0.3px;
+    box-shadow: 0 2px 10px rgba(124,74,42,0.30);
+    transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
   }
   .ns-btn-primary:hover {
-    box-shadow: 0 6px 28px rgba(167,139,250,0.55), 0 3px 12px rgba(244,114,182,0.32);
+    background: #6A3D22;
+    box-shadow: 0 4px 16px rgba(124,74,42,0.38);
     transform: translateY(-1px);
   }
-  .ns-btn-primary:active { transform: scale(0.99) translateY(0); }
+  .ns-btn-primary:active { transform: scale(0.99); }
 
   .ns-btn-restore {
     width: 100%; padding: 13px;
-    border-radius: 14px;
-    border: 1.5px solid rgba(167,139,250,0.35);
-    background: rgba(255,255,255,0.55);
-    backdrop-filter: blur(8px);
-    color: #7C3AED;
+    border-radius: 12px;
+    border: 1.5px solid #C4A882;
+    background: transparent;
+    color: #7C5A38;
     font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: 13px; font-weight: 600;
-    cursor: pointer; text-align: center;
-    display: block;
-    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    cursor: pointer; text-align: center; display: block;
+    transition: background 0.15s, border-color 0.15s;
   }
   .ns-btn-restore:hover {
-    border-color: rgba(167,139,250,0.7);
-    background: rgba(237,233,254,0.6);
-    box-shadow: 0 2px 12px rgba(167,139,250,0.18);
+    background: #F5EDE2;
+    border-color: #A07040;
   }
 
   .ns-btn-cancel {
     width: 100%; padding: 12px;
-    border-radius: 14px;
-    border: 1.5px solid rgba(180,160,220,0.22);
+    border-radius: 12px;
+    border: 1.5px solid #DDD5C8;
     background: transparent;
-    color: #B0A0C8;
+    color: #B0A090;
     font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: 13px; font-weight: 500;
     cursor: pointer;
-    transition: color 0.15s;
+    transition: color 0.15s, border-color 0.15s;
   }
-  .ns-btn-cancel:hover { color: #7C3AED; border-color: rgba(167,139,250,0.35); }
+  .ns-btn-cancel:hover { color: #7C4A2A; border-color: #C4A882; }
 
   .ns-guide-link {
-    display: flex; align-items: center; justify-content: center; gap: 5px;
-    font-size: 12px; color: #B0A0C8; font-weight: 500;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    font-size: 12px; color: #B0A090; font-weight: 500;
     background: none; border: none; cursor: pointer;
-    width: 100%; padding: 4px;
+    width: 100%; padding: 6px;
     font-family: 'Plus Jakarta Sans', sans-serif;
     transition: color 0.15s;
   }
-  .ns-guide-link:hover { color: #A78BFA; }
+  .ns-guide-link:hover { color: #7C4A2A; }
 
+  /* ── Guide panel ── */
   .ns-guide {
-    margin-top: 4px;
-    background: rgba(255,255,255,0.62);
-    backdrop-filter: blur(12px);
-    border: 1.5px solid rgba(255,255,255,0.9);
-    border-radius: 14px;
+    background: #FBF7F2;
+    border: 1px solid #E8DDD0;
+    border-radius: 12px;
     padding: 16px 18px;
-    font-size: 12px; color: #5E4D7A; line-height: 1.95;
+    font-size: 12px; color: #5C4A36; line-height: 1.9;
   }
-  .ns-guide strong { color: #3B1F6E; font-weight: 700; }
-  .ns-guide em { color: #A78BFA; font-style: normal; font-weight: 600; }
+  .ns-guide strong { color: #2C1F0E; font-weight: 700; }
+  .ns-guide em { color: #8B5E3C; font-style: normal; font-weight: 600; }
+
+  /* ── Divider ── */
+  .ns-div {
+    height: 1px; background: #EDE6DC; margin: 4px 0;
+  }
 `;
 
-/* ── Slide film content colours ── */
-const FILM_SCENES = [
-  /* left slide — dark underwater tones */
-  `linear-gradient(160deg, #0D1B2A 0%, #1A2E3E 35%, #0A1520 55%, #1E2D1E 80%, #0D1B0D 100%)`,
-  /* right slide — warm forest/earth */
-  `linear-gradient(145deg, #2A1A0A 0%, #3D2B0F 30%, #1E3020 55%, #3A2A10 80%, #2A1A0A 100%)`,
-  /* bottom-left slide — faded warm */
-  `linear-gradient(135deg, #1A1208 0%, #2E2010 40%, #181008 70%, #241A0C 100%)`,
-];
-
-/* ── SVG icons (unchanged) ── */
+/* ── SVG icons ── */
 function IconDb() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-      <ellipse cx="9" cy="5" rx="6" ry="2.5" stroke="#059669" strokeWidth="1.6" fill="rgba(52,211,153,0.18)" />
-      <path d="M3 5v4c0 1.38 2.686 2.5 6 2.5S15 10.38 15 9V5" stroke="#059669" strokeWidth="1.6" fill="none" />
-      <path d="M3 9v4c0 1.38 2.686 2.5 6 2.5S15 14.38 15 13V9" stroke="#059669" strokeWidth="1.6" fill="none" />
+      <ellipse cx="9" cy="5" rx="6" ry="2.5" stroke="#2E8B5A" strokeWidth="1.6" fill="rgba(90,171,135,0.14)" />
+      <path d="M3 5v4c0 1.38 2.686 2.5 6 2.5S15 10.38 15 9V5" stroke="#2E8B5A" strokeWidth="1.6" fill="none" />
+      <path d="M3 9v4c0 1.38 2.686 2.5 6 2.5S15 14.38 15 13V9" stroke="#2E8B5A" strokeWidth="1.6" fill="none" />
     </svg>
   );
 }
@@ -402,63 +230,21 @@ function IconCloud() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
       <path d="M13.5 12.5H5a3 3 0 1 1 .424-5.976A4 4 0 1 1 13.5 9a2.5 2.5 0 0 1 0 3.5z"
-        stroke="#7C3AED" strokeWidth="1.6" strokeLinejoin="round"
-        fill="rgba(167,139,250,0.18)" />
+        stroke="#8B5E3C" strokeWidth="1.6" strokeLinejoin="round"
+        fill="rgba(184,132,90,0.14)" />
     </svg>
   );
 }
 function IconLock() {
   return (
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="none"
-      style={{ display: "inline", verticalAlign: "middle", marginRight: 4, opacity: 0.65 }}>
-      <rect x="2.5" y="6" width="9" height="6.5" rx="2" stroke="#A78BFA" strokeWidth="1.4" fill="rgba(167,139,250,0.1)" />
-      <path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke="#A78BFA" strokeWidth="1.4" fill="none" />
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none"
+      style={{ display: "inline", verticalAlign: "middle", marginRight: 4, opacity: 0.55 }}>
+      <rect x="2.5" y="6" width="9" height="6.5" rx="2" stroke="#8B5E3C" strokeWidth="1.4" fill="rgba(139,94,60,0.08)" />
+      <path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke="#8B5E3C" strokeWidth="1.4" fill="none" />
     </svg>
   );
 }
 
-/* ── Single decorative slide ── */
-function SlideDeco({ className, tag, letter, num, title, meta, filmStyle, perfCount = 6 }) {
-  const perfs = Array.from({ length: perfCount });
-  return (
-    <div className={`ns-slide ${className}`}>
-      <div className="ns-slide-mount">
-        {/* top perforation strip */}
-        <div className="ns-perf-row top">
-          {perfs.map((_, i) => <div key={i} className="ns-perf" />)}
-        </div>
-
-        {/* ID label sticker */}
-        <div className="ns-slide-tag">{tag}</div>
-        <div className="ns-slide-letter">{letter}</div>
-
-        {/* film aperture */}
-        <div className="ns-slide-film" style={{ background: filmStyle }}>
-          <div style={{
-            position: "absolute", inset: 0,
-            background: "radial-gradient(ellipse at 30% 40%, rgba(255,255,255,0.07) 0%, transparent 58%)",
-          }} />
-        </div>
-
-        {/* caption */}
-        <div className="ns-slide-title">
-          {title}<br />
-          <span className="ns-slide-meta">{meta}</span>
-        </div>
-        <div className="ns-slide-num">{num}</div>
-
-        {/* bottom perforation strip */}
-        <div className="ns-perf-row bot">
-          {perfs.map((_, i) => <div key={i} className="ns-perf" />)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   MAIN COMPONENT
-───────────────────────────────────────────── */
 export default function CredentialSetup({ onDone, onCancel }) {
   const existing = getCredentials();
   const [sbUrl, setSbUrl]               = useState(existing.sbUrl || "");
@@ -491,40 +277,13 @@ export default function CredentialSetup({ onDone, onCancel }) {
   return (
     <div className="ns-root">
       <style>{STYLES}</style>
-
-      {/* ── Decorative slide frames ── */}
-      <SlideDeco
-        className="ns-slide-l"
-        tag="00125_03" letter="A" num="5"
-        title="NOMAD SETUP" meta="1/24 INR"
-        filmStyle={FILM_SCENES[0]}
-        perfCount={6}
-      />
-      <SlideDeco
-        className="ns-slide-r"
-        tag="00119_01" letter="A" num="91"
-        title="CONNECT" meta="7/83 INR"
-        filmStyle={FILM_SCENES[1]}
-        perfCount={5}
-      />
-      <SlideDeco
-        className="ns-slide-bl"
-        tag="00112_07" letter="B" num="3"
-        title="BACKEND" meta="4/63 INR"
-        filmStyle={FILM_SCENES[2]}
-        perfCount={4}
-      />
-
-      {/* ── Main column ── */}
       <div className="ns-col">
 
         {/* ── Header ── */}
         <div className="ns-head">
-          <div className="ns-head-label">NOMAD_SETUP</div>
           <div className="ns-title">NOMAD</div>
           <div className="ns-subtitle">
             Connect your own backend.<br />Your data stays completely private.
-            <span className="ns-subtitle-meta">BACKEND / 1 OF 1</span>
           </div>
         </div>
 
@@ -535,27 +294,19 @@ export default function CredentialSetup({ onDone, onCancel }) {
             <span className="ns-card-name">Supabase</span>
             <span className="ns-badge ns-badge-req">Required</span>
           </div>
-
           <div className="ns-field">
             <label className="ns-label">Project URL</label>
-            <input
-              className="ns-input"
-              value={sbUrl}
+            <input className="ns-input" value={sbUrl}
               onChange={e => { setSbUrl(e.target.value); setError(""); }}
               placeholder="https://xxxx.supabase.co"
-              autoComplete="off" spellCheck={false}
-            />
+              autoComplete="off" spellCheck={false} />
           </div>
-
           <div className="ns-field">
             <label className="ns-label"><IconLock />Anon / Public Key</label>
-            <input
-              className="ns-input"
-              value={sbKey}
+            <input className="ns-input" value={sbKey}
               onChange={e => { setSbKey(e.target.value); setError(""); }}
               placeholder="eyJhbGciOiJIUzI1NiIs…"
-              autoComplete="off" spellCheck={false}
-            />
+              autoComplete="off" spellCheck={false} />
           </div>
         </div>
 
@@ -567,27 +318,19 @@ export default function CredentialSetup({ onDone, onCancel }) {
             <span className="ns-badge ns-badge-opt">Optional</span>
           </div>
           <span className="ns-hint">Only needed for receipt photo uploads.</span>
-
           <div className="ns-field">
             <label className="ns-label">Cloud Name</label>
-            <input
-              className="ns-input"
-              value={cloudName}
+            <input className="ns-input" value={cloudName}
               onChange={e => setCloudName(e.target.value)}
               placeholder="your-cloud-name"
-              autoComplete="off" spellCheck={false}
-            />
+              autoComplete="off" spellCheck={false} />
           </div>
-
           <div className="ns-field">
             <label className="ns-label">Upload Preset</label>
-            <input
-              className="ns-input"
-              value={uploadPreset}
+            <input className="ns-input" value={uploadPreset}
               onChange={e => setUploadPreset(e.target.value)}
               placeholder="receipt_upload"
-              autoComplete="off" spellCheck={false}
-            />
+              autoComplete="off" spellCheck={false} />
           </div>
         </div>
 
@@ -603,17 +346,17 @@ export default function CredentialSetup({ onDone, onCancel }) {
           <label className="ns-btn-restore">
             ↩ Restore from config backup
             <input type="file" accept=".json" style={{ display: "none" }}
-              onChange={e => { if (e.target.files[0]) importConfig(e.target.files[0]); e.target.value = ""; }}
-            />
+              onChange={e => { if (e.target.files[0]) importConfig(e.target.files[0]); e.target.value = ""; }} />
           </label>
 
           {onCancel && (
             <button className="ns-btn-cancel" onClick={onCancel}>Cancel</button>
           )}
 
+          <div className="ns-div" />
+
           <button className="ns-guide-link" onClick={() => setShowGuide(v => !v)}>
-            How do I get these credentials?
-            <span style={{ fontSize: 14, fontWeight: 700 }}>↗</span>
+            How do I get these credentials? <span style={{ fontWeight: 700 }}>↗</span>
           </button>
 
           {showGuide && (
