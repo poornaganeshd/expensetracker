@@ -1931,6 +1931,14 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
         prevComplete.current = complete;
     }, [day.amSkinDone, day.pmSkinDone]);
 
+    useEffect(() => {
+        setAmOpen(!day.amSkinDone);
+    }, [day.amSkinDone]);
+
+    useEffect(() => {
+        setPmOpen(!day.pmSkinDone);
+    }, [day.pmSkinDone]);
+
     const toggleAmStep = (i) => {
         const next = [...(day.amSteps || [])];
         next[i] = !next[i];
@@ -2244,8 +2252,10 @@ const LogScreen = ({ allData, config }) => {
         const dow2 = dayOfWeek(new Date(key + 'T12:00:00'));
         const log = migrateFreeFoodLog(rec.freeFoodLog);
         const r2 = (config.routines && config.routines[dow2]) || { am: [], pm: [] };
-        const amNames = r2.am.map(pk => resolveProduct(pk, config.customProducts).name).join(', ');
-        const pmNames = r2.pm.map(pk => resolveProduct(pk, config.customProducts).name).join(', ');
+        const amLoggedNames = r2.am.filter((_, idx) => !!rec.amSteps?.[idx]).map(pk => resolveProduct(pk, config.customProducts).name).join(', ');
+        const pmLoggedNames = r2.pm.filter((_, idx) => !!rec.pmSteps?.[idx]).map(pk => resolveProduct(pk, config.customProducts).name).join(', ');
+        const amLoggedCount = (rec.amSteps || []).filter(Boolean).length;
+        const pmLoggedCount = (rec.pmSteps || []).filter(Boolean).length;
         const waterOk = (mwL + (rec.water || 0)) >= config.waterTarget;
         const eggsOk = (rec.eggs || 0) >= config.eggsTarget;
 
@@ -2311,14 +2321,14 @@ const LogScreen = ({ allData, config }) => {
                     <div className="dl-card">
                         <div className="dl-row">
                             <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="sun" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">AM Routine</span></div>
-                            <span className={`dl-val ${rec.amSkinDone ? 'dl-ok' : 'dl-miss'}`}>{rec.amSkinDone ? '✓ Done' : '—'}</span>
+                            <span className={`dl-val ${(rec.amSkinDone || amLoggedCount > 0) ? 'dl-ok' : 'dl-miss'}`}>{rec.amSkinDone ? 'Done' : amLoggedCount > 0 ? `${amLoggedCount}/${r2.am.length} logged` : '-'}</span>
                         </div>
-                        {rec.amSkinDone && amNames && <div className="dl-sub-row">{amNames}</div>}
+                        {amLoggedNames && <div className="dl-sub-row">{amLoggedNames}</div>}
                         <div className="dl-row">
                             <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="moon" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">PM Routine</span></div>
-                            <span className={`dl-val ${rec.pmSkinDone ? 'dl-ok' : 'dl-miss'}`}>{rec.pmSkinDone ? '✓ Done' : '—'}</span>
+                            <span className={`dl-val ${(rec.pmSkinDone || pmLoggedCount > 0) ? 'dl-ok' : 'dl-miss'}`}>{rec.pmSkinDone ? 'Done' : pmLoggedCount > 0 ? `${pmLoggedCount}/${r2.pm.length} logged` : '-'}</span>
                         </div>
-                        {rec.pmSkinDone && pmNames && <div className="dl-sub-row">{pmNames}</div>}
+                        {pmLoggedNames && <div className="dl-sub-row">{pmLoggedNames}</div>}
                     </div>
                     {(rec.skinTodayChip || rec.reactionChip || rec.retinolReactionChip) && (
                         <div className="dl-chips">
