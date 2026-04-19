@@ -1698,7 +1698,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                 <div className="sec-lbl">Today's rituals</div>
 
                 {/* Eggs counter bar */}
-                <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: day.eggs >= config.eggsTarget ? '#F5C030' : '#FFF4CC', boxShadow: day.eggs >= config.eggsTarget ? '0 3px 0 #C89010' : '0 3px 0 #E8D880' }}>
+                <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: day.eggs >= config.eggsTarget ? '#F6E7C8' : '#FFFFFF', boxShadow: day.eggs >= config.eggsTarget ? '0 3px 0 #D6B47A' : '0 3px 0 #E7E1D7' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div className="hc-icon ic-done" style={{ flexShrink: 0, background: 'rgba(255,255,255,0.45)' }}>
                             <PhosphorIcon name="egg" size={22} color={day.eggs >= config.eggsTarget ? 'rgba(0,0,0,0.45)' : '#4a8a22'} opacity={0.4} />
