@@ -480,6 +480,8 @@ export default function Nomad() {
   const [reportIncTr, sReportIncTr] = useState(false);
   const [reportSelCats, sReportSelCats] = useState([]);
   const [reportActive, sReportActive] = useState(true);
+  const [reportSendDow, sReportSendDow] = useState(1);
+  const [reportSendDom, sReportSendDom] = useState(1);
   const [reportSaving, sReportSaving] = useState(false);
   const [reportScheduleId, sReportScheduleId] = useState(null);
   const [dbSetupModal, sDbSetupModal] = useState(false);
@@ -501,6 +503,24 @@ export default function Nomad() {
   const dismissToast = (id) => sToasts(prev => prev.filter(t => t.id !== id));
 
   useEffect(() => subscribePendingSync(sPendingSync), []);
+
+  useEffect(() => {
+    if (!loaded || !SB_ENABLED) return;
+    const uid = SB_URL.replace("https://", "").split(".")[0];
+    fetch(`${SB_URL}/rest/v1/report_schedules?user_id=eq.${uid}&select=last_sent_at,email&limit=1`, { headers: sbH })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => {
+        const row = d[0];
+        if (!row?.last_sent_at) return;
+        const seen = localStorage.getItem("nomad-last-seen-sent");
+        if (seen === row.last_sent_at) return;
+        const age = Date.now() - new Date(row.last_sent_at).getTime();
+        if (age < 86400000) {
+          showT(`Report emailed to ${row.email}`, "success");
+          localStorage.setItem("nomad-last-seen-sent", row.last_sent_at);
+        }
+      }).catch(() => {});
+  }, [loaded]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -785,16 +805,31 @@ export default function Nomad() {
         sReportIncTr(s.include_transfers ?? false);
         sReportSelCats(s.selected_categories ?? []);
         sReportActive(s.is_active ?? false);
+        sReportSendDow(s.send_day_of_week ?? 1);
+        sReportSendDom(s.send_day_of_month ?? 1);
       })
       .catch(() => {});
   };
   const _doSaveSchedule = async () => {
     const userId = SB_URL.replace("https://", "").split(".")[0];
-    const next = new Date();
-    if (reportFreq === "weekly") next.setUTCDate(next.getUTCDate() + 7);
-    else if (reportFreq === "monthly") next.setUTCMonth(next.getUTCMonth() + 1);
-    else if (reportFreq === "quarterly") next.setUTCMonth(next.getUTCMonth() + 3);
-    else next.setUTCDate(next.getUTCDate() + (reportCustomDays || 7));
+    const now = new Date();
+    const next = new Date(now);
+    if (reportFreq === "weekly") {
+      const dow = reportSendDow;
+      let diff = dow - now.getUTCDay();
+      if (diff < 0 || (diff === 0 && now.getUTCHours() >= reportSendHour)) diff += 7;
+      next.setUTCDate(next.getUTCDate() + diff);
+    } else if (reportFreq === "monthly") {
+      const dom = Math.min(reportSendDom, 28);
+      next.setUTCDate(dom);
+      if (now.getUTCDate() > dom || (now.getUTCDate() === dom && now.getUTCHours() >= reportSendHour)) next.setUTCMonth(next.getUTCMonth() + 1);
+    } else if (reportFreq === "quarterly") {
+      const dom = Math.min(reportSendDom, 28);
+      next.setUTCDate(dom);
+      if (now.getUTCDate() > dom || (now.getUTCDate() === dom && now.getUTCHours() >= reportSendHour)) next.setUTCMonth(next.getUTCMonth() + 3);
+    } else {
+      next.setUTCDate(next.getUTCDate() + (reportCustomDays || 7));
+    }
     next.setUTCHours(reportSendHour, 0, 0, 0);
     const payload = {
       user_id: userId,
@@ -802,6 +837,8 @@ export default function Nomad() {
       frequency: reportFreq,
       custom_days: reportFreq === "custom" ? (reportCustomDays || 7) : null,
       send_hour: reportSendHour,
+      send_day_of_week: reportFreq === "weekly" ? reportSendDow : null,
+      send_day_of_month: (reportFreq === "monthly" || reportFreq === "quarterly") ? reportSendDom : null,
       include_expenses: reportIncExp,
       include_incomes: reportIncInc,
       include_transfers: reportIncTr,
@@ -989,6 +1026,22 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
               <input type="number" min="1" max="365" value={reportCustomDays} onChange={e => sReportCustomDays(Number(e.target.value))} style={{ width: 60, padding: "6px 10px", borderRadius: 8, border: "1.5px solid #c9a96e", background: "var(--bg)", color: "#c9a96e", fontSize: 14, fontWeight: 700, fontFamily: "var(--font-h)", textAlign: "center", outline: "none" }} />
               <span style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-h)" }}>days</span>
             </div>}
+
+            {reportFreq === "weekly" && <>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", letterSpacing: "1px", marginBottom: 6, textTransform: "uppercase" }}>Send Day</label>
+              <div style={{ display: "flex", gap: 5, marginBottom: 14 }}>
+                {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d, i) => <button key={i} onClick={() => sReportSendDow(i)} style={{ flex: 1, padding: "8px 2px", borderRadius: 8, fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, border: `1.5px solid ${reportSendDow === i ? "#c9a96e" : "var(--border)"}`, background: reportSendDow === i ? "#c9a96e18" : "var(--card)", color: reportSendDow === i ? "#c9a96e" : "var(--muted)", cursor: "pointer" }}>{d}</button>)}
+              </div>
+            </>}
+
+            {(reportFreq === "monthly" || reportFreq === "quarterly") && <>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", letterSpacing: "1px", marginBottom: 6, textTransform: "uppercase" }}>Send on Day of Month</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "10px 14px", background: "var(--bg)", borderRadius: 10, border: "1px solid var(--border)" }}>
+                <span style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-h)" }}>Day</span>
+                <input type="number" min="1" max="28" value={reportSendDom} onChange={e => sReportSendDom(Math.min(28, Math.max(1, Number(e.target.value))))} style={{ width: 60, padding: "6px 10px", borderRadius: 8, border: "1.5px solid #c9a96e", background: "var(--bg)", color: "#c9a96e", fontSize: 14, fontWeight: 700, fontFamily: "var(--font-h)", textAlign: "center", outline: "none" }} />
+                <span style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-h)" }}>of each month</span>
+              </div>
+            </>}
 
             {/* Send Time */}
             <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", letterSpacing: "1px", marginBottom: 6, textTransform: "uppercase" }}>Send Time (UTC)</label>

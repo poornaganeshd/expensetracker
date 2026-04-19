@@ -6,6 +6,7 @@ export interface Schedule {
   id: string; user_id: string; email: string;
   frequency: "weekly" | "monthly" | "quarterly" | "custom";
   custom_days: number | null; send_hour: number;
+  send_day_of_week: number | null; send_day_of_month: number | null;
   include_expenses: boolean; include_incomes: boolean; include_transfers: boolean;
   selected_categories: string[] | null;
   next_send_at: string; is_active: boolean;
@@ -46,10 +47,21 @@ export function getPeriod(s: Schedule, now: Date) {
 }
 export function getNextSendAt(s: Schedule, now: Date): Date {
   const n = new Date(now);
-  if (s.frequency === "weekly")         n.setUTCDate(n.getUTCDate() + 7);
-  else if (s.frequency === "monthly")   n.setUTCMonth(n.getUTCMonth() + 1);
-  else if (s.frequency === "quarterly") n.setUTCMonth(n.getUTCMonth() + 3);
-  else n.setUTCDate(n.getUTCDate() + (s.custom_days ?? 7));
+  if (s.frequency === "weekly") {
+    n.setUTCDate(n.getUTCDate() + 7);
+    if (s.send_day_of_week != null) {
+      const diff = ((s.send_day_of_week - n.getUTCDay()) + 7) % 7;
+      if (diff !== 0) n.setUTCDate(n.getUTCDate() + diff);
+    }
+  } else if (s.frequency === "monthly") {
+    n.setUTCMonth(n.getUTCMonth() + 1);
+    if (s.send_day_of_month != null) n.setUTCDate(Math.min(s.send_day_of_month, 28));
+  } else if (s.frequency === "quarterly") {
+    n.setUTCMonth(n.getUTCMonth() + 3);
+    if (s.send_day_of_month != null) n.setUTCDate(Math.min(s.send_day_of_month, 28));
+  } else {
+    n.setUTCDate(n.getUTCDate() + (s.custom_days ?? 7));
+  }
   n.setUTCHours(s.send_hour, 0, 0, 0);
   return n;
 }
@@ -155,7 +167,7 @@ export async function processSchedule(
     html: buildHtml({ schedule: s, periodStart: start, periodEnd: end, totalSpent, totalIncome, totalTransfers, byCategory }),
     attachments: [
       { filename: `nomad_${lbl}.csv`,         content: buildCsv(expenses, incomes, transfers, s) },
-      { filename: `nomad_backup_${lbl}.json`, content: buildBackup(allExpenses, allIncomes, allTransfers) },
+      { filename: `nomad_backup_${format(now, "yyyy-MM-dd")}.json`, content: buildBackup(allExpenses, allIncomes, allTransfers) },
     ],
   });
 }

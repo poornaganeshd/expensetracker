@@ -115,6 +115,8 @@ CREATE TABLE IF NOT EXISTS report_schedules (
   frequency           TEXT        NOT NULL CHECK (frequency IN ('weekly','monthly','quarterly','custom')),
   custom_days         INTEGER,
   send_hour           INTEGER     NOT NULL DEFAULT 6 CHECK (send_hour BETWEEN 0 AND 23),
+  send_day_of_week    INTEGER     CHECK (send_day_of_week BETWEEN 0 AND 6),
+  send_day_of_month   INTEGER     CHECK (send_day_of_month BETWEEN 1 AND 28),
   include_expenses    BOOLEAN     NOT NULL DEFAULT true,
   include_incomes     BOOLEAN     NOT NULL DEFAULT true,
   include_transfers   BOOLEAN     NOT NULL DEFAULT false,
@@ -140,6 +142,9 @@ CREATE TABLE IF NOT EXISTS report_delivery_log (
 CREATE INDEX IF NOT EXISTS idx_report_schedules_due
   ON report_schedules (next_send_at)
   WHERE is_active = true;
+
+ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_week  INTEGER CHECK (send_day_of_week BETWEEN 0 AND 6);
+ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_month INTEGER CHECK (send_day_of_month BETWEEN 1 AND 28);
 
 ALTER TABLE report_schedules    DISABLE ROW LEVEL SECURITY;
 ALTER TABLE report_delivery_log DISABLE ROW LEVEL SECURITY;
