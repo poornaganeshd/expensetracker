@@ -8,8 +8,8 @@ import {
 } from "date-fns";
 
 // ── env ───────────────────────────────────────────────────────────────────────
-const REGISTRY_URL = process.env.SUPABASE_URL!;               // owner's Supabase
-const REGISTRY_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;  // owner's service role key
+const REGISTRY_URL = process.env.VITE_SUPABASE_URL!;
+const REGISTRY_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const RESEND_KEY   = process.env.RESEND_API_KEY!;
 const CRON_SECRET  = process.env.CRON_SECRET!;
 const FROM_EMAIL   = process.env.RESEND_FROM_EMAIL ?? "NOMAD Reports <reports@resend.dev>";
@@ -173,7 +173,11 @@ async function processSchedule(s: Schedule, sbUrl: string, sbKey: string, resend
 
 // ── handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if ((req.headers.authorization ?? "") !== `Bearer ${CRON_SECRET}`) {
+  const authHeader = req.headers.authorization ?? "";
+  const querySecret = (req.query?.secret as string) ?? "";
+  const isAuthorized = authHeader === `Bearer ${CRON_SECRET}` || querySecret === CRON_SECRET;
+
+  if (!isAuthorized) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
@@ -185,7 +189,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── 1. read all registered user Supabase instances from owner's registry ──
   const registryH = makeHeaders(REGISTRY_KEY);
   const registryRaw = await fetch(`${REGISTRY_URL}/rest/v1/user_registry?select=*`, { headers: registryH });
-  const registry: UserEntry[] = registryRaw.ok ? await registryRaw.json() : [];
+  let registry: UserEntry[] = [];
+  if (registryRaw.ok) {
+    registry = await registryRaw.json();
+  } else {
+    const errorBody = await registryRaw.text().catch(() => "(unreadable)");
+    console.error(`[send-reports] Registry fetch failed: ${registryRaw.status} — ${errorBody}`);
+  }
 
   // Always include owner's own Supabase (service role key for extra access)
   const ownerEntry = { supabase_url: REGISTRY_URL, anon_key: REGISTRY_KEY };
