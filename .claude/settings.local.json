@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(npm run:*)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const fs=require\\('fs'\\); const src=fs.readFileSync\\('src/CredentialSetup.jsx','utf8'\\); console.log\\('Lines:', src.split\\('\\\\n'\\).length\\)\")",
+      "Bash(npx vite *)"
     ]
   }
 }

@@ -1,74 +1,184 @@
 import { useState } from "react";
 import { getCredentials, saveCredentials } from "./credentials";
 
+/* ─────────────────────────────────────────────
+   STYLES
+───────────────────────────────────────────── */
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,opsz,wght@0,8..18,400;0,8..18,500;0,8..18,600;0,8..18,700;0,8..18,800;1,8..18,400&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+  /* ── Page ── */
   .ns-root {
     min-height: 100vh;
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    background: linear-gradient(145deg, #EEE9FF 0%, #FFE8F5 38%, #E0F0FF 72%, #E8FFEF 100%);
+    background: #EAE3D0;
     font-family: 'Plus Jakarta Sans', sans-serif;
-    padding: 44px 20px 72px;
+    padding: 48px 20px 80px;
     position: relative;
     overflow: hidden;
   }
 
-  /* decorative blobs */
+  /* ── Film grain overlay ── */
   .ns-root::before {
     content: '';
-    position: fixed;
-    top: -120px; left: -100px;
-    width: 420px; height: 420px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(196,181,253,0.38) 0%, transparent 70%);
-    pointer-events: none;
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    background-size: 160px;
+    pointer-events: none; z-index: 0; opacity: 0.55;
   }
+
+  /* ── Warm lightbox center-glow ── */
   .ns-root::after {
     content: '';
     position: fixed;
-    bottom: -100px; right: -80px;
-    width: 380px; height: 380px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(249,168,212,0.32) 0%, transparent 70%);
+    top: 30%; left: 50%; transform: translate(-50%, -50%);
+    width: 600px; height: 500px;
+    background: radial-gradient(ellipse, rgba(255,240,200,0.28) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+
+  .ns-col { width: 100%; max-width: 440px; position: relative; z-index: 2; }
+
+  /* ─────────────────────────────────────────
+     DECORATIVE SLIDE FRAMES (background)
+  ───────────────────────────────────────── */
+  .ns-slide {
+    position: fixed;
+    font-family: 'IBM Plex Mono', monospace;
+    pointer-events: none; z-index: 1;
+    user-select: none;
+  }
+
+  .ns-slide-mount {
+    background: #E2D9C4;
+    border-radius: 10px;
+    padding: 30px 13px 40px;
+    box-shadow:
+      0 2px 8px rgba(0,0,0,0.18),
+      0 8px 28px rgba(0,0,0,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.5);
+    position: relative;
+  }
+
+  /* top label sticker — sits centered in the top perf strip */
+  .ns-slide-tag {
+    position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
+    background: #fff; border-radius: 3px;
+    padding: 1px 9px; z-index: 2;
+    font-size: 9.5px; font-weight: 600; letter-spacing: 1.5px;
+    color: #2A2018; white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.14);
+  }
+  .ns-slide-letter {
+    position: absolute; top: 4px; right: 10px; z-index: 2;
+    font-size: 11px; font-weight: 500; color: #6A5E48;
+  }
+  /* film aperture (dark rectangle) */
+  .ns-slide-film {
+    width: 100%;
+    border-radius: 3px;
+    border: 2.5px solid #2A2318;
+    overflow: hidden; position: relative;
+  }
+
+  /* perforations strip on top/bottom of mount */
+  .ns-perf-row {
+    position: absolute; left: 0; right: 0;
+    display: flex; justify-content: space-around; align-items: center;
+    height: 20px;
+    background: #D5CCBA;
+  }
+  .ns-perf-row.top { top: 0; border-radius: 10px 10px 0 0; }
+  .ns-perf-row.bot { bottom: 0; border-radius: 0 0 10px 10px; }
+  .ns-perf {
+    width: 6px; height: 10px;
+    border-radius: 2px;
+    background: #EAE3D0;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.18);
+  }
+
+  /* bottom text (title + meta) — sits in the padding gap below film, above bottom perf */
+  .ns-slide-title {
+    position: absolute; bottom: 22px; left: 12px;
+    font-size: 8.5px; font-weight: 700; letter-spacing: 1.2px;
+    color: #3A3028; text-transform: uppercase; line-height: 1.6;
     pointer-events: none;
   }
+  .ns-slide-meta { font-weight: 400; font-size: 7.5px; color: #6A5E48; }
+  .ns-slide-num { position: absolute; bottom: 22px; right: 11px; font-size: 10px; color: #7A6E56; }
 
-  .ns-col { width: 100%; max-width: 440px; position: relative; z-index: 1; }
+  /* slide left (large, tilted) */
+  .ns-slide-l {
+    left: -90px; top: 15vh;
+    transform: rotate(-14deg);
+    opacity: 0.82;
+    width: 220px;
+  }
+  .ns-slide-l .ns-slide-film { height: 130px; }
 
-  /* ── Header ── */
+  /* slide right (medium, tilted other way) */
+  .ns-slide-r {
+    right: -80px; top: 22vh;
+    transform: rotate(11deg);
+    opacity: 0.78;
+    width: 200px;
+  }
+  .ns-slide-r .ns-slide-film { height: 118px; }
+
+  /* slide bottom-left (small, steep tilt) */
+  .ns-slide-bl {
+    left: -60px; bottom: 8vh;
+    transform: rotate(-22deg);
+    opacity: 0.55;
+    width: 175px;
+  }
+  .ns-slide-bl .ns-slide-film { height: 100px; }
+
+  /* ─────────────────────────────────────────
+     HEADER
+  ───────────────────────────────────────── */
   .ns-head { text-align: center; margin-bottom: 30px; }
 
-  .ns-logomark {
-    width: 52px; height: 52px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #A78BFA, #F472B6);
-    display: inline-flex; align-items: center; justify-content: center;
+  /* slide-style ID label above NOMAD */
+  .ns-head-label {
+    display: inline-block;
+    background: #fff;
+    border-radius: 5px;
+    padding: 3px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; font-weight: 600; letter-spacing: 2px;
+    color: #2A2018;
     margin-bottom: 14px;
-    box-shadow: 0 6px 24px rgba(167,139,250,0.38), 0 2px 8px rgba(244,114,182,0.2);
+    box-shadow: 0 1px 5px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.04);
   }
-  .ns-logomark svg { display: block; }
 
   .ns-title {
-    font-size: 24px; font-weight: 800; letter-spacing: 5px;
-    background: linear-gradient(120deg, #7C3AED, #DB2777);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 7px;
-  }
-  .ns-subtitle {
-    font-size: 13px;
-    color: #8B7EA8;
-    line-height: 1.7; font-weight: 400;
+    font-size: 28px; font-weight: 800; letter-spacing: 7px;
+    color: #2A2018;
+    text-transform: uppercase;
+    margin-bottom: 6px;
   }
 
-  /* ── Cards ── */
+  .ns-subtitle {
+    font-size: 12px; color: #7A6E56; line-height: 1.7; font-weight: 400;
+    letter-spacing: 0.1px;
+  }
+  .ns-subtitle-meta {
+    display: inline-block; margin-top: 5px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px; color: #A0947C; letter-spacing: 1px;
+  }
+
+  /* ─────────────────────────────────────────
+     CARDS  (kept from previous design)
+  ───────────────────────────────────────── */
   .ns-card {
-    background: rgba(255,255,255,0.78);
+    background: rgba(255, 252, 245, 0.80);
     backdrop-filter: blur(18px) saturate(1.6);
     -webkit-backdrop-filter: blur(18px) saturate(1.6);
     border: 1.5px solid rgba(255,255,255,0.95);
@@ -87,9 +197,7 @@ const STYLES = `
   }
   .ns-card-sb::before {
     content: '';
-    position: absolute;
-    top: 0; left: 0; bottom: 0;
-    width: 4px;
+    position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
     background: linear-gradient(180deg, #34D399, #059669);
     border-radius: 20px 0 0 20px;
   }
@@ -101,24 +209,19 @@ const STYLES = `
   }
   .ns-card-cl::before {
     content: '';
-    position: absolute;
-    top: 0; left: 0; bottom: 0;
-    width: 4px;
+    position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
     background: linear-gradient(180deg, #A78BFA, #7C3AED);
     border-radius: 20px 0 0 20px;
   }
 
-  /* tinted card header area */
   .ns-card-head {
     display: flex; align-items: center; gap: 10px;
     margin-bottom: 20px;
   }
   .ns-card-icon-wrap {
-    width: 36px; height: 36px;
-    border-radius: 10px;
+    width: 36px; height: 36px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
-    font-size: 18px; line-height: 1;
   }
   .ns-card-sb .ns-card-icon-wrap {
     background: linear-gradient(135deg, #D1FAE5, #A7F3D0);
@@ -132,6 +235,7 @@ const STYLES = `
     font-size: 14px; font-weight: 700; color: #1A1033;
     letter-spacing: 0.2px; flex: 1;
   }
+
   .ns-badge {
     font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
     border-radius: 20px; padding: 3px 9px;
@@ -166,7 +270,7 @@ const STYLES = `
     width: 100%; padding: 11px 14px;
     border-radius: 11px;
     border: 1.5px solid rgba(180,160,220,0.25);
-    background: rgba(255,255,255,0.72);
+    background: rgba(255,255,255,0.65);
     color: #1A1033;
     font-size: 13px; font-family: 'Plus Jakarta Sans', sans-serif;
     outline: none;
@@ -261,7 +365,6 @@ const STYLES = `
   }
   .ns-guide-link:hover { color: #A78BFA; }
 
-  /* ── Guide panel ── */
   .ns-guide {
     margin-top: 4px;
     background: rgba(255,255,255,0.62);
@@ -275,7 +378,17 @@ const STYLES = `
   .ns-guide em { color: #A78BFA; font-style: normal; font-weight: 600; }
 `;
 
-/* ── SVG icon components ── */
+/* ── Slide film content colours ── */
+const FILM_SCENES = [
+  /* left slide — dark underwater tones */
+  `linear-gradient(160deg, #0D1B2A 0%, #1A2E3E 35%, #0A1520 55%, #1E2D1E 80%, #0D1B0D 100%)`,
+  /* right slide — warm forest/earth */
+  `linear-gradient(145deg, #2A1A0A 0%, #3D2B0F 30%, #1E3020 55%, #3A2A10 80%, #2A1A0A 100%)`,
+  /* bottom-left slide — faded warm */
+  `linear-gradient(135deg, #1A1208 0%, #2E2010 40%, #181008 70%, #241A0C 100%)`,
+];
+
+/* ── SVG icons (unchanged) ── */
 function IconDb() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -296,13 +409,56 @@ function IconCloud() {
 }
 function IconLock() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ display:"inline", verticalAlign:"middle", marginRight:4, opacity:0.65 }}>
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none"
+      style={{ display: "inline", verticalAlign: "middle", marginRight: 4, opacity: 0.65 }}>
       <rect x="2.5" y="6" width="9" height="6.5" rx="2" stroke="#A78BFA" strokeWidth="1.4" fill="rgba(167,139,250,0.1)" />
       <path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke="#A78BFA" strokeWidth="1.4" fill="none" />
     </svg>
   );
 }
 
+/* ── Single decorative slide ── */
+function SlideDeco({ className, tag, letter, num, title, meta, filmStyle, perfCount = 6 }) {
+  const perfs = Array.from({ length: perfCount });
+  return (
+    <div className={`ns-slide ${className}`}>
+      <div className="ns-slide-mount">
+        {/* top perforation strip */}
+        <div className="ns-perf-row top">
+          {perfs.map((_, i) => <div key={i} className="ns-perf" />)}
+        </div>
+
+        {/* ID label sticker */}
+        <div className="ns-slide-tag">{tag}</div>
+        <div className="ns-slide-letter">{letter}</div>
+
+        {/* film aperture */}
+        <div className="ns-slide-film" style={{ background: filmStyle }}>
+          <div style={{
+            position: "absolute", inset: 0,
+            background: "radial-gradient(ellipse at 30% 40%, rgba(255,255,255,0.07) 0%, transparent 58%)",
+          }} />
+        </div>
+
+        {/* caption */}
+        <div className="ns-slide-title">
+          {title}<br />
+          <span className="ns-slide-meta">{meta}</span>
+        </div>
+        <div className="ns-slide-num">{num}</div>
+
+        {/* bottom perforation strip */}
+        <div className="ns-perf-row bot">
+          {perfs.map((_, i) => <div key={i} className="ns-perf" />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   MAIN COMPONENT
+───────────────────────────────────────────── */
 export default function CredentialSetup({ onDone, onCancel }) {
   const existing = getCredentials();
   const [sbUrl, setSbUrl]               = useState(existing.sbUrl || "");
@@ -335,21 +491,40 @@ export default function CredentialSetup({ onDone, onCancel }) {
   return (
     <div className="ns-root">
       <style>{STYLES}</style>
+
+      {/* ── Decorative slide frames ── */}
+      <SlideDeco
+        className="ns-slide-l"
+        tag="00125_03" letter="A" num="5"
+        title="NOMAD SETUP" meta="1/24 INR"
+        filmStyle={FILM_SCENES[0]}
+        perfCount={6}
+      />
+      <SlideDeco
+        className="ns-slide-r"
+        tag="00119_01" letter="A" num="91"
+        title="CONNECT" meta="7/83 INR"
+        filmStyle={FILM_SCENES[1]}
+        perfCount={5}
+      />
+      <SlideDeco
+        className="ns-slide-bl"
+        tag="00112_07" letter="B" num="3"
+        title="BACKEND" meta="4/63 INR"
+        filmStyle={FILM_SCENES[2]}
+        perfCount={4}
+      />
+
+      {/* ── Main column ── */}
       <div className="ns-col">
 
         {/* ── Header ── */}
         <div className="ns-head">
-          <div>
-            <div className="ns-logomark">
-              <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-                <path d="M5 20 L5 6 L13 6 L21 13 L13 20 Z" fill="rgba(255,255,255,0.9)" />
-                <circle cx="18" cy="18" r="5" fill="rgba(255,255,255,0.5)" />
-              </svg>
-            </div>
-          </div>
+          <div className="ns-head-label">NOMAD_SETUP</div>
           <div className="ns-title">NOMAD</div>
           <div className="ns-subtitle">
             Connect your own backend.<br />Your data stays completely private.
+            <span className="ns-subtitle-meta">BACKEND / 1 OF 1</span>
           </div>
         </div>
 
@@ -368,22 +543,18 @@ export default function CredentialSetup({ onDone, onCancel }) {
               value={sbUrl}
               onChange={e => { setSbUrl(e.target.value); setError(""); }}
               placeholder="https://xxxx.supabase.co"
-              autoComplete="off"
-              spellCheck={false}
+              autoComplete="off" spellCheck={false}
             />
           </div>
 
           <div className="ns-field">
-            <label className="ns-label">
-              <IconLock />Anon / Public Key
-            </label>
+            <label className="ns-label"><IconLock />Anon / Public Key</label>
             <input
               className="ns-input"
               value={sbKey}
               onChange={e => { setSbKey(e.target.value); setError(""); }}
               placeholder="eyJhbGciOiJIUzI1NiIs…"
-              autoComplete="off"
-              spellCheck={false}
+              autoComplete="off" spellCheck={false}
             />
           </div>
         </div>
@@ -404,8 +575,7 @@ export default function CredentialSetup({ onDone, onCancel }) {
               value={cloudName}
               onChange={e => setCloudName(e.target.value)}
               placeholder="your-cloud-name"
-              autoComplete="off"
-              spellCheck={false}
+              autoComplete="off" spellCheck={false}
             />
           </div>
 
@@ -416,8 +586,7 @@ export default function CredentialSetup({ onDone, onCancel }) {
               value={uploadPreset}
               onChange={e => setUploadPreset(e.target.value)}
               placeholder="receipt_upload"
-              autoComplete="off"
-              spellCheck={false}
+              autoComplete="off" spellCheck={false}
             />
           </div>
         </div>
@@ -433,18 +602,13 @@ export default function CredentialSetup({ onDone, onCancel }) {
 
           <label className="ns-btn-restore">
             ↩ Restore from config backup
-            <input
-              type="file"
-              accept=".json"
-              style={{ display: "none" }}
+            <input type="file" accept=".json" style={{ display: "none" }}
               onChange={e => { if (e.target.files[0]) importConfig(e.target.files[0]); e.target.value = ""; }}
             />
           </label>
 
           {onCancel && (
-            <button className="ns-btn-cancel" onClick={onCancel}>
-              Cancel
-            </button>
+            <button className="ns-btn-cancel" onClick={onCancel}>Cancel</button>
           )}
 
           <button className="ns-guide-link" onClick={() => setShowGuide(v => !v)}>
