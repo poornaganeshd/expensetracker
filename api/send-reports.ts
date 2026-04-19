@@ -1,22 +1,14 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import nodemailer from "nodemailer";
-import {
-  subDays, subMonths,
-  startOfMonth, endOfMonth,
-  format,
-} from "date-fns";
+import { subDays, subMonths, startOfMonth, endOfMonth, format } from "date-fns";
 
-// ── env ───────────────────────────────────────────────────────────────────────
-const REGISTRY_URL  = process.env.VITE_SUPABASE_URL!;
-const REGISTRY_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const CRON_SECRET   = process.env.CRON_SECRET!;
-const GMAIL_USER    = process.env.GMAIL_USER!;
-const GMAIL_PASS    = process.env.GMAIL_APP_PASSWORD!;
-console.log("[send-reports] GMAIL_USER EXISTS:", !!GMAIL_USER);
-console.log("[send-reports] GMAIL_PASS EXISTS:", !!GMAIL_PASS);
+const REGISTRY_URL = process.env.VITE_SUPABASE_URL!;
+const REGISTRY_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const CRON_SECRET  = process.env.CRON_SECRET!;
+const GMAIL_USER   = process.env.GMAIL_USER!;
+const GMAIL_PASS   = process.env.GMAIL_APP_PASSWORD!;
 
-// ── types ─────────────────────────────────────────────────────────────────────
-interface UserEntry   { supabase_url: string; anon_key: string; }
+interface UserEntry { supabase_url: string; anon_key: string; }
 interface Schedule {
   id: string; user_id: string; email: string;
   frequency: "weekly" | "monthly" | "quarterly" | "custom";
@@ -25,15 +17,13 @@ interface Schedule {
   selected_categories: string[] | null;
   next_send_at: string; is_active: boolean;
 }
-interface Expense  { id: string; amount: number; categoryId: string; walletId: string; date: string; note?: string; }
-interface Income   { id: string; amount: number; sourceId: string;   walletId: string; date: string; }
-interface Transfer { id: string; amount: number; fromWallet: string; toWallet: string; date: string; note?: string; }
+interface Expense  { amount: number; categoryId: string; walletId: string; date: string; note?: string; }
+interface Income   { amount: number; sourceId: string;   walletId: string; date: string; }
+interface Transfer { amount: number; fromWallet: string; toWallet: string; date: string; note?: string; }
 
-// ── per-user supabase fetch ───────────────────────────────────────────────────
 function makeHeaders(key: string) {
   return { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${key}`, Prefer: "return=representation" };
 }
-
 async function userGet(baseUrl: string, key: string, path: string) {
   const r = await fetch(`${baseUrl}/rest/v1${path}`, { headers: makeHeaders(key) });
   if (!r.ok) throw new Error(`GET ${baseUrl}${path} → ${r.status}`);
@@ -46,7 +36,6 @@ async function userPost(baseUrl: string, key: string, table: string, body: objec
   await fetch(`${baseUrl}/rest/v1/${table}`, { method: "POST", headers: makeHeaders(key), body: JSON.stringify(body) });
 }
 
-// ── retry ─────────────────────────────────────────────────────────────────────
 async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   let last!: Error;
   for (let i = 1; i <= attempts; i++) {
@@ -56,16 +45,15 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   throw last;
 }
 
-// ── date math ─────────────────────────────────────────────────────────────────
 function getPeriod(s: Schedule, now: Date) {
-  if (s.frequency === "weekly")    return { start: subDays(now, 7),  end: subDays(now, 1) };
+  if (s.frequency === "weekly")    return { start: subDays(now, 7), end: subDays(now, 1) };
   if (s.frequency === "monthly")   { const p = subMonths(now, 1); return { start: startOfMonth(p), end: endOfMonth(p) }; }
   if (s.frequency === "quarterly") return { start: startOfMonth(subMonths(now, 3)), end: endOfMonth(subMonths(now, 1)) };
   return { start: subDays(now, s.custom_days ?? 7), end: subDays(now, 1) };
 }
 function getNextSendAt(s: Schedule, now: Date): Date {
   const n = new Date(now);
-  if (s.frequency === "weekly")    n.setUTCDate(n.getUTCDate() + 7);
+  if (s.frequency === "weekly")         n.setUTCDate(n.getUTCDate() + 7);
   else if (s.frequency === "monthly")   n.setUTCMonth(n.getUTCMonth() + 1);
   else if (s.frequency === "quarterly") n.setUTCMonth(n.getUTCMonth() + 3);
   else n.setUTCDate(n.getUTCDate() + (s.custom_days ?? 7));
@@ -73,7 +61,6 @@ function getNextSendAt(s: Schedule, now: Date): Date {
   return n;
 }
 
-// ── csv ───────────────────────────────────────────────────────────────────────
 function buildCsv(expenses: Expense[], incomes: Income[], transfers: Transfer[], s: Schedule) {
   const q = (v?: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
   let csv = "Type,Date,Amount,Category/Source/From,To/Wallet,Note\n";
@@ -86,7 +73,6 @@ function buildBackup(expenses: Expense[], incomes: Income[], transfers: Transfer
   return JSON.stringify({ expenses, incomes, transfers, _v: "nomad-v9", _date: new Date().toISOString() }, null, 2);
 }
 
-// ── email html ────────────────────────────────────────────────────────────────
 function buildHtml(opts: { schedule: Schedule; periodStart: Date; periodEnd: Date; totalSpent: number; totalIncome: number; totalTransfers: number; byCategory: { name: string; amount: number }[] }) {
   const { schedule: s, periodStart, periodEnd, totalSpent, totalIncome, totalTransfers, byCategory } = opts;
   const inr  = (n: number) => "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
@@ -137,15 +123,6 @@ function buildHtml(opts: { schedule: Schedule; periodStart: Date; periodEnd: Dat
 </table></td></tr></table></body></html>`;
 }
 
-// ── gmail transporter (created once per invocation) ──────────────────────────
-function makeTransporter() {
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: { user: GMAIL_USER, pass: GMAIL_PASS },
-  });
-}
-
-// ── process one schedule ──────────────────────────────────────────────────────
 async function processSchedule(s: Schedule, sbUrl: string, sbKey: string, transporter: nodemailer.Transporter, now: Date) {
   const { start, end } = getPeriod(s, now);
   const pStart = format(start, "yyyy-MM-dd");
@@ -168,8 +145,7 @@ async function processSchedule(s: Schedule, sbUrl: string, sbKey: string, transp
   const lbl    = `${s.frequency}_${format(end, "yyyy-MM-dd")}`;
   const fLabel = s.frequency === "custom" ? `Every ${s.custom_days}d` : s.frequency.charAt(0).toUpperCase() + s.frequency.slice(1);
 
-  console.log(`[send-reports] Sending email to: ${s.email}`);
-  const info = await transporter.sendMail({
+  await transporter.sendMail({
     from: `NOMAD Reports <${GMAIL_USER}>`,
     to: s.email,
     subject: `🦁 NOMAD ${fLabel} Report — ${format(start, "MMM d")} to ${format(end, "MMM d, yyyy")}`,
@@ -179,52 +155,42 @@ async function processSchedule(s: Schedule, sbUrl: string, sbKey: string, transp
       { filename: `nomad_backup_${lbl}.json`, content: buildBackup(expenses, incomes, transfers) },
     ],
   });
-  console.log("[send-reports] Gmail response:", info.messageId);
 }
 
-// ── handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const authHeader = req.headers.authorization ?? "";
+  const authHeader  = req.headers.authorization ?? "";
   const querySecret = (req.query?.secret as string) ?? "";
-  const isAuthorized = authHeader === `Bearer ${CRON_SECRET}` || querySecret === CRON_SECRET;
-
-  if (!isAuthorized) {
+  if (authHeader !== `Bearer ${CRON_SECRET}` && querySecret !== CRON_SECRET) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-
   if (!GMAIL_USER || !GMAIL_PASS) {
     return res.status(500).json({ error: "GMAIL_USER or GMAIL_APP_PASSWORD is not set" });
   }
 
   const now         = new Date();
   const nowIso      = now.toISOString();
-  const transporter = makeTransporter();
+  const transporter = nodemailer.createTransport({ service: "gmail", auth: { user: GMAIL_USER, pass: GMAIL_PASS } });
   const results: { user: string; scheduleId: string; status: string; error?: string }[] = [];
 
-  // ── 1. read all registered user Supabase instances from owner's registry ──
-  const registryH = makeHeaders(REGISTRY_KEY);
-  const registryRaw = await fetch(`${REGISTRY_URL}/rest/v1/user_registry?select=*`, { headers: registryH });
+  const registryRaw = await fetch(`${REGISTRY_URL}/rest/v1/user_registry?select=*`, { headers: makeHeaders(REGISTRY_KEY) });
   let registry: UserEntry[] = [];
   if (registryRaw.ok) {
     registry = await registryRaw.json();
   } else {
-    const errorBody = await registryRaw.text().catch(() => "(unreadable)");
-    console.error(`[send-reports] Registry fetch failed: ${registryRaw.status} — ${errorBody}`);
+    const body = await registryRaw.text().catch(() => "(unreadable)");
+    console.error(`[send-reports] Registry fetch failed: ${registryRaw.status} — ${body}`);
   }
 
-  // Always include owner's own Supabase (service role key for extra access)
-  const ownerEntry = { supabase_url: REGISTRY_URL, anon_key: REGISTRY_KEY };
   const allUsers: UserEntry[] = [
-    ownerEntry,
+    { supabase_url: REGISTRY_URL, anon_key: REGISTRY_KEY },
     ...registry.filter(u => u.supabase_url !== REGISTRY_URL),
   ];
 
-  // ── 2. for each user, fetch and process their due schedules ───────────────
   for (const user of allUsers) {
     let schedules: Schedule[] = [];
     try {
       schedules = await userGet(user.supabase_url, user.anon_key, `/report_schedules?is_active=eq.true&next_send_at=lte.${nowIso}&select=*`);
-    } catch { continue; } // user's Supabase unreachable — skip
+    } catch { continue; }
 
     for (const s of schedules) {
       const { start, end } = getPeriod(s, now);
@@ -244,7 +210,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         errMsg = (e as Error).message;
       }
 
-      // Log to user's own delivery log
       await userPost(user.supabase_url, user.anon_key, "report_delivery_log", {
         schedule_id: s.id, user_id: s.user_id, status,
         period_start: pStart, period_end: pEnd,

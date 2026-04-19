@@ -810,22 +810,18 @@ export default function Nomad() {
       is_active: reportActive,
     };
     if (reportScheduleId) {
-      // Existing record — use PATCH to avoid unique constraint conflict
-      const r = await fetch(`${SB_URL}/rest/v1/report_schedules?id=eq.${reportScheduleId}`, {
+      return fetch(`${SB_URL}/rest/v1/report_schedules?id=eq.${reportScheduleId}`, {
         method: "PATCH",
         headers: { ...sbH, "Prefer": "return=minimal" },
         body: JSON.stringify(payload),
       });
-      return r;
     } else {
-      // New record — INSERT
       const r = await fetch(`${SB_URL}/rest/v1/report_schedules`, {
         method: "POST",
         headers: { ...sbH, "Prefer": "return=representation" },
         body: JSON.stringify([payload]),
       });
       if (r.ok) {
-        // Store the returned id so future saves use PATCH
         const created = await r.json().catch(() => []);
         if (created[0]?.id) sReportScheduleId(created[0].id);
       }
@@ -877,7 +873,6 @@ export default function Nomad() {
         showT("Database tables created!", "success");
         sDbSetupModal(false);
         sDbSetupToken("");
-        // Retry the save now that tables exist
         sReportSaving(true);
         try {
           const r2 = await _doSaveSchedule();
