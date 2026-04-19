@@ -129,11 +129,14 @@ export async function processSchedule(
   const pEnd   = format(end,   "yyyy-MM-dd");
   const catFilter = s.selected_categories?.length ? `&categoryId=in.(${s.selected_categories.join(",")})` : "";
 
-  const [expenses, incomes, transfers] = await Promise.all([
+  const [expenses, incomes, transfers, allExpenses, allIncomes, allTransfers] = await Promise.all([
     s.include_expenses  ? userGet(sbUrl, sbKey, `/expenses?date=gte.${pStart}&date=lte.${pEnd}${catFilter}&select=*`)  : [],
     s.include_incomes   ? userGet(sbUrl, sbKey, `/incomes?date=gte.${pStart}&date=lte.${pEnd}&select=*`)               : [],
     s.include_transfers ? userGet(sbUrl, sbKey, `/transfers?date=gte.${pStart}&date=lte.${pEnd}&select=*`)             : [],
-  ]) as [Expense[], Income[], Transfer[]];
+    userGet(sbUrl, sbKey, `/expenses?select=*&order=date.desc`),
+    userGet(sbUrl, sbKey, `/incomes?select=*&order=date.desc`),
+    userGet(sbUrl, sbKey, `/transfers?select=*&order=date.desc`),
+  ]) as [Expense[], Income[], Transfer[], Expense[], Income[], Transfer[]];
 
   const totalSpent     = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
   const totalIncome    = incomes.reduce((sum, i)  => sum + Number(i.amount), 0);
@@ -152,7 +155,7 @@ export async function processSchedule(
     html: buildHtml({ schedule: s, periodStart: start, periodEnd: end, totalSpent, totalIncome, totalTransfers, byCategory }),
     attachments: [
       { filename: `nomad_${lbl}.csv`,         content: buildCsv(expenses, incomes, transfers, s) },
-      { filename: `nomad_backup_${lbl}.json`, content: buildBackup(expenses, incomes, transfers) },
+      { filename: `nomad_backup_${lbl}.json`, content: buildBackup(allExpenses, allIncomes, allTransfers) },
     ],
   });
 }
