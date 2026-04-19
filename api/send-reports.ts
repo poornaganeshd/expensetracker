@@ -1,20 +1,19 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import {
-  addDays, addMonths,
   subDays, subMonths,
   startOfMonth, endOfMonth,
   format,
 } from "date-fns";
 
 // ── env ───────────────────────────────────────────────────────────────────────
-const REGISTRY_URL = process.env.VITE_SUPABASE_URL!;
-const REGISTRY_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const RESEND_KEY   = process.env.RESEND_API_KEY;
-const CRON_SECRET  = process.env.CRON_SECRET!;
-const FROM_EMAIL   = process.env.RESEND_FROM_EMAIL ?? "NOMAD Reports <reports@resend.dev>";
-console.log("[send-reports] RESEND KEY EXISTS:", !!RESEND_KEY);
-console.log("[send-reports] FROM_EMAIL:", FROM_EMAIL);
+const REGISTRY_URL  = process.env.VITE_SUPABASE_URL!;
+const REGISTRY_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const CRON_SECRET   = process.env.CRON_SECRET!;
+const GMAIL_USER    = process.env.GMAIL_USER!;
+const GMAIL_PASS    = process.env.GMAIL_APP_PASSWORD!;
+console.log("[send-reports] GMAIL_USER EXISTS:", !!GMAIL_USER);
+console.log("[send-reports] GMAIL_PASS EXISTS:", !!GMAIL_PASS);
 
 // ── types ─────────────────────────────────────────────────────────────────────
 interface UserEntry   { supabase_url: string; anon_key: string; }
@@ -138,8 +137,16 @@ function buildHtml(opts: { schedule: Schedule; periodStart: Date; periodEnd: Dat
 </table></td></tr></table></body></html>`;
 }
 
+// ── gmail transporter (created once per invocation) ──────────────────────────
+function makeTransporter() {
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user: GMAIL_USER, pass: GMAIL_PASS },
+  });
+}
+
 // ── process one schedule ──────────────────────────────────────────────────────
-async function processSchedule(s: Schedule, sbUrl: string, sbKey: string, resend: Resend, now: Date) {
+async function processSchedule(s: Schedule, sbUrl: string, sbKey: string, transporter: nodemailer.Transporter, now: Date) {
   const { start, end } = getPeriod(s, now);
   const pStart = format(start, "yyyy-MM-dd");
   const pEnd   = format(end,   "yyyy-MM-dd");
@@ -162,20 +169,17 @@ async function processSchedule(s: Schedule, sbUrl: string, sbKey: string, resend
   const fLabel = s.frequency === "custom" ? `Every ${s.custom_days}d` : s.frequency.charAt(0).toUpperCase() + s.frequency.slice(1);
 
   console.log(`[send-reports] Sending email to: ${s.email}`);
-  const sendResult = await resend.emails.send({
-    from: FROM_EMAIL,
+  const info = await transporter.sendMail({
+    from: `NOMAD Reports <${GMAIL_USER}>`,
     to: s.email,
     subject: `🦁 NOMAD ${fLabel} Report — ${format(start, "MMM d")} to ${format(end, "MMM d, yyyy")}`,
     html: buildHtml({ schedule: s, periodStart: start, periodEnd: end, totalSpent, totalIncome, totalTransfers, byCategory }),
     attachments: [
-      { filename: `nomad_${lbl}.csv`,          content: Buffer.from(buildCsv(expenses, incomes, transfers, s)).toString("base64") },
-      { filename: `nomad_backup_${lbl}.json`,  content: Buffer.from(buildBackup(expenses, incomes, transfers)).toString("base64") },
+      { filename: `nomad_${lbl}.csv`,         content: buildCsv(expenses, incomes, transfers, s) },
+      { filename: `nomad_backup_${lbl}.json`, content: buildBackup(expenses, incomes, transfers) },
     ],
   });
-  console.log("[send-reports] RESEND RESPONSE:", JSON.stringify(sendResult));
-  if (sendResult.error) {
-    throw new Error(`Resend error: ${sendResult.error.message}`);
-  }
+  console.log("[send-reports] Gmail response:", info.messageId);
 }
 
 // ── handler ───────────────────────────────────────────────────────────────────
@@ -188,13 +192,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  if (!RESEND_KEY) {
-    return res.status(500).json({ error: "RESEND_API_KEY is not set" });
+  if (!GMAIL_USER || !GMAIL_PASS) {
+    return res.status(500).json({ error: "GMAIL_USER or GMAIL_APP_PASSWORD is not set" });
   }
 
-  const now    = new Date();
-  const nowIso = now.toISOString();
-  const resend = new Resend(RESEND_KEY);
+  const now         = new Date();
+  const nowIso      = now.toISOString();
+  const transporter = makeTransporter();
   const results: { user: string; scheduleId: string; status: string; error?: string }[] = [];
 
   // ── 1. read all registered user Supabase instances from owner's registry ──
@@ -230,7 +234,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let errMsg: string | undefined;
 
       try {
-        await withRetry(() => processSchedule(s, user.supabase_url, user.anon_key, resend, now));
+        await withRetry(() => processSchedule(s, user.supabase_url, user.anon_key, transporter, now));
         await userPatch(user.supabase_url, user.anon_key, `/report_schedules?id=eq.${s.id}`, {
           next_send_at: getNextSendAt(s, now).toISOString(),
           last_sent_at: nowIso,
