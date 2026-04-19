@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { ComposedChart, Bar, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import RoutineApp from "./Routine";
-import TrendChart from "./components/TrendChart";
 import { flushSyncQueue, getPendingSyncCount, sendSupabaseRequest, subscribePendingSync } from "./offlineSync";
 import { checkBillReminders } from "./billReminders";
 import { getINRRate, saveCurrencyMeta, getCurrencyMeta } from "./currencyConverter";
@@ -198,39 +197,75 @@ function LionM({ balance: bal, dancing }) {
 }
 
 function Chart({ expenses: ex, incomes: inc, settlements: stl, months: ms, period = "month" }) {
-  const sumAmt = arr => arr.reduce((s, x) => s + x.amount, 0);
-  const netExp = (f) => Math.max(0, sumAmt(ex.filter(f)) + sumAmt(stl.filter(x => f(x) && x.direction === "owe")) - sumAmt(stl.filter(x => f(x) && x.direction === "owed")));
-  let rawPts = [], labels = [];
+  const sumAmt = arr => arr.reduce((s, x) => s + Number(x.amount || 0), 0);
+  const addDays = (date, days) => { const d = new Date(date); d.setDate(d.getDate() + days); return d; };
+  const startOfWeek = (date) => { const d = new Date(date); d.setDate(d.getDate() - d.getDay()); return d; };
+  const monthKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const allDates = [...ex, ...inc, ...stl].map(x => x.date).filter(Boolean).sort();
+  let buckets = [];
+
   if (period === "day") {
     const today = new Date();
-    const days = Array.from({ length: 14 }, (_, i) => { const d = new Date(today); d.setDate(d.getDate() - (13 - i)); return localDateKey(d); });
-    labels = days.map(d => new Date(d + "T00:00:00").getDate().toString());
-    rawPts = days.map(day => ({ i: sumAmt(inc.filter(x => x.date === day)), e: netExp(x => x.date === day) }));
+    buckets = Array.from({ length: 14 }, (_, i) => {
+      const date = addDays(today, -(13 - i));
+      const key = localDateKey(date);
+      return { key, label: new Date(`${key}T00:00:00`).getDate().toString() };
+    });
   } else if (period === "week") {
-    const today = new Date(), dow = today.getDay();
-    const cwStart = new Date(today); cwStart.setDate(today.getDate() - dow);
-    const wStarts = Array.from({ length: 8 }, (_, i) => { const d = new Date(cwStart); d.setDate(cwStart.getDate() - (7 - i) * 7); return localDateKey(d); });
-    labels = wStarts.map(ws => new Date(ws + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }));
-    rawPts = wStarts.map(ws => { const we = new Date(ws + "T00:00:00"); we.setDate(we.getDate() + 6); const weStr = localDateKey(we); return { i: sumAmt(inc.filter(x => x.date >= ws && x.date <= weStr)), e: netExp(x => x.date >= ws && x.date <= weStr) }; });
+    const currentWeek = startOfWeek(new Date());
+    buckets = Array.from({ length: 8 }, (_, i) => {
+      const start = addDays(currentWeek, -(7 * (7 - i)));
+      const key = localDateKey(start);
+      return { key, label: new Date(`${key}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }) };
+    });
   } else if (period === "month") {
-    if (ms.length < 1) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>Add transactions to see trends</p>;
-    labels = ms.map(m => ml(m));
-    rawPts = ms.map(m => ({ i: sumAmt(inc.filter(x => mk(x.date) === m)), e: netExp(x => mk(x.date) === m) }));
+    const monthKeys = allDates.length
+      ? [...new Set(allDates.map(d => d.slice(0, 7)))].sort().slice(-12)
+      : ms.slice(-12);
+    buckets = monthKeys.map(key => ({ key, label: ml(key) }));
   } else if (period === "year") {
-    const yrs = [...new Set([...ex, ...inc, ...stl].map(x => x.date?.slice(0, 4)).filter(Boolean))].sort();
-    if (yrs.length < 1) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>Add transactions to see trends</p>;
-    labels = yrs;
-    rawPts = yrs.map(yr => ({ i: sumAmt(inc.filter(x => x.date?.startsWith(yr))), e: netExp(x => x.date?.startsWith(yr)) }));
+    const years = [...new Set(allDates.map(d => d.slice(0, 4)))].sort();
+    buckets = years.map(key => ({ key, label: key }));
   }
-  if (!rawPts.length || rawPts.every(p => p.i === 0 && p.e === 0)) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>No data for this period</p>;
 
-  const data = rawPts.map((p, idx) => ({ label: labels[idx], income: p.i, spent: p.e, net: Math.max(0, p.i - p.e), hasData: p.i > 0 || p.e > 0 }));
+  if (buckets.length < 1) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>Add transactions to see trends</p>;
+
+  const data = buckets.map(({ key, label }) => {
+    let income = 0, spent = 0;
+    if (period === "day") {
+      income = sumAmt(inc.filter(x => x.date === key));
+      spent = sumAmt(ex.filter(x => x.date === key))
+        + sumAmt(stl.filter(x => x.date === key && x.direction === "owe"))
+        - sumAmt(stl.filter(x => x.date === key && x.direction === "owed"));
+    } else if (period === "week") {
+      const end = localDateKey(addDays(new Date(`${key}T00:00:00`), 6));
+      income = sumAmt(inc.filter(x => x.date >= key && x.date <= end));
+      spent = sumAmt(ex.filter(x => x.date >= key && x.date <= end))
+        + sumAmt(stl.filter(x => x.date >= key && x.date <= end && x.direction === "owe"))
+        - sumAmt(stl.filter(x => x.date >= key && x.date <= end && x.direction === "owed"));
+    } else if (period === "month") {
+      income = sumAmt(inc.filter(x => mk(x.date) === key));
+      spent = sumAmt(ex.filter(x => mk(x.date) === key))
+        + sumAmt(stl.filter(x => mk(x.date) === key && x.direction === "owe"))
+        - sumAmt(stl.filter(x => mk(x.date) === key && x.direction === "owed"));
+    } else {
+      income = sumAmt(inc.filter(x => x.date?.startsWith(key)));
+      spent = sumAmt(ex.filter(x => x.date?.startsWith(key)))
+        + sumAmt(stl.filter(x => x.date?.startsWith(key) && x.direction === "owe"))
+        - sumAmt(stl.filter(x => x.date?.startsWith(key) && x.direction === "owed"));
+    }
+    const safeSpent = Math.max(0, spent);
+    const net = income - safeSpent;
+    return { label, income, spent: safeSpent, net, netArea: Math.max(0, net), hasData: income > 0 || safeSpent > 0 };
+  });
+
+  if (data.every(p => p.income === 0 && p.spent === 0)) return <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 24, fontFamily: "var(--font-b)" }}>No data for this period</p>;
 
   if (period === "day") {
     data.forEach((d, i) => { d.rollingAvg = i >= 6 ? data.slice(i - 6, i + 1).reduce((s, x) => s + x.spent, 0) / 7 : undefined; });
   }
 
-  const allVals = data.flatMap(d => [d.income, d.spent]).filter(v => v > 0);
+  const allVals = data.flatMap(d => [d.income, d.spent, d.netArea]).filter(v => v > 0);
   const sorted = [...allVals].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)] || 1;
   const maxVal = Math.max(...allVals, 1);
@@ -257,10 +292,10 @@ function Chart({ expenses: ex, incomes: inc, settlements: stl, months: ms, perio
         <YAxis scale={useLog ? "log" : "auto"} domain={useLog ? [1, "auto"] : [0, "auto"]} tickFormatter={fmtY} tick={{ fontSize: 9, fontFamily: "var(--font-h)", fill: "var(--muted)" }} tickLine={false} axisLine={false} width={44} allowDataOverflow={useLog} />
         <Tooltip content={({ active, payload, label }) => {
           if (!active || !payload?.length) return null;
-          const ip = payload.find(p => p.dataKey === "income"), sp = payload.find(p => p.dataKey === "spent");
-          return <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontFamily: "var(--font-h)", fontSize: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.1)" }}><div style={{ fontWeight: 700, marginBottom: 4, color: "var(--ts)", fontSize: 11 }}>{label}</div>{ip && <div style={{ color: "#6BAA75", fontWeight: 600 }}>Income: {fmt(ip.value || 0)}</div>}{sp && <div style={{ color: "#E07A5F", fontWeight: 600 }}>Spent: {fmt(sp.value || 0)}</div>}</div>;
+          const ip = payload.find(p => p.dataKey === "income"), sp = payload.find(p => p.dataKey === "spent"), np = payload.find(p => p.dataKey === "netArea")?.payload?.net;
+          return <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontFamily: "var(--font-h)", fontSize: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.1)" }}><div style={{ fontWeight: 700, marginBottom: 4, color: "var(--ts)", fontSize: 11 }}>{label}</div>{ip && <div style={{ color: "#6BAA75", fontWeight: 600 }}>Income: {fmt(ip.value || 0)}</div>}{sp && <div style={{ color: "#E07A5F", fontWeight: 600 }}>Spent: {fmt(sp.value || 0)}</div>}<div style={{ color: np >= 0 ? "#7B8CDE" : "#D4726A", fontWeight: 600 }}>Net: {fmt(np || 0)}</div></div>;
         }} />
-        <Area dataKey="net" fill="url(#netGreen)" stroke="none" />
+        <Area dataKey="netArea" fill="url(#netGreen)" stroke="none" />
         <Bar dataKey="spent" fill="#E07A5F" fillOpacity={0.82} radius={[4, 4, 0, 0]} maxBarSize={18} />
         <Line dataKey="income" stroke="#6BAA75" strokeWidth={2.5} dot={<IncomeDot />} activeDot={{ r: 5, fill: "#6BAA75" }} />
         {period === "day" && data.some(d => d.rollingAvg !== undefined) && <Line dataKey="rollingAvg" stroke="#7B8CDE" strokeWidth={1.5} strokeDasharray="4 3" dot={false} activeDot={false} />}
@@ -1030,7 +1065,7 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
         <LionM balance={mBal} dancing={ld} />
         <Splits splits={sp} expanded={spX} onToggle={() => sSpX(!spX)} onAdd={s => { sSp(p => [...p, s]); sbUpsert("splits", [toSB(s, ["id", "name", "amount", "direction", "settled", "eventId", "groupId"])]) }} onSettle={settle} onDelete={id => { sSp(p => p.filter(s => s.id !== id)); sbDelete("splits", id) }} />
         {(() => { const cm = localDateKey().slice(0, 7), mE = ex.filter(e => mk(e.date) === cm), fixT = mE.filter(isFix).reduce((s, e) => s + e.amount, 0), flxT = mE.filter(e => !isFix(e)).reduce((s, e) => s + e.amount, 0), tot = fixT + flxT, fixP = tot > 0 ? Math.round(fixT / tot * 100) : 0, flxP = 100 - fixP; return <div style={{ ...cc, padding: "16px 18px", marginBottom: 14, position: "relative", overflow: "hidden" }}><div style={{ position: "absolute", bottom: 0, right: 0, width: 60, height: 3, borderRadius: "3px 0 0 0", background: "#A78BFA" }} /><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "#A78BFA", fontWeight: 700, letterSpacing: "0.5px" }}>Fixed vs Flexible</div><div style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-h)" }}>This Month</div></div>{tot === 0 ? <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: "8px 0" }}>No expenses this month</p> : <><div style={{ height: 8, borderRadius: 4, background: "#FBBF24", overflow: "hidden", marginBottom: 10 }}><div style={{ height: "100%", width: `${fixP}%`, background: "#A78BFA", borderRadius: 4 }} /></div><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: 2, background: "#A78BFA", flexShrink: 0 }} /><span style={{ fontSize: 12, fontFamily: "var(--font-h)", color: "var(--ts)" }}>Fixed</span></div><span style={{ fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 600, color: "var(--text)" }}>{fmt(fixT)} <span style={{ color: "var(--muted)", fontWeight: 400 }}>({fixP}%)</span></span></div><div style={{ display: "flex", justifyContent: "space-between" }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: 2, background: "#FBBF24", flexShrink: 0 }} /><span style={{ fontSize: 12, fontFamily: "var(--font-h)", color: "var(--ts)" }}>Flexible</span></div><span style={{ fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 600, color: "var(--text)" }}>{fmt(flxT)} <span style={{ color: "var(--muted)", fontWeight: 400 }}>({flxP}%)</span></span></div></>}</div> })()}
-        <div style={{ ...cc, padding: "18px 14px", marginBottom: 16, position: "relative", overflow: "hidden", background: dm ? "linear-gradient(180deg, rgba(18,18,18,0.98), rgba(11,11,11,0.98))" : "var(--card)" }}><div style={{ position: "absolute", bottom: 0, right: 0, width: 60, height: 3, borderRadius: "3px 0 0 0", background: "#D4AF37" }} /><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 10, flexWrap: "wrap" }}><div><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "#D4AF37", letterSpacing: "0.5px", fontWeight: 700 }}>Trend</div><div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 4 }}>Stacked expenses with net balance overlay</div></div><div style={{ display: "flex", background: dm ? "rgba(255,255,255,0.03)" : "var(--bg)", borderRadius: 999, padding: 3, border: "1px solid var(--border)", gap: 2 }}>{["Day","Week","Month"].map(p => { const v = p.toLowerCase(); return <button key={v} onClick={() => sTrendPeriod(v)} style={{ padding: "6px 12px", borderRadius: 999, fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 700, letterSpacing: "0.03em", border: "none", cursor: "pointer", background: trendPeriod === v ? "#D4AF37" : "transparent", color: trendPeriod === v ? "#111" : "var(--muted)", transition: "all 0.15s" }}>{p}</button>; })}</div></div><TrendChart expenses={ex} incomes={inc} categories={cats} period={trendPeriod} formatCurrency={fmt} /></div>
+        <div style={{ ...cc, padding: "18px 14px", marginBottom: 16, position: "relative", overflow: "hidden" }}><div style={{ position: "absolute", bottom: 0, right: 0, width: 60, height: 3, borderRadius: "3px 0 0 0", background: "#7B8CDE" }} /><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "#7B8CDE", letterSpacing: "0.5px", fontWeight: 700 }}>Trend</div><div style={{ display: "flex", background: "var(--bg)", borderRadius: 8, padding: 2, border: "1px solid var(--border)", gap: 1 }}>{["Day","Week","Month","Year"].map(p => { const v = p.toLowerCase(); return <button key={v} onClick={() => sTrendPeriod(v)} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, border: "none", cursor: "pointer", background: trendPeriod === v ? "#7B8CDE" : "transparent", color: trendPeriod === v ? "#fff" : "var(--muted)", transition: "all 0.15s" }}>{p}</button>; })}</div></div><div style={{ overflowX: "auto", width: "100%" }}><Chart expenses={ex} incomes={inc} settlements={stl} months={allM} period={trendPeriod} /></div></div>
         <div style={{ ...cc, padding: 18, marginBottom: 16, position: "relative", overflow: "hidden" }}><div style={{ position: "absolute", bottom: 0, right: 0, width: 60, height: 3, borderRadius: "3px 0 0 0", background: "#E07A5F" }} /><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "#E07A5F", marginBottom: 16, letterSpacing: "0.5px", fontWeight: 700 }}>Spending by Category</div>{flt.expenses.length === 0 ? <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 20 }}>No expenses yet</p> : (() => { const t = {}; flt.expenses.forEach(e => { t[e.categoryId] = (t[e.categoryId] || 0) + e.amount }); const s = Object.entries(t).sort((a, b) => b[1] - a[1]), mx = s[0]?.[1] || 1; return s.map(([cid, total]) => { const c = cats.find(x => x.id === cid) || { id: cid, name: cid, color: "#999", neon: "#999" }; const cExps = flt.expenses.filter(e => e.categoryId === cid); const ctag = cExps.length > 0 && cExps.every(isFix) ? "fixed" : "flexible"; return <div key={cid} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}><span style={{ width: 30, display: "flex", justifyContent: "center" }}><DI2 id={c.id} accent={c.neon || c.color} size={20} /></span><div style={{ flex: 1 }}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}><div style={{ display: "flex", alignItems: "center" }}><span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)" }}>{c.name}</span><span style={{ fontSize: 8, fontFamily: "var(--font-h)", fontWeight: 600, color: ctag === "fixed" ? "#A78BFA" : "#FBBF24", background: ctag === "fixed" ? "#A78BFA15" : "#FBBF2415", padding: "2px 6px", borderRadius: 4, marginLeft: 6 }}>{ctag === "fixed" ? "FIXED" : "FLEX"}</span></div><span style={{ fontSize: 13, fontFamily: "var(--font-h)", color: "var(--ts)", fontWeight: 500 }}>{fmt(total)}</span></div><div style={{ height: 5, borderRadius: 3, background: "var(--border)", overflow: "hidden" }}><div style={{ height: "100%", width: `${(total / mx) * 100}%`, background: c.color, borderRadius: 3 }} /></div></div></div> }) })()}</div>
         <Report expenses={ex} /></div>}
 
