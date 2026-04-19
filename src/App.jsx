@@ -46,14 +46,21 @@ const getRecurringDueDate = (record, todayString) => {
   if (Number.isNaN(start.getTime()) || start > today) return null;
   if (record.frequency === "monthly") {
     const months = Math.max(0, fullMonthsBetween(start, today));
-    return isoDate(withClampedDay(start.getFullYear(), start.getMonth() + months, record.dayOfMonth || start.getDate()));
+    const dayOfMonth = record.dayOfMonth || start.getDate();
+    let due = withClampedDay(start.getFullYear(), start.getMonth() + months, dayOfMonth);
+    // If due falls before startDate (e.g. dayOfMonth already passed when record was created), move to next month
+    if (due < start) due = withClampedDay(start.getFullYear(), start.getMonth() + months + 1, dayOfMonth);
+    return isoDate(due);
   }
   if (record.frequency === "yearly") {
     const monthIndex = Math.max(0, (record.yearMonth || (start.getMonth() + 1)) - 1);
     const desiredDay = record.yearDay || start.getDate();
     const startAnchor = withClampedDay(start.getFullYear(), monthIndex, desiredDay);
     const years = Math.max(0, fullYearsBetween(startAnchor, today));
-    return isoDate(withClampedDay(start.getFullYear() + years, monthIndex, desiredDay));
+    let due = withClampedDay(start.getFullYear() + years, monthIndex, desiredDay);
+    // If due falls before startDate (e.g. yearly date already passed this year when record was created), move to next year
+    if (due < start) due = withClampedDay(start.getFullYear() + years + 1, monthIndex, desiredDay);
+    return isoDate(due);
   }
   if (record.frequency === "custom") {
     const intervalDays = Number(record.intervalDays) || 0;
