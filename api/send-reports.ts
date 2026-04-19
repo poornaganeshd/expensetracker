@@ -10,9 +10,11 @@ import {
 // ── env ───────────────────────────────────────────────────────────────────────
 const REGISTRY_URL = process.env.VITE_SUPABASE_URL!;
 const REGISTRY_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const RESEND_KEY   = process.env.RESEND_API_KEY!;
+const RESEND_KEY   = process.env.RESEND_API_KEY;
 const CRON_SECRET  = process.env.CRON_SECRET!;
 const FROM_EMAIL   = process.env.RESEND_FROM_EMAIL ?? "NOMAD Reports <reports@resend.dev>";
+console.log("[send-reports] RESEND KEY EXISTS:", !!RESEND_KEY);
+console.log("[send-reports] FROM_EMAIL:", FROM_EMAIL);
 
 // ── types ─────────────────────────────────────────────────────────────────────
 interface UserEntry   { supabase_url: string; anon_key: string; }
@@ -159,7 +161,8 @@ async function processSchedule(s: Schedule, sbUrl: string, sbKey: string, resend
   const lbl    = `${s.frequency}_${format(end, "yyyy-MM-dd")}`;
   const fLabel = s.frequency === "custom" ? `Every ${s.custom_days}d` : s.frequency.charAt(0).toUpperCase() + s.frequency.slice(1);
 
-  await resend.emails.send({
+  console.log(`[send-reports] Sending email to: ${s.email}`);
+  const sendResult = await resend.emails.send({
     from: FROM_EMAIL,
     to: s.email,
     subject: `🦁 NOMAD ${fLabel} Report — ${format(start, "MMM d")} to ${format(end, "MMM d, yyyy")}`,
@@ -169,6 +172,10 @@ async function processSchedule(s: Schedule, sbUrl: string, sbKey: string, resend
       { filename: `nomad_backup_${lbl}.json`,  content: Buffer.from(buildBackup(expenses, incomes, transfers)).toString("base64") },
     ],
   });
+  console.log("[send-reports] RESEND RESPONSE:", JSON.stringify(sendResult));
+  if (sendResult.error) {
+    throw new Error(`Resend error: ${sendResult.error.message}`);
+  }
 }
 
 // ── handler ───────────────────────────────────────────────────────────────────
@@ -179,6 +186,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!isAuthorized) {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  if (!RESEND_KEY) {
+    return res.status(500).json({ error: "RESEND_API_KEY is not set" });
   }
 
   const now    = new Date();
