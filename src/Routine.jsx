@@ -17,55 +17,188 @@ import { getCredentials as _getCreds } from './credentials';
    v7 → progress dots UI fix: column layout (dot + label + value), no wrap
    ============================================================ */
 
+const PhosphorIcon = ({ name, size = 24, color = 'currentColor', opacity = 0.3 }) => {
+    const icons = {
+        drop: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <path d="M208,144a80,80,0,0,1-160,0C48,80,128,16,128,16S208,80,208,144Z" fill={color} opacity={opacity}/>
+                <path d="M208,144a80,80,0,0,1-160,0C48,80,128,16,128,16S208,80,208,144Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <line x1="128" y1="200" x2="128" y2="224" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+            </svg>
+        ),
+        egg: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <ellipse cx="128" cy="135" rx="80" ry="97" fill={color} opacity={opacity}/>
+                <ellipse cx="128" cy="135" rx="80" ry="97" stroke={color} strokeWidth="14" fill="none"/>
+                <path d="M80,112C95,90,161,90,176,112" stroke={color} strokeWidth="14" strokeLinecap="round" fill="none"/>
+            </svg>
+        ),
+        bowl: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <path d="M32,104H224a96,96,0,0,1-192,0Z" fill={color} opacity={opacity}/>
+                <path d="M32,104H224a96,96,0,0,1-192,0Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <line x1="72" y1="224" x2="184" y2="224" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+                <line x1="32" y1="72" x2="224" y2="72" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+            </svg>
+        ),
+        leaf: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <path d="M152,32C80,32,40,88,40,152c0,0,48-24,88-16s72,48,72,48C228,120,224,32,152,32Z" fill={color} opacity={opacity}/>
+                <path d="M152,32C80,32,40,88,40,152c0,0,48-24,88-16s72,48,72,48C228,120,224,32,152,32Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <line x1="40" y1="216" x2="120" y2="136" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+            </svg>
+        ),
+        bottle: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <rect x="88" y="56" width="80" height="160" rx="24" fill={color} opacity={opacity}/>
+                <rect x="88" y="56" width="80" height="160" rx="24" stroke={color} strokeWidth="14" fill="none"/>
+                <line x1="88" y1="120" x2="168" y2="120" stroke={color} strokeWidth="12" strokeLinecap="round"/>
+                <path d="M88,152c20,16,64,16,80,0" stroke={color} strokeWidth="12" strokeLinecap="round" fill="none"/>
+                <path d="M108,56V32M148,56V32" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+            </svg>
+        ),
+        notepad: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <rect x="48" y="40" width="160" height="176" rx="16" fill={color} opacity={opacity}/>
+                <rect x="48" y="40" width="160" height="176" rx="16" stroke={color} strokeWidth="14" fill="none"/>
+                <line x1="88" y1="100" x2="168" y2="100" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+                <line x1="88" y1="132" x2="168" y2="132" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+                <line x1="88" y1="164" x2="136" y2="164" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+            </svg>
+        ),
+        sparkle: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <path d="M128,24l24,80H232l-68,48,24,80L128,184,68,232l24-80L24,104h80Z" fill={color} opacity={opacity}/>
+                <path d="M128,24l24,80H232l-68,48,24,80L128,184,68,232l24-80L24,104h80Z" stroke={color} strokeWidth="14" strokeLinejoin="round" fill="none"/>
+            </svg>
+        ),
+        sun: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <circle cx="128" cy="128" r="60" fill={color} opacity={opacity}/>
+                <circle cx="128" cy="128" r="60" stroke={color} strokeWidth="14" fill="none"/>
+                {[[128,24],[128,232],[24,128],[232,128],[60,60],[196,196],[60,196],[196,60]].map(([x1,y1],i)=>{
+                    const cx=128,cy=128,dx=x1-cx,dy=y1-cy,len=Math.sqrt(dx*dx+dy*dy),nx=dx/len,ny=dy/len;
+                    return <line key={i} x1={cx+nx*72} y1={cy+ny*72} x2={cx+nx*88} y2={cy+ny*88} stroke={color} strokeWidth="14" strokeLinecap="round"/>;
+                })}
+            </svg>
+        ),
+        moon: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <path d="M216,112A88,88,0,0,1,112,216c-40,0-74-22-90-56,0,0,42,10,74-8s52-54,38-96C172,58,216,82,216,112Z" fill={color} opacity={opacity}/>
+                <path d="M216,112A88,88,0,0,1,112,216c-40,0-74-22-90-56,0,0,42,10,74-8s52-54,38-96C172,58,216,82,216,112Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            </svg>
+        ),
+        heart: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <path d="M128,224S24,160,24,96a52,52,0,0,1,104,0,52,52,0,0,1,104,0C232,160,128,224,128,224Z" fill={color} opacity={opacity}/>
+                <path d="M128,224S24,160,24,96a52,52,0,0,1,104,0,52,52,0,0,1,104,0C232,160,128,224,128,224Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            </svg>
+        ),
+        flame: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <path d="M96,224c0-80,80-88,80-160,0,0,32,32,32,80a96,96,0,0,1-192,0C16,112,96,136,96,224Z" fill={color} opacity={opacity}/>
+                <path d="M96,224c0-80,80-88,80-160,0,0,32,32,32,80a96,96,0,0,1-192,0C16,112,96,136,96,224Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            </svg>
+        ),
+        cup: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <path d="M56,56H200l-24,128H80Z" fill={color} opacity={opacity}/>
+                <path d="M56,56H200l-24,128H80Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <line x1="64" y1="208" x2="192" y2="208" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+                <path d="M200,88h24a24,24,0,0,1,0,48H200" stroke={color} strokeWidth="14" strokeLinecap="round" fill="none"/>
+            </svg>
+        ),
+        pill: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <rect x="36" y="100" width="184" height="56" rx="28" fill={color} opacity={opacity}/>
+                <rect x="36" y="100" width="184" height="56" rx="28" stroke={color} strokeWidth="14" fill="none"/>
+                <line x1="128" y1="100" x2="128" y2="156" stroke={color} strokeWidth="12"/>
+            </svg>
+        ),
+        book: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <path d="M40,196V56a16,16,0,0,1,16-16H216V196Z" fill={color} opacity={opacity}/>
+                <path d="M40,196V56a16,16,0,0,1,16-16H216V196H56A16,16,0,0,0,40,212V196" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <path d="M56,212H216" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+            </svg>
+        ),
+        star: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <path d="M128,24l26,54,60,8-44,42,10,60L128,160l-52,28,10-60L42,86l60-8Z" fill={color} opacity={opacity}/>
+                <path d="M128,24l26,54,60,8-44,42,10,60L128,160l-52,28,10-60L42,86l60-8Z" stroke={color} strokeWidth="14" strokeLinejoin="round" fill="none"/>
+            </svg>
+        ),
+        run: (
+            <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
+                <circle cx="164" cy="44" r="20" fill={color} opacity={opacity}/>
+                <circle cx="164" cy="44" r="20" stroke={color} strokeWidth="14" fill="none"/>
+                <path d="M80,160l40-56,40,24,32,56" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <path d="M120,104l-40,80" stroke={color} strokeWidth="14" strokeLinecap="round" fill="none"/>
+            </svg>
+        ),
+    };
+    return icons[name] || null;
+};
+
+const PHOSPHOR_NAMES = new Set(['drop','egg','bowl','leaf','bottle','notepad','sparkle','sun','moon','heart','flame','cup','pill','book','star','run']);
+const ItemIcon = ({ name, size = 22, color = 'rgba(0,0,0,0.45)', opacity = 0.35 }) =>
+    PHOSPHOR_NAMES.has(name)
+        ? <PhosphorIcon name={name} size={size} color={color} opacity={opacity} />
+        : <span style={{ fontSize: size - 2, lineHeight: 1 }}>{name}</span>;
+
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=DM+Mono:wght@400;500&display=swap');
 
 #nomad-routine {
-  --bg: #f7f5f0;
-  --bg2: #ede9e1;
+  --bg: #f0ece4;
+  --bg2: #e8e4dc;
   --sf: #ffffff;
-  --bd: rgba(0,0,0,0.08);
-  --bde: rgba(0,0,0,0.14);
-  --tx: rgba(10,12,8,0.90);
-  --txm: rgba(10,12,8,0.55);
-  --txd: rgba(10,12,8,0.32);
+  --bd: rgba(0,0,0,0.07);
+  --bde: rgba(0,0,0,0.13);
+  --tx: rgba(46,43,38,0.92);
+  --txm: rgba(46,43,38,0.50);
+  --txd: rgba(46,43,38,0.28);
   --green: #639922;
-  --green-sf: #EAF3DE;
+  --green-sf: #b8d98a;
   --green-deep: #3B6D11;
   --amber: #EF9F27;
-  --amber-sf: #FAEEDA;
+  --amber-sf: #f9e09a;
   --amber-deep: #854F0B;
   --teal: #1D9E75;
-  --teal-sf: #E1F5EE;
+  --teal-sf: #8adace;
   --teal-deep: #0F6E56;
-  --r: 16px;
-  --rsm: 10px;
+  --r: 20px;
+  --rsm: 14px;
   --rpill: 100px;
   --font: 'DM Sans', sans-serif;
   --mono: 'DM Mono', monospace;
-  --food-bg: #FBF6EC;
-  --skin-bg: #F0F8F3;
+  --card-shadow: 0 3px 0 #ddd8ce;
+  --sky: #d4e8f5;
+  --sky-horizon: #e8f0e4;
+  --sky-grass: #c8dba0;
 }
 #nomad-routine.dark {
-  --bg: #0d1a0f;
-  --bg2: #111f13;
-  --sf: #162019;
+  --bg: #1a1e16;
+  --bg2: #222618;
+  --sf: #1e2418;
   --bd: rgba(255,255,255,0.08);
   --bde: rgba(255,255,255,0.14);
-  --tx: rgba(240,245,238,0.90);
-  --txm: rgba(240,245,238,0.50);
-  --txd: rgba(240,245,238,0.28);
-  --green-sf: rgba(99,153,34,0.15);
-  --amber-sf: rgba(239,159,39,0.12);
-  --teal-sf: rgba(29,158,117,0.12);
-  --food-bg: #0f1a0b;
-  --skin-bg: #0c1814;
+  --tx: rgba(240,245,235,0.92);
+  --txm: rgba(240,245,235,0.50);
+  --txd: rgba(240,245,235,0.28);
+  --green-sf: #3a5c1a;
+  --amber-sf: #4a3010;
+  --teal-sf: #0a3828;
+  --card-shadow: 0 3px 0 rgba(0,0,0,0.3);
+  --sky: #1a2e3a;
+  --sky-horizon: #1e2e1a;
+  --sky-grass: #1a3010;
 }
 
 #nomad-routine * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
 #nomad-routine .hd { display: none !important; }
 #nomad-routine .skin-hd .date { display: none !important; }
+
 #nomad-routine .app {
   max-width: 430px;
   margin: 0 auto;
@@ -76,92 +209,397 @@ const CSS = `
   flex-direction: column;
   padding-bottom: 76px;
 }
-#nomad-routine .app[data-tab="food"] { background: var(--food-bg); }
-#nomad-routine .app[data-tab="skin"] { background: var(--skin-bg); }
 
 #nomad-routine .screen {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 18px 24px;
   scrollbar-width: none;
 }
 #nomad-routine .screen::-webkit-scrollbar { display: none; }
 
-#nomad-routine .hd {
+/* ---- Sky header ---- */
+#nomad-routine .sky-header {
+  background: var(--sky);
+  padding: 26px 18px 22px;
+  position: relative;
+  overflow: hidden;
+}
+#nomad-routine .sky-cloud {
+  position: absolute;
+  border-radius: 100px;
+  background: rgba(255,255,255,0.5);
+}
+#nomad-routine .sky-horizon {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 26px;
+  background: var(--sky-horizon);
+}
+#nomad-routine .sky-grass {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 12px;
+  background: var(--sky-grass);
+}
+#nomad-routine .sky-content { position: relative; z-index: 2; }
+#nomad-routine .sky-top-row {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 18px;
-}
-#nomad-routine .hd h1 {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin: 0;
-}
-#nomad-routine .hd .sub {
-  font-size: 12px;
-  color: var(--txm);
-  font-family: var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-#nomad-routine .card {
-  background: var(--sf);
-  border: 1px solid var(--bd);
-  border-radius: var(--r);
-  padding: 16px;
-  margin-bottom: 12px;
-}
-#nomad-routine .card.done { background: var(--green-sf); border-color: transparent; }
-#nomad-routine .card.skin-done { background: var(--teal-sf); border-color: transparent; }
-#nomad-routine .card.confirmed { background: var(--bg2); }
-
-#nomad-routine .row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-#nomad-routine .label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--txm);
-  font-weight: 500;
-  margin-bottom: 8px;
-}
-
-/* ---- Mascot bubble ---- */
-#nomad-routine .mascot {
-  display: flex;
-  gap: 10px;
   align-items: flex-start;
-  background: var(--sf);
-  border: 1px solid var(--bd);
-  border-left: 3px solid var(--amber);
-  border-radius: var(--r);
-  padding: 12px 14px;
   margin-bottom: 16px;
 }
-#nomad-routine .mascot.skin { border-left-color: var(--teal); }
-#nomad-routine .mascot .av {
-  width: 28px; height: 28px;
-  background: var(--bg2);
+#nomad-routine .sky-date-big {
+  font-size: 28px;
+  font-weight: 800;
+  color: #2a3a28;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+#nomad-routine .sky-date-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5a7050;
+  letter-spacing: 0.01em;
+}
+#nomad-routine .sky-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+#nomad-routine .sky-prog-track {
+  flex: 1;
+  height: 7px;
+  background: rgba(255,255,255,0.45);
+  border-radius: 100px;
+  overflow: hidden;
+}
+#nomad-routine .sky-prog-fill {
+  height: 100%;
+  background: #639922;
+  border-radius: 100px;
+  transition: width 0.4s ease;
+}
+#nomad-routine .sky-prog-txt {
+  font-size: 11px;
+  font-weight: 800;
+  color: #3a5a30;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+#nomad-routine .streak-card {
+  background: rgba(255,255,255,0.7);
+  border-radius: 16px;
+  padding: 8px 12px;
+  text-align: center;
+  border: 1.5px solid rgba(255,255,255,0.9);
+  flex-shrink: 0;
+}
+#nomad-routine .streak-card .s-num {
+  font-size: 22px;
+  font-weight: 800;
+  color: #c8820a;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-family: var(--mono);
+}
+#nomad-routine .streak-card .s-lbl {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #a09060;
+  margin-top: 2px;
+}
+
+/* ---- Panda bubble in sky ---- */
+#nomad-routine .sky-panda-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+#nomad-routine .sky-panda-av {
+  width: 44px; height: 44px;
   border-radius: 50%;
+  background: rgba(255,255,255,0.6);
+  border: 2px solid rgba(255,255,255,0.9);
   display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
   flex-shrink: 0;
   overflow: hidden;
 }
-#nomad-routine .mascot .msg { font-size: 14px; color: var(--tx); line-height: 1.4; padding-top: 4px; }
+#nomad-routine .sky-panda-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+#nomad-routine .sky-panda-bubble {
+  background: rgba(255,255,255,0.82);
+  border: 1.5px solid rgba(255,255,255,0.95);
+  border-radius: 16px 16px 16px 4px;
+  padding: 10px 13px;
+  font-size: 13px;
+  color: #3a3830;
+  line-height: 1.5;
+  flex: 1;
+}
+
+/* ---- Body padding ---- */
+#nomad-routine .body-pad {
+  padding: 18px 18px 0;
+}
+
+/* ---- Section label ---- */
+#nomad-routine .sec-lbl {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #c5c0b8;
+  margin: 18px 0 10px 2px;
+}
+
+/* ---- Habit grid ---- */
+#nomad-routine .habit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+  align-items: stretch;
+}
+
+/* ---- Habit tile ---- */
+#nomad-routine .hcard {
+  border-radius: 24px;
+  padding: 16px 15px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform 0.15s;
+  position: relative;
+  border: 1.5px solid transparent;
+}
+#nomad-routine .hcard:active { transform: scale(0.97); }
+#nomad-routine .hcard.hc-idle {
+  background: var(--sf);
+  border-color: var(--bd);
+  box-shadow: var(--card-shadow);
+}
+#nomad-routine .hcard.hc-amber {
+  background: #FFD04D;
+  box-shadow: 0 3px 0 #C8960C;
+}
+#nomad-routine .hcard.hc-green {
+  background: #8ED952;
+  box-shadow: 0 3px 0 #5CA828;
+}
+#nomad-routine .hcard.hc-teal {
+  background: #3DC9B4;
+  box-shadow: 0 3px 0 #1A9888;
+}
+#nomad-routine .hcard.hc-sage {
+  background: #A0CC6A;
+  box-shadow: 0 3px 0 #72A038;
+}
+
+#nomad-routine .hc-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+#nomad-routine .hc-icon {
+  width: 40px; height: 40px;
+  border-radius: 13px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+#nomad-routine .hc-icon.ic-idle { background: #f5f2ee; }
+#nomad-routine .hc-icon.ic-done { background: rgba(255,255,255,0.45); }
+#nomad-routine .hc-check-idle {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--bde);
+}
+#nomad-routine .hc-check-done {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.6);
+  display: flex; align-items: center; justify-content: center;
+}
+#nomad-routine .hc-body { margin-top: auto; }
+#nomad-routine .hc-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--tx);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+#nomad-routine .hcard.hc-amber .hc-name,
+#nomad-routine .hcard.hc-green .hc-name,
+#nomad-routine .hcard.hc-teal .hc-name,
+#nomad-routine .hcard.hc-sage .hc-name { color: rgba(0,0,0,0.62); }
+#nomad-routine .hc-meta {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--txm);
+  margin-top: 3px;
+}
+#nomad-routine .hcard.hc-amber .hc-meta,
+#nomad-routine .hcard.hc-green .hc-meta,
+#nomad-routine .hcard.hc-teal .hc-meta,
+#nomad-routine .hcard.hc-sage .hc-meta { color: rgba(0,0,0,0.32); }
+
+/* ---- Card (shared) ---- */
+#nomad-routine .card {
+  background: var(--sf);
+  border: 1.5px solid var(--bd);
+  border-radius: 24px;
+  padding: 18px;
+  margin-bottom: 10px;
+  box-shadow: var(--card-shadow);
+}
+#nomad-routine .card.done { background: var(--green-sf); border-color: transparent; }
+#nomad-routine .card.skin-done { background: var(--teal-sf); border-color: transparent; }
+#nomad-routine .card.confirmed { background: var(--bg2); border-color: transparent; }
+
+/* ---- Water card ---- */
+#nomad-routine .water-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+#nomad-routine .water-card-icon {
+  width: 42px; height: 42px;
+  border-radius: 14px;
+  background: #fff8ee;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 8px;
+}
+#nomad-routine .water-card-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--tx);
+  letter-spacing: -0.02em;
+}
+#nomad-routine .water-card-sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--txm);
+  margin-top: 2px;
+}
+#nomad-routine .water-big {
+  font-family: var(--mono);
+  font-size: 38px;
+  font-weight: 800;
+  color: var(--amber);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+#nomad-routine .water-big .u {
+  font-size: 16px;
+  color: var(--txm);
+  font-weight: 700;
+  margin-left: 1px;
+}
+#nomad-routine .water-target {
+  font-size: 11px;
+  color: var(--txm);
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+
+/* ---- Stepper (pill buttons) ---- */
+#nomad-routine .stepper { display: flex; align-items: center; gap: 8px; }
+#nomad-routine .stepper button {
+  width: 38px; height: 38px;
+  border-radius: 14px;
+  background: var(--bg2);
+  border: none;
+  color: var(--tx);
+  font-size: 22px;
+  font-weight: 300;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font);
+  line-height: 1;
+  transition: transform 0.12s;
+}
+#nomad-routine .stepper button:active { transform: scale(0.92); }
+#nomad-routine .stepper button:disabled { opacity: 0.35; pointer-events: none; }
+#nomad-routine .stepper .val {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 700;
+  min-width: 28px;
+  text-align: center;
+  color: var(--tx);
+}
+
+/* ---- Water track ---- */
+#nomad-routine .track {
+  display: flex;
+  justify-content: space-between;
+  margin: 14px 0 8px;
+  gap: 5px;
+}
+#nomad-routine .track-pt {
+  flex: 1;
+  text-align: center;
+  padding: 7px 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--txd);
+  cursor: pointer;
+  border-radius: 100px;
+  height: 8px;
+  background: var(--bg2);
+  transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0;
+}
+#nomad-routine .track-pt.on { background: var(--amber); }
+#nomad-routine .track-pt.soft { background: var(--amber-sf); }
+#nomad-routine .prog {
+  height: 7px;
+  background: var(--bg2);
+  border-radius: 100px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+#nomad-routine .prog-fill {
+  height: 100%;
+  background: var(--amber);
+  border-radius: 100px;
+  transition: width 0.3s ease;
+}
+#nomad-routine .prog-fill.teal { background: var(--teal); }
+#nomad-routine .prog-fill.green { background: var(--green); }
+
+/* ---- Morning water row ---- */
+#nomad-routine .mw-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 4px 2px;
+}
+#nomad-routine .mw-row .txt { flex: 1; font-size: 15px; font-weight: 600; }
+#nomad-routine .mw-input {
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: var(--rsm);
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--tx);
+  width: 70px;
+  outline: none;
+}
 
 /* ---- Checkbox ---- */
 #nomad-routine .check {
   width: 22px; height: 22px;
-  border-radius: 7px;
-  border: 1.5px solid var(--bde);
-  background: var(--bg);
+  border-radius: 8px;
+  border: 2px solid var(--bde);
+  background: var(--bg2);
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
@@ -180,114 +618,24 @@ const CSS = `
   100% { transform: scale(1); }
 }
 
-/* ---- Morning water row ---- */
-#nomad-routine .mw-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 4px 2px;
-}
-#nomad-routine .mw-row .txt { flex: 1; font-size: 15px; font-weight: 500; }
-#nomad-routine .mw-input {
-  background: var(--bg2);
-  border: 1px solid var(--bd);
-  border-radius: var(--rsm);
-  padding: 6px 10px;
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--tx);
-  width: 70px;
-  outline: none;
-}
-
-/* ---- Water track ---- */
-#nomad-routine .water-big {
-  font-family: var(--mono);
-  font-size: 36px;
-  font-weight: 500;
-  color: var(--amber);
-  letter-spacing: -0.02em;
-  margin-bottom: 2px;
-}
-#nomad-routine .water-big .u { font-size: 18px; color: var(--txm); margin-left: 2px; }
-#nomad-routine .water-target { font-size: 11px; color: var(--txm); font-family: var(--mono); letter-spacing: 0.04em; }
-#nomad-routine .track {
-  display: flex;
-  justify-content: space-between;
-  margin: 16px 0 10px;
-  position: relative;
-}
-#nomad-routine .track-pt {
-  flex: 1;
-  text-align: center;
-  padding: 8px 0;
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--txd);
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.15s;
-}
-#nomad-routine .track-pt.on { color: var(--amber-deep); background: var(--amber-sf); font-weight: 500; }
-#nomad-routine .track-pt:active { transform: scale(0.95); }
-#nomad-routine .prog {
-  height: 6px;
-  background: var(--bg2);
-  border-radius: 100px;
-  overflow: hidden;
-  margin-top: 4px;
-}
-#nomad-routine .prog-fill {
-  height: 100%;
-  background: var(--amber);
-  border-radius: 100px;
-  transition: width 0.3s ease;
-}
-#nomad-routine .prog-fill.teal { background: var(--teal); }
-#nomad-routine .prog-fill.green { background: var(--green); }
-
-/* ---- Stepper ---- */
-#nomad-routine .stepper {
-  display: flex; align-items: center; gap: 10px;
-}
-#nomad-routine .stepper button {
-  width: 34px; height: 34px;
-  border-radius: 10px;
-  background: var(--bg2);
-  border: 1px solid var(--bd);
-  color: var(--tx);
-  font-size: 18px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--font);
-}
-#nomad-routine .stepper button:active { transform: scale(0.92); }
-#nomad-routine .stepper button:disabled { opacity: 0.35; pointer-events: none; }
-#nomad-routine .stepper .val {
-  font-family: var(--mono);
-  font-size: 22px;
-  font-weight: 500;
-  min-width: 28px;
-  text-align: center;
-  color: var(--tx);
-}
-
 /* ---- Pills / chips ---- */
 #nomad-routine .pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 12px;
+  padding: 7px 14px;
   border-radius: var(--rpill);
   background: var(--bg2);
-  border: 1px solid var(--bd);
+  border: 1.5px solid var(--bd);
   font-size: 13px;
   color: var(--tx);
   cursor: pointer;
   font-family: var(--font);
+  font-weight: 600;
   transition: all 0.15s;
 }
 #nomad-routine .pill:active { transform: scale(0.96); }
-#nomad-routine .pill.on { background: var(--amber-sf); border-color: var(--amber); color: var(--amber-deep); font-weight: 500; }
+#nomad-routine .pill.on { background: var(--amber-sf); border-color: var(--amber); color: var(--amber-deep); font-weight: 700; }
 #nomad-routine .pill.on.teal { background: var(--teal-sf); border-color: var(--teal); color: var(--teal-deep); }
 #nomad-routine .pill.on.green { background: var(--green-sf); border-color: var(--green); color: var(--green-deep); }
 #nomad-routine .pills { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -298,16 +646,16 @@ const CSS = `
   gap: 6px;
   padding: 6px 10px;
   border-radius: var(--rpill);
-  background: var(--amber-sf);
+  background: #f8f5f0;
   border: 1px solid var(--bd);
   font-size: 12px;
-  color: var(--amber-deep);
-  font-weight: 500;
+  color: var(--txm);
+  font-weight: 600;
   animation: chipIn 0.25s ease;
 }
 #nomad-routine .chip button {
   background: none; border: none; padding: 0;
-  color: var(--amber-deep);
+  color: var(--txm);
   cursor: pointer; font-size: 14px;
   line-height: 1;
 }
@@ -316,278 +664,300 @@ const CSS = `
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* ---- Curd toggle card ---- */
-#nomad-routine .tap-card {
-  padding: 18px;
-  border-radius: var(--r);
-  background: var(--bg2);
-  border: 1px solid var(--bd);
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-weight: 500;
+/* ---- Log card (food log section) ---- */
+#nomad-routine .log-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
 }
-#nomad-routine .tap-card.on {
-  background: var(--green-sf);
-  border-color: var(--green);
+#nomad-routine .log-card-icon {
+  width: 42px; height: 42px;
+  border-radius: 14px;
+  background: #edf7e0;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+#nomad-routine .log-card-num {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #c5c0b8;
+}
+#nomad-routine .log-card-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--tx);
+  letter-spacing: -0.02em;
+}
+#nomad-routine .log-card-add {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 800;
   color: var(--green-deep);
+  background: #edf7e0;
+  border-radius: 100px;
+  padding: 5px 13px;
+  cursor: pointer;
+  border: none;
+  font-family: var(--font);
+  letter-spacing: 0.02em;
 }
-#nomad-routine .tap-card.teal.on {
-  background: var(--teal-sf);
-  border-color: var(--teal);
-  color: var(--teal-deep);
+
+/* ---- Food chip entry ---- */
+#nomad-routine .food-chip {
+  background: #f8f5f0;
+  border-radius: 12px;
+  padding: 7px 11px;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
 }
-#nomad-routine .tap-card:active { transform: scale(0.98); }
+#nomad-routine .food-chip-tag {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #c5c0b8;
+}
+#nomad-routine .food-chip-txt {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a4640;
+}
+#nomad-routine .free-list { display: flex; flex-wrap: wrap; gap: 7px; }
 
 /* ---- Inputs ---- */
 #nomad-routine .inp {
   width: 100%;
   background: var(--bg2);
-  border: 1px solid var(--bd);
+  border: 1.5px solid var(--bd);
   border-radius: var(--rsm);
   padding: 10px 12px;
   font-size: 14px;
   color: var(--tx);
   font-family: var(--font);
   outline: none;
+  font-weight: 500;
 }
 #nomad-routine .inp:focus { border-color: var(--bde); }
 textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
-input[type=number].inp { -moz-appearance: textfield; }
-input[type=number].inp::-webkit-outer-spin-button,
-input[type=number].inp::-webkit-inner-spin-button {
-  -webkit-appearance: none; margin: 0;
+
+/* ---- Buttons ---- */
+#nomad-routine .btn {
+  width: 100%;
+  background: var(--tx);
+  color: var(--bg);
+  border: none;
+  border-radius: 100px;
+  padding: 13px;
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: opacity 0.15s;
+}
+#nomad-routine .btn:active { opacity: 0.85; }
+#nomad-routine .btn.teal { background: var(--teal); color: #fff; }
+#nomad-routine .btn.green { background: var(--green); color: #fff; }
+#nomad-routine .btn.amber { background: var(--amber); color: #fff; }
+#nomad-routine .btn.ghost { background: var(--bg2); color: var(--tx); border: 1px solid var(--bd); }
+#nomad-routine .btn.danger { background: #c23c3c; color: #fff; }
+
+#nomad-routine .confirm-btn {
+  width: 100%;
+  background: var(--green);
+  border: none;
+  border-radius: 100px;
+  padding: 12px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: opacity 0.15s;
+}
+#nomad-routine .confirm-btn:active { opacity: 0.85; }
+#nomad-routine .confirm-btn.teal { background: var(--teal); }
+
+/* ---- Tap card (curd) ---- */
+#nomad-routine .tap-card {
+  padding: 18px;
+  border-radius: 20px;
+  background: var(--bg2);
+  border: 1.5px solid var(--bd);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 700;
+}
+#nomad-routine .tap-card.on { background: var(--green-sf); border-color: var(--green); color: var(--green-deep); }
+#nomad-routine .tap-card.teal.on { background: var(--teal-sf); border-color: var(--teal); color: var(--teal-deep); }
+#nomad-routine .tap-card:active { transform: scale(0.98); }
+
+/* ---- Label ---- */
+#nomad-routine .label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--txd);
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+#nomad-routine .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-/* ---- Bottom nav ---- */
+/* ---- Skin header ---- */
+#nomad-routine .skin-hd {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px;
+  padding: 0 2px;
+}
+#nomad-routine .phase-badge {
+  background: var(--teal-sf);
+  color: var(--teal-deep);
+  border-radius: var(--rpill);
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1.5px solid var(--teal);
+}
+
+/* ---- Collapsible ---- */
+#nomad-routine .coll-hd {
+  display: flex; justify-content: space-between; align-items: center;
+  cursor: pointer;
+}
+#nomad-routine .coll-hd .t { font-weight: 700; font-size: 15px; }
+#nomad-routine .coll-hd .t .ct { color: var(--txm); font-size: 12px; font-weight: 500; margin-left: 6px; }
+#nomad-routine .chev { transition: transform 0.2s; color: var(--txm); }
+#nomad-routine .chev.open { transform: rotate(90deg); }
+#nomad-routine .steps { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--bd); }
+#nomad-routine .step { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; }
+#nomad-routine .step .info { flex: 1; }
+#nomad-routine .step .info .name { font-size: 14px; font-weight: 600; }
+#nomad-routine .step .info .kind { font-size: 11px; color: var(--txm); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* ---- Saved link ---- */
+#nomad-routine .saved-link {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  color: var(--txm);
+  margin-top: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* ---- Nav ---- */
 #nomad-routine .nav {
   position: fixed;
   bottom: 0; left: 50%;
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 430px;
-  background: var(--sf);
-  border-top: 1px solid var(--bd);
+  width: 100%; max-width: 430px;
+  background: #f8f6f2;
+  border-top: 1.5px solid var(--bd);
   display: flex;
-  padding: 10px 0 18px;
+  padding: 10px 0 20px;
   z-index: 100;
 }
+#nomad-routine.dark .nav { background: var(--sf); }
 #nomad-routine .nav button {
   flex: 1;
   background: none; border: none;
   padding: 6px 0;
   cursor: pointer;
   display: flex; flex-direction: column; align-items: center;
-  gap: 3px;
-  color: var(--txm);
+  gap: 4px;
+  color: var(--txd);
   font-family: var(--font);
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
 }
-#nomad-routine .nav button svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.6; }
-#nomad-routine .nav button.active.food { color: var(--amber-deep); }
-#nomad-routine .nav button.active.skin { color: var(--teal-deep); }
-#nomad-routine .nav button.active.log { color: var(--green-deep); }
+#nomad-routine .nav button svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+#nomad-routine .nav button.active.food { color: var(--green); }
+#nomad-routine .nav button.active.skin { color: var(--teal); }
+#nomad-routine .nav button.active.log { color: var(--green); }
 #nomad-routine .nav button.active.settings { color: var(--tx); }
 #nomad-routine .nav button:active { transform: scale(0.94); }
 
-/* ---- Skin header ---- */
-#nomad-routine .skin-hd {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 14px;
-}
-#nomad-routine .skin-hd .date { font-size: 13px; color: var(--txm); font-family: var(--mono); }
-#nomad-routine .phase-badge {
-  background: var(--teal-sf);
-  color: var(--teal-deep);
-  border-radius: var(--rpill);
-  padding: 5px 11px;
-  font-size: 11px;
-  font-weight: 500;
-  border: 1px solid var(--teal);
-}
-
-/* ---- Collapsible card ---- */
-#nomad-routine .coll-hd {
-  display: flex; justify-content: space-between; align-items: center;
-  cursor: pointer;
-}
-#nomad-routine .coll-hd .t { font-weight: 500; font-size: 15px; }
-#nomad-routine .coll-hd .t .ct { color: var(--txm); font-size: 12px; font-weight: 400; margin-left: 6px; }
-#nomad-routine .chev {
-  transition: transform 0.2s;
-  color: var(--txm);
-}
-#nomad-routine .chev.open { transform: rotate(90deg); }
-#nomad-routine .steps {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--bd);
-}
-#nomad-routine .step {
-  display: flex; align-items: flex-start; gap: 12px;
-  padding: 10px 0;
-}
-#nomad-routine .step .info { flex: 1; }
-#nomad-routine .step .info .name { font-size: 14px; font-weight: 500; }
-#nomad-routine .step .info .kind { font-size: 11px; color: var(--txm); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
-
-#nomad-routine .btn {
-  width: 100%;
-  background: var(--tx);
-  color: var(--bg);
-  border: none;
-  border-radius: var(--rsm);
-  padding: 12px;
-  font-family: var(--font);
-  font-weight: 500;
-  font-size: 14px;
-  cursor: pointer;
-  margin-top: 12px;
-}
-#nomad-routine .btn.teal { background: var(--teal); color: #fff; }
-#nomad-routine .btn.green { background: var(--green); color: #fff; }
-#nomad-routine .btn.amber { background: var(--amber); color: #fff; }
-#nomad-routine .btn:active { transform: scale(0.98); }
-#nomad-routine .btn.ghost {
-  background: var(--bg2);
-  color: var(--tx);
-  border: 1px solid var(--bd);
-}
-#nomad-routine .btn.danger { background: #c23c3c; color: #fff; }
-
-/* ---- Notes confirm ---- */
-#nomad-routine .confirm-btn {
-  width: 100%;
-  background: none;
-  border: 1px solid var(--bd);
-  border-radius: var(--rsm);
-  padding: 10px 12px;
-  font-family: var(--font);
-  font-size: 13px;
-  color: var(--txm);
-  cursor: pointer;
-  margin-top: 12px;
-  text-align: center;
-}
-#nomad-routine .confirm-btn:hover { background: var(--bg2); }
-#nomad-routine .saved-link {
-  display: block;
-  text-align: center;
-  font-size: 12px;
-  color: var(--txm);
-  margin-top: 12px;
-  cursor: pointer;
-  font-family: var(--mono);
-}
-#nomad-routine .saved-link:hover { color: var(--tx); }
-
-/* ---- Free food log categories ---- */
-#nomad-routine .food-cat { margin-bottom: 14px; }
-#nomad-routine .food-cat:last-child { margin-bottom: 0; }
-#nomad-routine .food-cat-lbl {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--txm);
-  font-weight: 500;
-  margin-bottom: 6px;
-}
-#nomad-routine .food-cat .free-list { margin-top: 6px; }
-
-/* ---- Log screen ---- */
+/* ---- Stats (Log screen) ---- */
 #nomad-routine .stats {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 #nomad-routine .stat {
   background: var(--sf);
-  border: 1px solid var(--bd);
-  border-radius: var(--rsm);
-  padding: 12px 10px;
-  text-align: center;
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: var(--card-shadow);
 }
-#nomad-routine .stat .v {
-  font-family: var(--mono);
-  font-size: 22px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-#nomad-routine .stat .l {
-  font-size: 9px;
-  color: var(--txm);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-top: 3px;
-}
-#nomad-routine .stat.green .v { color: var(--green-deep); }
-#nomad-routine .stat.teal .v { color: var(--teal-deep); }
-#nomad-routine .stat.amber .v { color: var(--amber-deep); }
+#nomad-routine .stat .v { font-size: 26px; font-weight: 800; color: var(--green); font-family: var(--mono); letter-spacing: -0.02em; }
+#nomad-routine .stat .l { font-size: 11px; font-weight: 600; color: var(--txm); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+#nomad-routine .stat.teal .v { color: var(--teal); }
+#nomad-routine .stat.amber .v { color: var(--amber); }
 
+/* ---- Calendar ---- */
 #nomad-routine .cal-hd {
   display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
-#nomad-routine .cal-hd .m { font-size: 14px; font-weight: 500; }
+#nomad-routine .cal-hd .m { font-size: 15px; font-weight: 800; color: var(--tx); letter-spacing: -0.01em; }
 #nomad-routine .cal-hd button {
-  background: var(--bg2);
-  border: 1px solid var(--bd);
-  width: 30px; height: 30px;
-  border-radius: 8px;
-  cursor: pointer;
-  color: var(--tx);
-  font-size: 14px;
+  background: var(--bg2); border: none;
+  width: 32px; height: 32px; border-radius: 10px;
+  font-size: 18px; cursor: pointer; color: var(--tx);
+  display: flex; align-items: center; justify-content: center;
 }
-#nomad-routine .cal {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
-  animation: monthIn 0.25s ease;
-}
-@keyframes monthIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+#nomad-routine .cal { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; }
 #nomad-routine .cal-day-lbl {
-  font-size: 9px;
-  color: var(--txd);
-  text-align: center;
-  font-family: var(--mono);
+  text-align: center; font-size: 10px; font-weight: 800;
+  color: var(--txd); padding: 4px 0; letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 #nomad-routine .cal-cell {
   aspect-ratio: 1;
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--bg2);
-  border: 1px solid transparent;
+  border: 1.5px solid transparent;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--txd);
   cursor: pointer;
+  font-weight: 600;
 }
 #nomad-routine .cal-cell.empty { visibility: hidden; }
-#nomad-routine .cal-cell.lvl1 { background: var(--green-sf); color: var(--green-deep); }
-#nomad-routine .cal-cell.lvl2 { background: #B8D68F; color: var(--green-deep); }
-#nomad-routine .cal-cell.lvl3 { background: var(--green); color: #fff; }
-#nomad-routine .cal-cell.lvl4 { background: var(--green-deep); color: #fff; font-weight: 500; }
+#nomad-routine .cal-cell.lvl1 { background: var(--amber-sf); color: var(--amber-deep); }
+#nomad-routine .cal-cell.lvl2 { background: #fad99a; color: var(--amber-deep); }
+#nomad-routine .cal-cell.lvl3 { background: var(--green-sf); color: var(--green-deep); }
+#nomad-routine .cal-cell.lvl4 { background: var(--green); color: #fff; }
 #nomad-routine .cal-cell.today { border-color: var(--tx); }
 
+/* ---- Sheet ---- */
 #nomad-routine .sheet {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.5);
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45);
   z-index: 150;
   display: flex; align-items: flex-end;
   animation: fadeIn 0.2s ease;
 }
 #nomad-routine .sheet-body {
-  width: 100%;
-  max-width: 430px;
+  width: 100%; max-width: 430px;
   margin: 0 auto;
   background: var(--bg);
-  border-radius: 24px 24px 0 0;
+  border-radius: 28px 28px 0 0;
   padding: 22px 20px 26px;
   max-height: 85vh;
   overflow-y: auto;
@@ -600,40 +970,26 @@ input[type=number].inp::-webkit-inner-spin-button {
   display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 16px;
 }
-#nomad-routine .sheet-hd h2 { margin: 0; font-size: 18px; font-weight: 700; }
+#nomad-routine .sheet-hd h2 { margin: 0; font-size: 18px; font-weight: 800; color: var(--tx); }
 #nomad-routine .sheet-hd button {
   background: var(--bg2); border: none; width: 30px; height: 30px;
-  border-radius: 8px; cursor: pointer; font-size: 16px; color: var(--tx);
+  border-radius: 10px; cursor: pointer; font-size: 16px; color: var(--tx);
 }
 #nomad-routine .sum-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 #nomad-routine .sum-chip {
-  padding: 5px 10px;
-  border-radius: var(--rpill);
-  background: var(--sf);
-  border: 1px solid var(--bd);
-  font-size: 11px;
-  color: var(--tx);
+  padding: 5px 10px; border-radius: var(--rpill);
+  background: var(--sf); border: 1px solid var(--bd);
+  font-size: 11px; color: var(--tx);
 }
-
-/* ---- Sheet detail ---- */
 #nomad-routine .detail-section { margin-bottom: 16px; }
 #nomad-routine .detail-section-lbl {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-weight: 600;
-  color: var(--txd);
-  margin-bottom: 8px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid var(--bd);
+  font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em;
+  font-weight: 800; color: var(--txd); margin-bottom: 8px;
+  padding-bottom: 5px; border-bottom: 1px solid var(--bd);
 }
 #nomad-routine .detail-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  font-size: 12px;
-  padding: 3px 0;
-  color: var(--tx);
+  display: flex; justify-content: space-between; align-items: flex-start;
+  font-size: 12px; padding: 3px 0; color: var(--tx);
 }
 #nomad-routine .detail-row .dk { color: var(--txm); flex-shrink: 0; margin-right: 10px; }
 #nomad-routine .detail-row .dv { text-align: right; color: var(--tx); word-break: break-word; max-width: 65%; }
@@ -641,106 +997,65 @@ input[type=number].inp::-webkit-inner-spin-button {
 /* ---- Settings ---- */
 #nomad-routine .sec { margin-bottom: 22px; }
 #nomad-routine .sec h3 {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--txm);
-  font-weight: 500;
-  margin: 0 0 10px;
-  padding: 0 4px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--txm); font-weight: 800; margin: 0 0 10px; padding: 0 4px;
 }
 #nomad-routine .set-row {
-  background: var(--sf);
-  border: 1px solid var(--bd);
-  border-radius: var(--rsm);
-  padding: 12px 14px;
-  margin-bottom: 8px;
+  background: var(--sf); border: 1.5px solid var(--bd);
+  border-radius: 20px; padding: 14px 16px; margin-bottom: 8px;
+  box-shadow: var(--card-shadow);
 }
-#nomad-routine .set-row .lbl { font-size: 13px; font-weight: 500; }
+#nomad-routine .set-row .lbl { font-size: 13px; font-weight: 700; }
 #nomad-routine .set-row .desc { font-size: 11px; color: var(--txm); margin-top: 2px; }
 #nomad-routine .set-row .r { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-
 #nomad-routine .toggle {
-  width: 42px; height: 24px;
-  background: var(--bg2);
-  border: 1px solid var(--bd);
-  border-radius: 100px;
-  position: relative;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex-shrink: 0;
+  width: 42px; height: 24px; background: var(--bg2); border: 1.5px solid var(--bd);
+  border-radius: 100px; position: relative; cursor: pointer; transition: all 0.2s; flex-shrink: 0;
 }
 #nomad-routine .toggle::after {
-  content: '';
-  position: absolute;
-  top: 2px; left: 2px;
-  width: 18px; height: 18px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 18px; height: 18px; background: #fff; border-radius: 50%;
+  transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
 #nomad-routine .toggle.on { background: var(--green); border-color: var(--green); }
 #nomad-routine .toggle.on::after { transform: translateX(18px); }
-
 #nomad-routine .seg {
-  display: flex;
-  background: var(--bg2);
-  border-radius: var(--rsm);
-  padding: 3px;
-  gap: 2px;
+  display: flex; background: var(--bg2); border-radius: var(--rsm); padding: 3px; gap: 2px;
 }
 #nomad-routine .seg button {
-  flex: 1;
-  padding: 7px 8px;
-  border: none;
-  background: none;
-  border-radius: 7px;
-  font-size: 12px;
-  color: var(--txm);
-  cursor: pointer;
-  font-family: var(--font);
-  font-weight: 500;
+  flex: 1; padding: 7px 8px; border: none; background: none;
+  border-radius: 10px; font-size: 12px; color: var(--txm);
+  cursor: pointer; font-family: var(--font); font-weight: 600;
 }
 #nomad-routine .seg button.on { background: var(--sf); color: var(--tx); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-
-#nomad-routine .free-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-
-/* ---- Skin routine editor ---- */
 #nomad-routine .routine-day-row { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--bd); }
 #nomad-routine .routine-day-row:last-child { border-bottom: none; margin-bottom: 0; }
-#nomad-routine .routine-day-lbl { font-size: 13px; font-weight: 600; color: var(--tx); margin-bottom: 8px; }
+#nomad-routine .routine-day-lbl { font-size: 13px; font-weight: 700; color: var(--tx); margin-bottom: 8px; }
 #nomad-routine .routine-sub { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 6px; }
-#nomad-routine .routine-sub-label {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--txm); font-weight: 500; min-width: 24px; padding-top: 6px;
-}
+#nomad-routine .routine-sub-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--txm); font-weight: 700; min-width: 24px; padding-top: 6px; }
 #nomad-routine .routine-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; flex: 1; }
 #nomad-routine .routine-chip {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 9px; border-radius: 100px;
   background: var(--teal-sf); border: 1px solid var(--bd);
-  font-size: 11px; color: var(--teal-deep); font-weight: 500;
+  font-size: 11px; color: var(--teal-deep); font-weight: 600;
 }
-#nomad-routine .routine-chip button {
-  background: none; border: none; padding: 0;
-  color: var(--teal-deep); cursor: pointer; font-size: 13px; line-height: 1;
-}
+#nomad-routine .routine-chip button { background: none; border: none; padding: 0; color: var(--teal-deep); cursor: pointer; font-size: 13px; }
 #nomad-routine .add-step-btn {
   display: inline-flex; align-items: center; padding: 4px 9px;
-  border-radius: 100px; background: var(--bg2); border: 1px dashed var(--bd);
-  font-size: 11px; color: var(--txm); cursor: pointer; font-family: var(--font);
+  border-radius: 100px; background: var(--bg2); border: 1.5px dashed var(--bde);
+  font-size: 11px; color: var(--txm); cursor: pointer; font-family: var(--font); font-weight: 600;
 }
 #nomad-routine .product-picker {
   margin-top: 6px; background: var(--bg); border: 1px solid var(--bd);
-  border-radius: 8px; padding: 8px; display: flex; flex-wrap: wrap; gap: 5px; width: 100%;
+  border-radius: 12px; padding: 8px; display: flex; flex-wrap: wrap; gap: 5px; width: 100%;
 }
 #nomad-routine .product-picker-item {
   padding: 4px 10px; border-radius: 100px; background: var(--bg2);
-  border: 1px solid var(--bd); font-size: 11px; color: var(--tx); cursor: pointer;
+  border: 1px solid var(--bd); font-size: 11px; color: var(--tx); cursor: pointer; font-weight: 600;
 }
 
-/* ---- Toast animation ---- */
+/* ---- Toast ---- */
 @keyframes toastPill {
   0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
   15% { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -748,102 +1063,114 @@ input[type=number].inp::-webkit-inner-spin-button {
   100% { opacity: 0; transform: translateX(-50%) translateY(-4px); }
 }
 
-/* ---- Progress dots row ---- */
+/* ---- Progress dots (kept for skin mode) ---- */
 #nomad-routine .prog-dots {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--sf);
-  border: 1px solid var(--bd);
-  border-radius: var(--rsm);
-  margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: var(--sf); border: 1.5px solid var(--bd);
+  border-radius: 18px; margin-bottom: 14px; box-shadow: var(--card-shadow);
 }
-#nomad-routine .prog-dot {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-}
+#nomad-routine .prog-dot { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
 #nomad-routine .prog-dot .dot {
-  width: 10px; height: 10px;
-  border-radius: 50%;
-  background: var(--bg2);
-  border: 1.5px solid var(--bd);
-  flex-shrink: 0;
-  transition: all 0.2s;
+  width: 10px; height: 10px; border-radius: 50%; background: var(--bg2); border: 1.5px solid var(--bd); flex-shrink: 0; transition: all 0.2s;
 }
 #nomad-routine .prog-dot .dot.on { background: var(--green); border-color: var(--green); box-shadow: 0 0 0 3px var(--green-sf); }
 #nomad-routine .prog-dot .dot.on.amber { background: var(--amber); border-color: var(--amber); box-shadow: 0 0 0 3px var(--amber-sf); }
 #nomad-routine .prog-dot .dot.on.teal { background: var(--teal); border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-sf); }
-#nomad-routine .prog-dot .dot-lbl {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--txd);
-  font-family: var(--mono);
-  white-space: nowrap;
-}
-#nomad-routine .prog-dot .dot-val {
-  font-size: 10px;
-  font-family: var(--mono);
-  color: var(--txm);
-  font-weight: 500;
-}
+#nomad-routine .prog-dot .dot-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--txd); font-family: var(--mono); white-space: nowrap; }
+#nomad-routine .prog-dot .dot-val { font-size: 10px; font-family: var(--mono); color: var(--txm); font-weight: 600; }
 #nomad-routine .prog-dot-sep { width: 1px; height: 24px; background: var(--bd); flex-shrink: 0; }
 
-/* ---- End of day summary card ---- */
+/* ---- Idle tile color families ---- */
+#nomad-routine .hcard.hc-amber-idle { background: #FFF4CC; box-shadow: 0 3px 0 #E8D880; }
+#nomad-routine .hcard.hc-green-idle { background: #E0F8C0; box-shadow: 0 3px 0 #B0DC80; }
+#nomad-routine .hcard.hc-teal-idle  { background: #C4F0EC; box-shadow: 0 3px 0 #88D4CC; }
+#nomad-routine .hcard.hc-sage-idle  { background: #D8F4B8; box-shadow: 0 3px 0 #ACCC80; }
+#nomad-routine .hcard.hc-purple-idle { background: #EED8FC; box-shadow: 0 3px 0 #C8A0E8; }
+#nomad-routine .hcard.hc-pink-idle  { background: #FCD8EC; box-shadow: 0 3px 0 #E8A8CC; }
+#nomad-routine .hcard.hc-purple { background: #C070F0; box-shadow: 0 3px 0 #8C30C0; }
+#nomad-routine .hcard.hc-pink { background: #F070B8; box-shadow: 0 3px 0 #C03888; }
+
+/* ---- Eggs in-tile stepper ---- */
+#nomad-routine .hc-stepper {
+  display: flex; gap: 6px; margin-top: 8px;
+}
+#nomad-routine .hc-stepper button {
+  width: 28px; height: 28px; border-radius: 8px; border: none;
+  background: rgba(255,255,255,0.55); color: rgba(0,0,0,0.5);
+  font-size: 18px; font-weight: 300; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font); line-height: 1; transition: opacity 0.12s;
+}
+#nomad-routine .hcard.hc-idle .hc-stepper button,
+#nomad-routine .hcard.hc-green-idle .hc-stepper button { background: var(--bg2); }
+#nomad-routine .hc-stepper button:disabled { opacity: 0.25; pointer-events: none; }
+#nomad-routine .hc-egg-dots { display: flex; gap: 2px; margin-bottom: 4px; flex-wrap: wrap; }
+#nomad-routine .hc-egg-dot { font-size: 18px; opacity: 0.18; transition: opacity 0.15s, transform 0.15s; }
+#nomad-routine .hc-egg-dot.filled { opacity: 1; transform: scale(1.08); }
+#nomad-routine .hc-stepper button:active { opacity: 0.7; }
+
+/* ---- Dark mode hcard text fix (tiles stay light pastels, text must stay dark) ---- */
+#nomad-routine.dark .hcard .hc-name { color: rgba(0,0,0,0.72) !important; }
+#nomad-routine.dark .hcard .hc-meta { color: rgba(0,0,0,0.45) !important; }
+#nomad-routine.dark .hcard .hc-icon.ic-idle { background: rgba(255,255,255,0.3); }
+#nomad-routine.dark .hcard .hc-stepper button { background: rgba(0,0,0,0.12); color: rgba(0,0,0,0.6); }
+#nomad-routine.dark .hcard .hc-check-idle { border-color: rgba(0,0,0,0.2); }
+/* ---- Dark mode sky header text override ---- */
+#nomad-routine.dark .sky-date-big { color: rgba(220,240,225,0.95) !important; }
+#nomad-routine.dark .sky-date-sub { color: rgba(180,210,185,0.70) !important; }
+#nomad-routine.dark .sky-content .sec-lbl { color: rgba(180,210,185,0.6) !important; }
+#nomad-routine.dark .streak-card { background: rgba(0,0,0,0.25); }
+#nomad-routine.dark .sky-panda-bubble { background: rgba(30,40,30,0.85); color: rgba(220,240,225,0.9); }
+/* ---- Dark mode sky clouds ---- */
+#nomad-routine.dark .sky-cloud { background: rgba(255,255,255,0.08); }
+/* ---- Dark mode sky progress ---- */
+#nomad-routine.dark .sky-prog-track { background: rgba(0,0,0,0.25); }
+#nomad-routine.dark .sky-prog-txt { color: rgba(180,210,185,0.7); }
+
+/* ---- Detail sheet new design ---- */
+#nomad-routine .dl-section { margin-bottom: 18px; }
+#nomad-routine .dl-section-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+#nomad-routine .dl-section-icon { font-size: 16px; width: 28px; height: 28px; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+#nomad-routine .dl-food-icon { background: #E0F8C0; }
+#nomad-routine .dl-skin-icon { background: #C4F0EC; }
+#nomad-routine .dl-section-lbl { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--txm); }
+#nomad-routine .dl-card { background: var(--bg); border: 1.5px solid var(--bd); border-radius: 18px; overflow: hidden; margin-bottom: 10px; }
+#nomad-routine .dl-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 14px; border-bottom: 1px solid var(--bd); }
+#nomad-routine .dl-row:last-child { border-bottom: none; }
+#nomad-routine .dl-row-left { display: flex; align-items: center; gap: 8px; }
+#nomad-routine .dl-emoji { font-size: 15px; }
+#nomad-routine .dl-ph-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+#nomad-routine .dl-key { font-size: 13px; font-weight: 600; color: var(--tx); }
+#nomad-routine .dl-val { font-size: 13px; font-weight: 700; color: var(--txm); }
+#nomad-routine .dl-val.dl-ok { color: #3a9010; }
+#nomad-routine .dl-val.dl-miss { color: var(--txd); }
+#nomad-routine .dl-sub-row { padding: 0 14px 10px 38px; font-size: 11px; color: var(--txm); margin-top: -4px; border-bottom: 1px solid var(--bd); }
+#nomad-routine .dl-log { background: var(--bg); border: 1.5px solid var(--bd); border-radius: 18px; overflow: hidden; margin-bottom: 10px; }
+#nomad-routine .dl-log-group { padding: 10px 14px; border-bottom: 1px solid var(--bd); }
+#nomad-routine .dl-log-group:last-child { border-bottom: none; }
+#nomad-routine .dl-log-tag { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--txm); margin-bottom: 3px; }
+#nomad-routine .dl-log-items { font-size: 13px; color: var(--tx); font-weight: 500; }
+#nomad-routine .dl-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+#nomad-routine .dl-chip { padding: 5px 12px; border-radius: 100px; font-size: 11px; font-weight: 700; }
+#nomad-routine .dl-chip.amber { background: #FFF4CC; color: #8a6010; border: 1.5px solid #E8D880; }
+#nomad-routine .dl-chip.green { background: #E0F8C0; color: #3a7010; border: 1.5px solid #B0DC80; }
+#nomad-routine .dl-chip.teal { background: #C4F0EC; color: #0a6058; border: 1.5px solid #88D4CC; }
+#nomad-routine .dl-chip.pink { background: #FCD8EC; color: #8a2858; border: 1.5px solid #E8A8CC; }
+#nomad-routine .dl-note { font-size: 12px; color: var(--txm); padding: 10px 14px; background: var(--sf); border: 1.5px solid var(--bd); border-radius: 14px; margin-bottom: 10px; line-height: 1.5; }
+/* Icon picker */
+#nomad-routine .icon-picker-grid { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0 6px; }
+#nomad-routine .icon-picker-btn { width: 36px; height: 36px; border-radius: 10px; border: 1.5px solid var(--bd); background: var(--bg); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.1s; }
+#nomad-routine .icon-picker-btn.sel { background: var(--amber-sf); border-color: var(--amber); }
+
+/* ---- EOD card ---- */
 #nomad-routine .eod-card {
-  background: var(--tx);
-  color: var(--bg);
-  border-radius: var(--r);
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  background: var(--tx); color: var(--bg); border-radius: 20px; padding: 14px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px;
 }
-#nomad-routine .eod-card .eod-title {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  opacity: 0.55;
-  font-weight: 500;
-}
-#nomad-routine .eod-card .eod-row {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-#nomad-routine .eod-card .eod-item {
-  font-size: 13px;
-  font-family: var(--mono);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
+#nomad-routine .eod-card .eod-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.55; font-weight: 700; }
+#nomad-routine .eod-card .eod-row { display: flex; gap: 14px; flex-wrap: wrap; }
+#nomad-routine .eod-card .eod-item { font-size: 13px; font-family: var(--mono); display: flex; align-items: center; gap: 5px; }
 #nomad-routine .eod-card .eod-item .eod-ok { opacity: 1; }
 #nomad-routine .eod-card .eod-item .eod-miss { opacity: 0.38; }
-
-/* ---- Confirm button polish ---- */
-#nomad-routine .confirm-btn {
-  width: 100%;
-  background: var(--green);
-  border: none;
-  border-radius: var(--rsm);
-  padding: 11px 12px;
-  font-family: var(--font);
-  font-size: 13px;
-  font-weight: 500;
-  color: #fff;
-  cursor: pointer;
-  margin-top: 12px;
-  text-align: center;
-  transition: opacity 0.15s;
-}
-#nomad-routine .confirm-btn:active { opacity: 0.85; }
-#nomad-routine .confirm-btn.teal { background: var(--teal); }
 `;
 
 // Inject CSS immediately at module load so styles exist before first paint.
@@ -971,9 +1298,8 @@ const DEFAULT_CONFIG = {
         Sat: 'Guava or Apple',
         Sun: 'Whatever looks fresh',
     },
-    snackOptions: ['Banana', 'Carrot', 'Cucumber', 'Guava', 'Apple', 'Pomegranate', 'Papaya', 'Other'],
     customProducts: DEFAULT_CUSTOM_PRODUCTS,
-    customDailyItems: [{ id: 'curd', label: 'Curd', emoji: '🥛' }],
+    customDailyItems: [],
     routines: DEFAULT_ROUTINES,
 };
 
@@ -1190,7 +1516,7 @@ const ProgressDots = ({ day, config, mode }) => {
                 <div className="dot-lbl">Eggs</div>
                 <div className="dot-val">{day.eggs}/{config.eggsTarget}</div>
             </div>
-            {(config.customDailyItems || []).map(it => (
+            {(config.customDailyItems || []).filter(it => !it.archived).map(it => (
                 <React.Fragment key={it.id}>
                     <div className="prog-dot-sep" />
                     <div className="prog-dot">
@@ -1257,7 +1583,7 @@ const EodCard = ({ day, config }) => {
                     <span className={eggsOk ? 'eod-ok' : 'eod-miss'}>🥚</span>
                     <span>{day.eggs}/{config.eggsTarget}</span>
                 </div>
-                {(config.customDailyItems || []).map(it => (
+                {(config.customDailyItems || []).filter(it => !it.archived).map(it => (
                     <div key={it.id} className="eod-item">
                         <span className={day.dailyChecks?.[it.id] ? 'eod-ok' : 'eod-miss'}>{it.emoji}</span>
                         <span>{day.dailyChecks?.[it.id] ? it.label + ' ✓' : 'No ' + it.label.toLowerCase()}</span>
@@ -1277,7 +1603,7 @@ const EodCard = ({ day, config }) => {
    ============================================================ */
 const FoodScreen = ({ day, update, config, onComplete, streak }) => {
     const suggested = config.snackRotation[dayOfWeek()] || 'Banana';
-    const waterPts = [0.5, 1, 1.5, 2, 2.5, 3, 3.5];
+    const waterPts = Array.from({ length: Math.round(config.waterTarget / 0.5) }, (_, i) => (i + 1) * 0.5);
     const mwL = effectiveMorningWater(day);
     const foodLog = migrateFreeFoodLog(day.freeFoodLog);
     const isEvening = new Date().getHours() >= 20;
@@ -1306,194 +1632,265 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
         update({ freeFoodLog: foodLog.filter((_, idx) => idx !== i) });
     };
 
-    const totalWater = (mwL + day.water).toFixed(1);
+    const totalWater = mwL + day.water;
+
+    const foodItems = [
+        day.morningWater,
+        day.eggs >= config.eggsTarget,
+        ...(config.customDailyItems || []).filter(it => !it.archived).map(it => day.dailyChecks?.[it.id]),
+    ];
+    const doneCount = foodItems.filter(Boolean).length;
+    const totalCount = foodItems.length || 1;
+    const pct = Math.round((doneCount / totalCount) * 100);
+
+    const dow = dayOfWeek();
+    const dateLabel = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
     return (
         <div className="screen">
-            <div className="hd">
-                <h1>NOMAD</h1>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {streak > 0 && (
-                        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', background: 'var(--amber-sf)', color: 'var(--amber-deep)', padding: '3px 8px', borderRadius: 100, border: '1px solid var(--amber)', fontWeight: 500 }}>
-                            🔥 {streak}
+            {/* Sky Header */}
+            <div className="sky-header">
+                <div className="sky-cloud" style={{ width: 110, height: 34, top: 12, left: -16 }} />
+                <div className="sky-cloud" style={{ width: 80, height: 26, top: 6, left: 54 }} />
+                <div className="sky-cloud" style={{ width: 130, height: 40, top: 18, right: -24 }} />
+                <div className="sky-cloud" style={{ width: 70, height: 22, top: 46, right: 36 }} />
+                <div className="sky-cloud" style={{ width: 55, height: 18, top: 50, left: 70 }} />
+                <div className="sky-horizon" />
+                <div className="sky-grass" />
+                <div className="sky-content">
+                    <div className="sky-top-row">
+                        <div>
+                            <div className="sky-date-big">{dateLabel}</div>
+                            <div className="sky-date-sub">{dow} · {doneCount} of {totalCount} done</div>
+                            <div className="sky-progress-row">
+                                <div className="sky-prog-track">
+                                    <div className="sky-prog-fill" style={{ width: `${pct}%` }} />
+                                </div>
+                                <div className="sky-prog-txt">{pct}%</div>
+                            </div>
                         </div>
-                    )}
-                    <div className="sub">{dayOfWeek()} · {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</div>
+                        {streak > 0 && (
+                            <div className="streak-card">
+                                <div className="s-num">{streak}</div>
+                                <div className="s-lbl">day streak</div>
+                            </div>
+                        )}
+                    </div>
+                    <div className="sky-panda-row">
+                        <div className="sky-panda-av">
+                            <img src={PANDA_SRC} alt="panda" />
+                        </div>
+                        <div className="sky-panda-bubble">{getPandaFoodMessage(day, config)}</div>
+                    </div>
                 </div>
             </div>
 
-            <ProgressDots day={day} config={config} mode="food" />
-            <PandaM message={getPandaFoodMessage(day, config)} />
+            {/* Body */}
+            <div className="body-pad">
+                <div className="sec-lbl">Today's rituals</div>
 
-            {/* Morning water */}
-            <div className={`card ${day.morningWater ? 'done' : ''}`}>
-                <div className="label">01 · Morning water</div>
-                <div className="mw-row">
-                    <Check on={day.morningWater} onClick={() => {
-                        haptic();
-                        update({ morningWater: !day.morningWater });
-                    }} />
-                    <div className="txt">First glass of the day</div>
-                    <input
-                        className="mw-input"
-                        placeholder="500ml"
-                        value={day.morningWaterAmount}
-                        onChange={(e) => update({ morningWaterAmount: e.target.value })}
-                    />
+                {/* Eggs counter bar */}
+                <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: day.eggs >= config.eggsTarget ? '#8ED952' : 'var(--sf)', boxShadow: day.eggs >= config.eggsTarget ? '0 3px 0 #5CA828' : 'var(--card-shadow)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div className="hc-icon ic-done" style={{ flexShrink: 0, background: 'rgba(255,255,255,0.45)' }}>
+                            <PhosphorIcon name="egg" size={22} color={day.eggs >= config.eggsTarget ? 'rgba(0,0,0,0.45)' : '#4a8a22'} opacity={0.4} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: 'rgba(0,0,0,0.72)' }}>Eggs</div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(0,0,0,0.40)', marginTop: 1 }}>{day.eggs >= config.eggsTarget ? 'target hit!' : `${config.eggsTarget - day.eggs} more to go`}</div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <button onClick={() => { haptic(); update({ eggs: Math.max(0, day.eggs - 1) }); }} disabled={day.eggs <= 0} style={{ width: 32, height: 32, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.5)', color: 'rgba(0,0,0,0.55)', fontSize: 20, fontWeight: 300, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                            <span style={{ fontSize: 28, fontWeight: 800, minWidth: 28, textAlign: 'center', color: day.eggs >= config.eggsTarget ? 'rgba(0,0,0,0.72)' : 'var(--tx)' }}>{day.eggs}</span>
+                            <button onClick={() => { haptic(); update({ eggs: Math.min(config.eggsTarget, day.eggs + 1) }); }} disabled={day.eggs >= config.eggsTarget} style={{ width: 32, height: 32, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.5)', color: 'rgba(0,0,0,0.55)', fontSize: 20, fontWeight: 300, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>
+                        {Array.from({ length: config.eggsTarget }, (_, i) => (
+                            <div key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: i < day.eggs ? (day.eggs >= config.eggsTarget ? 'rgba(0,0,0,0.3)' : '#8ED952') : 'rgba(0,0,0,0.1)', transition: 'background 0.2s' }} />
+                        ))}
+                    </div>
                 </div>
-            </div>
 
-            {/* Water total */}
-            <div className="card">
-                <div className="label">02 · Water total</div>
-                <div className="water-big">{totalWater}<span className="u">L</span></div>
-                <div className="water-target">
-                    Target · {config.waterTarget}L
-                    {mwL > 0 && day.morningWater && <span style={{ marginLeft: 8, color: 'var(--txd)' }}>{mwL.toFixed(1)}L from morning</span>}
-                </div>
-                <div className="track">
-                    {waterPts.filter(p => p <= config.waterTarget + 0.01).map((p) => {
-                        const currentTotal = Math.round((mwL + day.water) * 10) / 10;
-                        const isOn = Math.abs(currentTotal - p) < 0.05;
+                {/* Habit Grid */}
+                <div className="habit-grid">
+
+                    {/* Morning Water tile */}
+                    <div
+                        className={`hcard ${day.morningWater ? 'hc-amber' : 'hc-amber-idle'}`}
+                        onClick={() => { haptic(); update({ morningWater: !day.morningWater }); }}
+                    >
+                        <div className="hc-top">
+                            <div className="hc-icon ic-done">
+                                <PhosphorIcon name="drop" size={24} color={day.morningWater ? 'rgba(0,0,0,0.5)' : '#c8820a'} opacity={0.35} />
+                            </div>
+                            {day.morningWater
+                                ? <div className="hc-check-done"><svg width="9" height="8" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="rgba(0,0,0,0.45)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
+                                : <div className="hc-check-idle" />
+                            }
+                        </div>
+                        <div className="hc-body">
+                            <div className="hc-name" style={{ color: day.morningWater ? 'rgba(0,0,0,0.62)' : 'var(--tx)' }}>Morning Water</div>
+                            <div className="hc-meta" style={{ color: day.morningWater ? 'rgba(0,0,0,0.32)' : 'var(--txm)' }}>{day.morningWater ? `${day.morningWaterAmount || '500ml'} · done` : 'tap to log'}</div>
+                        </div>
+                    </div>
+
+                    {/* Snack tile */}
+                    <div
+                        className={`hcard ${day.snack ? 'hc-sage' : 'hc-sage-idle'}`}
+                        onClick={() => { haptic(); if (!day.snack) update({ snack: suggested }); else update({ snack: '' }); }}
+                    >
+                        <div className="hc-top">
+                            <div className="hc-icon ic-done">
+                                <PhosphorIcon name="leaf" size={24} color={day.snack ? 'rgba(0,0,0,0.45)' : '#3b6d11'} opacity={0.35} />
+                            </div>
+                            {day.snack
+                                ? <div className="hc-check-done"><svg width="9" height="8" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="rgba(0,0,0,0.45)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
+                                : <div className="hc-check-idle" />
+                            }
+                        </div>
+                        <div className="hc-body">
+                            <div className="hc-name" style={{ color: day.snack ? 'rgba(0,0,0,0.62)' : 'var(--tx)' }}>Snack</div>
+                            <div className="hc-meta" style={{ color: day.snack ? 'rgba(0,0,0,0.32)' : 'var(--txm)' }}>{day.snack ? `${day.snack} · done` : `${suggested} suggested`}</div>
+                        </div>
+                    </div>
+
+                    {/* Custom daily items as tiles — skip archived */}
+                    {(config.customDailyItems || []).filter(it => !it.archived).map((it, idx) => {
+                        const done = !!day.dailyChecks?.[it.id];
+                        const doneColors = ['hc-purple', 'hc-pink', 'hc-green', 'hc-amber', 'hc-teal', 'hc-sage'];
+                        const idleColors = ['hc-purple-idle', 'hc-pink-idle', 'hc-green-idle', 'hc-amber-idle', 'hc-teal-idle', 'hc-sage-idle'];
+                        const cls = done ? doneColors[idx % doneColors.length] : idleColors[idx % idleColors.length];
                         return (
                             <div
-                                key={p}
-                                className={`track-pt ${isOn ? 'on' : ''}`}
-                                onClick={() => {
-                                    haptic();
-                                    const target = isOn ? 0 : Math.max(0, Math.round((p - mwL) * 100) / 100);
-                                    update({ water: target });
-                                }}
+                                key={it.id}
+                                className={`hcard ${cls}`}
+                                onClick={() => { haptic(); update({ dailyChecks: { ...day.dailyChecks, [it.id]: !done } }); }}
                             >
-                                {p.toFixed(1)}L
+                                <div className="hc-top">
+                                    <div className="hc-icon ic-done">
+                                        <ItemIcon name={it.emoji} size={22} color={done ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.45)'} opacity={0.35} />
+                                    </div>
+                                    {done
+                                        ? <div className="hc-check-done"><svg width="9" height="8" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="rgba(0,0,0,0.45)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
+                                        : <div className="hc-check-idle" />
+                                    }
+                                </div>
+                                <div className="hc-body">
+                                    <div className="hc-name" style={{ color: done ? 'rgba(0,0,0,0.62)' : 'var(--tx)' }}>{it.label}</div>
+                                    <div className="hc-meta" style={{ color: done ? 'rgba(0,0,0,0.32)' : 'var(--txm)' }}>{done ? 'done' : 'tap to log'}</div>
+                                </div>
                             </div>
                         );
                     })}
-                </div>
-                <div className="prog">
-                    <div className="prog-fill" style={{ width: `${Math.min(100, ((mwL + day.water) / config.waterTarget) * 100)}%` }} />
-                </div>
-            </div>
 
-            {/* Eggs */}
-            <div className={`card ${day.eggs >= config.eggsTarget ? 'done' : ''}`}>
-                <div className="label">03 · Eggs</div>
-                <div className="row">
-                    <div>
-                        <div style={{ fontSize: 14, fontWeight: 500 }}>Protein base</div>
-                        <div style={{ fontSize: 11, color: 'var(--txm)', marginTop: 2 }}>Target · {config.eggsTarget}</div>
-                    </div>
-                    <div className="stepper">
-                        <button onClick={() => update({ eggs: Math.max(0, day.eggs - 1) })}>−</button>
-                        <div className="val">{day.eggs}</div>
-                        <button disabled={day.eggs >= config.eggsTarget} onClick={() => update({ eggs: day.eggs + 1 })}>+</button>
-                        {day.eggs >= config.eggsTarget && <Check on={true} />}
-                    </div>
                 </div>
-            </div>
 
-            {/* Snack — simplified, no override */}
-            <div className="card">
-                <div className="label">04 · Evening snack</div>
-                <div style={{ fontSize: 12, color: 'var(--txm)', marginBottom: 10 }}>
-                    Today's pick · <span style={{ color: 'var(--tx)', fontWeight: 500 }}>{suggested}</span>
-                </div>
-                <div
-                    className={`tap-card ${day.snack === suggested ? 'on' : ''}`}
-                    onClick={() => { haptic(); update({ snack: day.snack === suggested ? '' : suggested }); }}
-                >
-                    {day.snack === suggested ? `✓ ${suggested} logged` : `Tap to log ${suggested}`}
-                </div>
-            </div>
-
-            {/* Custom daily items */}
-            {(config.customDailyItems || []).map((it, idx) => (
-                <div key={it.id} className="card">
-                    <div className="label">{String(idx + 5).padStart(2, '0')} · {it.label}</div>
-                    <div
-                        className={`tap-card ${day.dailyChecks?.[it.id] ? 'on' : ''}`}
-                        onClick={() => { haptic(); update({ dailyChecks: { ...day.dailyChecks, [it.id]: !day.dailyChecks?.[it.id] } }); }}
-                    >
-                        {day.dailyChecks?.[it.id] ? `✓ ${it.label} logged` : 'Tap when done'}
-                    </div>
-                </div>
-            ))}
-
-            {/* Free food log — flat running log with tags */}
-            <div className="card">
-                <div className="label">06 · Free food log</div>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                    {LOG_TAGS.map(t => (
-                        <div
-                            key={t}
-                            className={`pill ${logTag === t ? 'on' : ''}`}
-                            style={{ padding: '5px 10px', fontSize: 12 }}
-                            onClick={() => setLogTag(t)}
-                        >
-                            {t[0].toUpperCase() + t.slice(1)}
+                {/* Water total card */}
+                <div className="card" style={{ marginBottom: 10 }}>
+                    <div className="water-card-row">
+                        <div>
+                            <div className="water-card-icon">
+                                <PhosphorIcon name="bottle" size={24} color="#c8820a" opacity={0.3} />
+                            </div>
+                            <div className="water-card-name">Water Total</div>
+                            <div className="water-card-sub">{mwL > 0 && day.morningWater ? `${mwL.toFixed(1)}L from morning` : `target ${config.waterTarget}L`}</div>
                         </div>
-                    ))}
+                        <div style={{ textAlign: 'right' }}>
+                            <div className="water-big">{(totalWater).toFixed(1)}<span className="u">L</span></div>
+                            <div className="water-target">of {config.waterTarget}L</div>
+                            <div className="stepper" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
+                                <button onClick={() => { haptic(); update({ water: Math.max(0, day.water - 0.5) }); }} disabled={day.water <= 0}>−</button>
+                                <button onClick={() => { haptic(); update({ water: day.water + 0.5 }); }} disabled={totalWater >= config.waterTarget}>+</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="track">
+                        {waterPts.filter(p => p <= config.waterTarget + 0.01).map((p) => {
+                            const currentTotal = Math.round((mwL + day.water) * 10) / 10;
+                            const isOn = currentTotal >= p;
+                            const isSoft = !isOn && currentTotal >= p - 0.5 && currentTotal > 0;
+                            return (
+                                <div
+                                    key={p}
+                                    className={`track-pt ${isOn ? 'on' : isSoft ? 'soft' : ''}`}
+                                    onClick={() => { haptic(); const newWater = Math.max(0, p - mwL); update({ water: newWater }); }}
+                                />
+                            );
+                        })}
+                    </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                        className="inp"
-                        placeholder="What did you eat?"
-                        value={logInput}
-                        onChange={(e) => setLogInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') addEntry(); }}
-                        style={{ flex: 1 }}
-                    />
-                    <button
-                        className="btn"
-                        style={{ width: 'auto', marginTop: 0, padding: '0 14px', fontSize: 13 }}
-                        onClick={addEntry}
-                    >Add</button>
-                </div>
-                {foodLog.length > 0 && (
-                    <div className="free-list" style={{ marginTop: 10 }}>
-                        {foodLog.map((entry, i) => (
-                            <div key={i} className="chip" style={{ background: 'var(--amber-sf)' }}>
-                                <span style={{ fontSize: 10, opacity: 0.7, marginRight: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{entry.tag}</span>
-                                · {entry.text}
-                                <button onClick={() => removeEntry(i)}>×</button>
+
+                {/* Food Log card */}
+                <div className="card" style={{ marginBottom: 10 }}>
+                    <div className="log-card-header">
+                        <div className="log-card-icon">
+                            <PhosphorIcon name="notepad" size={24} color="#4a8a22" opacity={0.3} />
+                        </div>
+                        <div className="log-card-title-col">
+                            <div className="log-card-num">Food Log</div>
+                            <div className="log-card-name">Today's meals</div>
+                        </div>
+                    </div>
+                    <div className="sec-lbl" style={{ margin: '0 0 8px', fontSize: 9 }}>Category</div>
+                    <div className="pills" style={{ marginBottom: 10 }}>
+                        {LOG_TAGS.map(t => (
+                            <div key={t} className={`pill ${logTag === t ? 'on' : ''}`} onClick={() => setLogTag(t)}>
+                                {t[0].toUpperCase() + t.slice(1)}
                             </div>
                         ))}
                     </div>
-                )}
-            </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                            className="inp"
+                            placeholder="What did you eat?"
+                            value={logInput}
+                            onChange={(e) => setLogInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') addEntry(); }}
+                            style={{ flex: 1 }}
+                        />
+                        <button className="btn green" style={{ width: 'auto', marginTop: 0, padding: '0 16px', fontSize: 13 }} onClick={addEntry}>Add</button>
+                    </div>
+                    {foodLog.length > 0 && (
+                        <div className="free-list" style={{ marginTop: 12 }}>
+                            {foodLog.map((entry, i) => (
+                                <div key={i} className="food-chip">
+                                    <span className="food-chip-tag">{entry.tag}</span>
+                                    <span className="food-chip-txt">{entry.text} <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#c5c0b8', padding: 0, marginLeft: 2 }} onClick={() => removeEntry(i)}>×</button></span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
 
-            {/* Notes — no mood, with confirm */}
-            <div className={`card ${day.notesConfirmed ? 'confirmed' : ''}`}>
-                <div className="label">07 · Notes</div>
-                <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Skin feel</div>
-                <div className="pills" style={{ marginBottom: 10, opacity: day.notesConfirmed ? 0.6 : 1 }}>
-                    {['oily', 'normal', 'dry'].map((k) => (
-                        <div key={k} className={`pill ${day.skinFeelChip === k ? 'on' : ''}`}
-                            onClick={() => !day.notesConfirmed && update({ skinFeelChip: day.skinFeelChip === k ? '' : k })}>
-                            {k[0].toUpperCase() + k.slice(1)}
-                        </div>
-                    ))}
+                {/* Notes card */}
+                <div className={`card ${day.notesConfirmed ? 'confirmed' : ''}`} style={{ marginBottom: 24 }}>
+                    <div className="label">Notes</div>
+                    <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Skin feel</div>
+                    <div className="pills" style={{ marginBottom: 10, opacity: day.notesConfirmed ? 0.6 : 1 }}>
+                        {['oily', 'normal', 'dry'].map((k) => (
+                            <div key={k} className={`pill ${day.skinFeelChip === k ? 'on' : ''}`}
+                                onClick={() => !day.notesConfirmed && update({ skinFeelChip: day.skinFeelChip === k ? '' : k })}>
+                                {k[0].toUpperCase() + k.slice(1)}
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Energy</div>
+                    <div className="pills" style={{ marginBottom: 12, opacity: day.notesConfirmed ? 0.6 : 1 }}>
+                        {['high', 'medium', 'low'].map((k) => (
+                            <div key={k} className={`pill ${day.energyChip === k ? 'on' : ''}`}
+                                onClick={() => !day.notesConfirmed && update({ energyChip: day.energyChip === k ? '' : k })}>
+                                {k[0].toUpperCase() + k.slice(1)}
+                            </div>
+                        ))}
+                    </div>
+                    <textarea className="inp" placeholder="Anything else..." value={day.notes} readOnly={day.notesConfirmed} onChange={(e) => !day.notesConfirmed && update({ notes: e.target.value })} />
+                    {!day.notesConfirmed
+                        ? <button className="confirm-btn" onClick={() => { haptic(); update({ notesConfirmed: true }); }}>Confirm notes</button>
+                        : <span className="saved-link" onClick={() => update({ notesConfirmed: false })}>✓ Saved · Edit</span>
+                    }
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Energy</div>
-                <div className="pills" style={{ marginBottom: 12, opacity: day.notesConfirmed ? 0.6 : 1 }}>
-                    {['high', 'medium', 'low'].map((k) => (
-                        <div key={k} className={`pill ${day.energyChip === k ? 'on' : ''}`}
-                            onClick={() => !day.notesConfirmed && update({ energyChip: day.energyChip === k ? '' : k })}>
-                            {k[0].toUpperCase() + k.slice(1)}
-                        </div>
-                    ))}
-                </div>
-                <textarea
-                    className="inp"
-                    placeholder="Anything else..."
-                    value={day.notes}
-                    readOnly={day.notesConfirmed}
-                    onChange={(e) => !day.notesConfirmed && update({ notes: e.target.value })}
-                />
-                {!day.notesConfirmed
-                    ? <button className="confirm-btn" onClick={() => { haptic(); update({ notesConfirmed: true }); }}>Confirm notes</button>
-                    : <span className="saved-link" onClick={() => update({ notesConfirmed: false })}>✓ Saved · Edit</span>
-                }
+
             </div>
         </div>
     );
@@ -1537,25 +1934,31 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
 
     return (
         <div className="screen">
-            <div className="hd">
-                <h1>NOMAD</h1>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {streak > 0 && (
-                        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', background: 'var(--teal-sf)', color: 'var(--teal-deep)', padding: '3px 8px', borderRadius: 100, border: '1px solid var(--teal)', fontWeight: 500 }}>
-                            🔥 {streak}
+            <div className="sky-header" style={{ '--sky': '#d4eef5', '--sky-horizon': '#e4f0ec', '--sky-grass': '#a8d4b8' }}>
+                <div className="sky-cloud" style={{ width: 100, height: 30, top: 10, left: -10 }} />
+                <div className="sky-cloud" style={{ width: 75, height: 24, top: 5, left: 60 }} />
+                <div className="sky-cloud" style={{ width: 120, height: 36, top: 16, right: -20 }} />
+                <div className="sky-horizon" />
+                <div className="sky-grass" />
+                <div className="sky-content">
+                    <div className="sky-top-row">
+                        <div>
+                            <div className="sky-date-big" style={{ color: '#1a3a32' }}>{dow} · {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</div>
+                            <div className="sky-date-sub" style={{ color: '#2a6050' }}>Skin ritual</div>
                         </div>
-                    )}
-                    <div className="sub">{dow} · {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</div>
+                        <div className="phase-badge">{phaseLabel}</div>
+                    </div>
+                    <div className="sky-panda-row">
+                        <div className="sky-panda-av">
+                            <img src={PANDA_SRC} alt="panda" />
+                        </div>
+                        <div className="sky-panda-bubble">{getPandaSkinMessage(day, config)}</div>
+                    </div>
                 </div>
             </div>
-
-            <div className="skin-hd">
-                <div className="date">Routine today</div>
-                <div className="phase-badge">{phaseLabel}</div>
-            </div>
+            <div className="body-pad">
 
             <ProgressDots day={day} config={config} mode="skin" />
-            <Panda msg={getPandaSkinMessage(day, config)} mode="skin" />
 
             {/* AM Card */}
             <div className={`card ${day.amSkinDone ? 'skin-done' : ''}`}>
@@ -1644,6 +2047,7 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                     : <span className="saved-link" onClick={() => update({ skinNotesConfirmed: false })}>✓ Saved · Edit</span>
                 }
             </div>
+            </div>
         </div>
     );
 };
@@ -1676,10 +2080,9 @@ const LogScreen = ({ allData, config }) => {
         const mwL = effectiveMorningWater(d);
         if ((mwL + (d.water || 0)) >= config.waterTarget) pts++;
         if ((d.eggs || 0) >= config.eggsTarget) pts++;
-        if (d.curd) pts++;
         if (d.amSkinDone) pts++;
         if (d.pmSkinDone) pts++;
-        if (pts >= 6) return 4;
+        if (pts >= 5) return 4;
         if (pts >= 4) return 3;
         if (pts >= 2) return 2;
         if (pts >= 1) return 1;
@@ -1691,10 +2094,12 @@ const LogScreen = ({ allData, config }) => {
     const streak = useMemo(() => {
         let s = 0;
         const d = new Date();
-        while (true) {
-            const key = todayKey(d);
-            const rec = allData[key];
-            if (rec && dayLevel(rec) > 0) { s++; d.setDate(d.getDate() - 1); }
+        const todayK = todayKey(d);
+        if (!allData[todayK] || dayLevel(allData[todayK]) < 2) d.setDate(d.getDate() - 1);
+        let safety = 0;
+        while (safety < 365) {
+            const rec = allData[todayKey(d)];
+            if (rec && dayLevel(rec) >= 2) { s++; d.setDate(d.getDate() - 1); safety++; }
             else break;
         }
         return s;
@@ -1764,7 +2169,7 @@ const LogScreen = ({ allData, config }) => {
             const wb = XLSX.utils.book_new();
 
             // Daily sheet (cap at 10 years = ~3650 days for safety on low-RAM devices)
-            const hdr = ['Date', 'Day', 'Water (L)', 'Water target', 'Morning water', 'Eggs', 'Eggs target', 'Curd', 'Snack', 'Breakfast', 'Lunch', 'Dinner', 'Other food', 'Skin feel', 'Energy', 'AM skin', 'PM skin', 'AM products', 'PM products', 'Skin today', 'Retinol reaction', 'Notes', 'Skin notes'];
+            const hdr = ['Date', 'Day', 'Water (L)', 'Water target', 'Morning water', 'Eggs', 'Eggs target', 'Snack', 'Breakfast', 'Lunch', 'Dinner', 'Other food', 'Skin feel', 'Energy', 'AM skin', 'PM skin', 'AM products', 'PM products', 'Skin today', 'Retinol reaction', 'Notes', 'Skin notes'];
             const rows = [hdr];
             const allKeys = Object.keys(allData).sort();
             const exportKeys = allKeys.length > 3650 ? allKeys.slice(-3650) : allKeys;
@@ -1780,7 +2185,7 @@ const LogScreen = ({ allData, config }) => {
                     config.waterTarget,
                     d.morningWaterAmount || '',
                     d.eggs || 0, config.eggsTarget,
-                    d.curd ? 'yes' : 'no', d.snack || '',
+                    d.snack || '',
                     log.filter(e => e.tag === 'breakfast').map(e => e.text).join('; '),
                     log.filter(e => e.tag === 'lunch').map(e => e.text).join('; '),
                     log.filter(e => e.tag === 'dinner').map(e => e.text).join('; '),
@@ -1829,50 +2234,87 @@ const LogScreen = ({ allData, config }) => {
         const r2 = (config.routines && config.routines[dow2]) || { am: [], pm: [] };
         const amNames = r2.am.map(pk => resolveProduct(pk, config.customProducts).name).join(', ');
         const pmNames = r2.pm.map(pk => resolveProduct(pk, config.customProducts).name).join(', ');
+        const waterOk = (mwL + (rec.water || 0)) >= config.waterTarget;
+        const eggsOk = (rec.eggs || 0) >= config.eggsTarget;
 
         return (
             <>
-                <div className="detail-section">
-                    <div className="detail-section-lbl">Food</div>
-                    <div className="detail-row"><span className="dk">Water</span><span className="dv">{totalW} / {config.waterTarget}L</span></div>
-                    <div className="detail-row"><span className="dk">Eggs</span><span className="dv">{rec.eggs || 0} / {config.eggsTarget}</span></div>
-                    <div className="detail-row"><span className="dk">Curd</span><span className="dv">{rec.curd ? '✓' : '—'}</span></div>
-                    <div className="detail-row"><span className="dk">Snack</span><span className="dv">{rec.snack || '—'}</span></div>
+                {/* Food section */}
+                <div className="dl-section">
+                    <div className="dl-section-hd">
+                        <div className="dl-section-icon dl-food-icon"><PhosphorIcon name="bowl" size={16} color="#3a7010" opacity={0.7}/></div>
+                        <span className="dl-section-lbl">Food</span>
+                    </div>
+                    <div className="dl-card">
+                        <div className="dl-row">
+                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="drop" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">Water</span></div>
+                            <span className={`dl-val ${waterOk ? 'dl-ok' : ''}`}>{totalW} / {config.waterTarget}L</span>
+                        </div>
+                        <div className="dl-row">
+                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="egg" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">Eggs</span></div>
+                            <span className={`dl-val ${eggsOk ? 'dl-ok' : ''}`}>{rec.eggs || 0} / {config.eggsTarget}</span>
+                        </div>
+                        {rec.snack && (
+                            <div className="dl-row">
+                                <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="leaf" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">Snack</span></div>
+                                <span className="dl-val" style={{ color: 'var(--tx)' }}>{rec.snack}</span>
+                            </div>
+                        )}
+                        {(config.customDailyItems || []).filter(it => !it.archived).map(it => (
+                            <div key={it.id} className="dl-row">
+                                <div className="dl-row-left"><div className="dl-ph-icon"><ItemIcon name={it.emoji} size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">{it.label}</span></div>
+                                <span className={`dl-val ${rec.dailyChecks?.[it.id] ? 'dl-ok' : 'dl-miss'}`}>{rec.dailyChecks?.[it.id] ? '✓' : '—'}</span>
+                            </div>
+                        ))}
+                    </div>
                     {log.length > 0 && (
-                        <div style={{ marginTop: 6 }}>
+                        <div className="dl-log">
                             {['breakfast', 'lunch', 'dinner', 'snack', 'other'].map(tag => {
                                 const items = log.filter(e => e.tag === tag).map(e => e.text);
                                 if (!items.length) return null;
-                                return <div key={tag} className="detail-row"><span className="dk" style={{ textTransform: 'capitalize' }}>{tag}</span><span className="dv">{items.join(', ')}</span></div>;
+                                return (
+                                    <div key={tag} className="dl-log-group">
+                                        <div className="dl-log-tag">{tag}</div>
+                                        <div className="dl-log-items">{items.join(', ')}</div>
+                                    </div>
+                                );
                             })}
                         </div>
                     )}
                     {(rec.skinFeelChip || rec.energyChip) && (
-                        <div className="sum-chips" style={{ marginTop: 8, marginBottom: 0 }}>
-                            {rec.skinFeelChip && <div className="sum-chip">Skin feel · {rec.skinFeelChip}</div>}
-                            {rec.energyChip && <div className="sum-chip">Energy · {rec.energyChip}</div>}
+                        <div className="dl-chips">
+                            {rec.skinFeelChip && <div className="dl-chip amber">Skin feel · {rec.skinFeelChip}</div>}
+                            {rec.energyChip && <div className="dl-chip green">Energy · {rec.energyChip}</div>}
                         </div>
                     )}
-                    {rec.notes && <div style={{ fontSize: 12, color: 'var(--txm)', marginTop: 8, padding: '8px 10px', background: 'var(--sf)', border: '1px solid var(--bd)', borderRadius: 8 }}>{rec.notes}</div>}
+                    {rec.notes && <div className="dl-note">{rec.notes}</div>}
                 </div>
 
-                <div className="detail-section">
-                    <div className="detail-section-lbl">Skin</div>
-                    <div className="detail-row">
-                        <span className="dk">AM</span>
-                        <span className="dv">{rec.amSkinDone ? '✓' : '—'} {amNames && <span style={{ fontSize: 11, color: 'var(--txm)' }}>{amNames}</span>}</span>
+                {/* Skin section */}
+                <div className="dl-section">
+                    <div className="dl-section-hd">
+                        <div className="dl-section-icon dl-skin-icon"><PhosphorIcon name="sparkle" size={16} color="#0a6058" opacity={0.7}/></div>
+                        <span className="dl-section-lbl">Skin</span>
                     </div>
-                    <div className="detail-row">
-                        <span className="dk">PM</span>
-                        <span className="dv">{rec.pmSkinDone ? '✓' : '—'} {pmNames && <span style={{ fontSize: 11, color: 'var(--txm)' }}>{pmNames}</span>}</span>
+                    <div className="dl-card">
+                        <div className="dl-row">
+                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="sun" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">AM Routine</span></div>
+                            <span className={`dl-val ${rec.amSkinDone ? 'dl-ok' : 'dl-miss'}`}>{rec.amSkinDone ? '✓ Done' : '—'}</span>
+                        </div>
+                        {rec.amSkinDone && amNames && <div className="dl-sub-row">{amNames}</div>}
+                        <div className="dl-row">
+                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="moon" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">PM Routine</span></div>
+                            <span className={`dl-val ${rec.pmSkinDone ? 'dl-ok' : 'dl-miss'}`}>{rec.pmSkinDone ? '✓ Done' : '—'}</span>
+                        </div>
+                        {rec.pmSkinDone && pmNames && <div className="dl-sub-row">{pmNames}</div>}
                     </div>
                     {(rec.skinTodayChip || rec.reactionChip || rec.retinolReactionChip) && (
-                        <div className="sum-chips" style={{ marginTop: 8, marginBottom: 0 }}>
-                            {rec.skinTodayChip && <div className="sum-chip">Skin today · {rec.skinTodayChip}</div>}
-                            {(rec.reactionChip || rec.retinolReactionChip) && <div className="sum-chip">Reaction · {rec.reactionChip || rec.retinolReactionChip}</div>}
+                        <div className="dl-chips">
+                            {rec.skinTodayChip && <div className="dl-chip teal">Skin today · {rec.skinTodayChip}</div>}
+                            {(rec.reactionChip || rec.retinolReactionChip) && <div className="dl-chip pink">Reaction · {rec.reactionChip || rec.retinolReactionChip}</div>}
                         </div>
                     )}
-                    {rec.skinNotes && <div style={{ fontSize: 12, color: 'var(--txm)', marginTop: 8, padding: '8px 10px', background: 'var(--sf)', border: '1px solid var(--bd)', borderRadius: 8 }}>{rec.skinNotes}</div>}
+                    {rec.skinNotes && <div className="dl-note">{rec.skinNotes}</div>}
                 </div>
             </>
         );
@@ -1880,10 +2322,17 @@ const LogScreen = ({ allData, config }) => {
 
     return (
         <div className="screen">
-            <div className="hd">
-                <h1>Log</h1>
-                <div className="sub">History</div>
+            <div className="sky-header" style={{ '--sky': '#e8eef4', '--sky-horizon': '#eef0e8', '--sky-grass': '#c8d8b0' }}>
+                <div className="sky-cloud" style={{ width: 90, height: 28, top: 10, left: -10 }} />
+                <div className="sky-cloud" style={{ width: 130, height: 38, top: 18, right: -20 }} />
+                <div className="sky-horizon" />
+                <div className="sky-grass" />
+                <div className="sky-content">
+                    <div className="sky-date-big" style={{ color: '#2a3228' }}>Log</div>
+                    <div className="sky-date-sub" style={{ color: '#5a6050' }}>Your history</div>
+                </div>
             </div>
+            <div className="body-pad">
 
             <div className="stats" style={{ gridTemplateColumns: '1fr 1fr' }}>
                 <div className="stat green"><div className="v">{streak}</div><div className="l">Streak</div></div>
@@ -1931,6 +2380,8 @@ const LogScreen = ({ allData, config }) => {
             <button className={`btn ${exported ? 'green' : ''}`} onClick={exportData}>
                 {exported ? 'Exported ✓' : 'Export data'}
             </button>
+
+            </div>
 
             {activeDay && (
                 <div className="sheet" onClick={() => setActiveDay(null)}>
@@ -2024,9 +2475,12 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
 
     const [newSnack, setNewSnack] = useState('');
     const [restoreMode, setRestoreMode] = useState('both'); // 'both' | 'data' | 'config'
-    const [open, setOpen] = useState({ targets: true, dailyitems: false, skincare: false, routine: false, snackrot: false, snackopts: false, data: true });
+    const [open, setOpen] = useState({ targets: true, dailyitems: false, skincare: false, routine: false, snackrot: false, data: true });
     const [newProduct, setNewProduct] = useState({ kind: '', name: '', slot: 'both' });
     const [newDailyItem, setNewDailyItem] = useState({ label: '', emoji: '' });
+    const [iconPickerFor, setIconPickerFor] = useState(null); // item id or 'new'
+    const PRESET_ICONS = ['leaf','drop','bowl','bottle','egg','sparkle','heart','flame','cup','pill','book','star','run','sun','moon','notepad'];
+
     const toggle = (k) => setOpen(o => ({ ...o, [k]: !o[k] }));
     const SecHd = ({ label, k }) => (
         <div onClick={() => toggle(k)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: open[k] ? 14 : 0 }}>
@@ -2116,12 +2570,16 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
 
     return (
         <div className="screen">
-            <div className="hd">
-                <h1>Settings</h1>
-                <div className="sub">Configure</div>
+            <div className="sky-header" style={{ '--sky': '#f0ece4', '--sky-horizon': '#e8e4dc', '--sky-grass': '#d0c8b8' }}>
+                <div className="sky-cloud" style={{ width: 100, height: 30, top: 10, left: -10, background: 'rgba(255,255,255,0.4)' }} />
+                <div className="sky-horizon" />
+                <div className="sky-content">
+                    <div className="sky-date-big" style={{ color: '#2e2b26' }}>Settings</div>
+                    <div className="sky-date-sub" style={{ color: '#7a7268' }}>Routine & data</div>
+                </div>
             </div>
+            <div className="body-pad">
 
-            {/* Appearance — FIRST */}
             {/* Targets */}
             <div className="sec">
                 <SecHd label="Targets" k="targets" />
@@ -2159,33 +2617,59 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
             <div className="sec">
                 <SecHd label="Daily items" k="dailyitems" />
                 {open.dailyitems && <>
-                    {(config.customDailyItems || []).map((it) => (
-                        <div key={it.id} className="set-row" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 8 }}>
-                            <input className="inp" style={{ width: 44, textAlign: 'center', flexShrink: 0 }} value={it.emoji}
-                                onChange={(e) => update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, emoji: e.target.value } : x) })} />
-                            <input className="inp" style={{ flex: 1 }} value={it.label}
-                                onChange={(e) => update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, label: e.target.value } : x) })} />
-                            <button style={{ background: 'none', border: 'none', color: 'var(--txd)', fontSize: 18, cursor: 'pointer', flexShrink: 0, padding: '0 4px' }}
-                                onClick={() => {
-                                    update({ customDailyItems: config.customDailyItems.filter(x => x.id !== it.id) });
-                                    showToast(`${it.label} removed`, 'info');
-                                }}>×</button>
+                    {(config.customDailyItems || []).filter(it => !it.archived).map((it) => (
+                        <div key={it.id} className="set-row" style={{ background: 'var(--bg2)', borderRadius: 12, marginBottom: 8, padding: '10px 12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <button
+                                    onClick={() => setIconPickerFor(iconPickerFor === it.id ? null : it.id)}
+                                    style={{ width: 40, height: 40, borderRadius: 12, border: '1.5px solid var(--bd)', background: 'var(--bg)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                ><ItemIcon name={it.emoji || 'sparkle'} size={20} color="var(--txm)" opacity={0.8}/></button>
+                                <input className="inp" style={{ flex: 1 }} value={it.label}
+                                    onChange={(e) => update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, label: e.target.value } : x) })} />
+                                <button style={{ background: 'none', border: 'none', color: 'var(--txd)', fontSize: 20, cursor: 'pointer', flexShrink: 0, padding: '0 2px' }}
+                                    onClick={() => {
+                                        update({ customDailyItems: config.customDailyItems.filter(x => x.id !== it.id) });
+                                        showToast(`${it.label} removed`, 'info');
+                                    }}>×</button>
+                            </div>
+                            {iconPickerFor === it.id && (
+                                <div className="icon-picker-grid">
+                                    {PRESET_ICONS.map(ic => (
+                                        <button key={ic} className={`icon-picker-btn ${it.emoji === ic ? 'sel' : ''}`}
+                                            onClick={() => {
+                                                update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, emoji: ic } : x) });
+                                                setIconPickerFor(null);
+                                            }}><PhosphorIcon name={ic} size={18} color="var(--txm)" opacity={0.8}/></button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     ))}
-                    <div className="set-row" style={{ padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 8 }}>
-                        <div className="lbl" style={{ marginBottom: 8 }}>Add item</div>
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                            <input className="inp" style={{ width: 52, textAlign: 'center', flexShrink: 0 }} placeholder="🥗" value={newDailyItem.emoji}
-                                onChange={(e) => setNewDailyItem(p => ({ ...p, emoji: e.target.value }))} />
+                    <div className="set-row" style={{ padding: '12px 12px', background: 'var(--bg2)', borderRadius: 12, marginBottom: 8 }}>
+                        <div className="lbl" style={{ marginBottom: 10 }}>Add item</div>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: iconPickerFor === 'new' ? 0 : 8 }}>
+                            <button
+                                onClick={() => setIconPickerFor(iconPickerFor === 'new' ? null : 'new')}
+                                style={{ width: 44, height: 44, borderRadius: 12, border: '1.5px solid var(--bd)', background: 'var(--bg)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >{newDailyItem.emoji ? <PhosphorIcon name={newDailyItem.emoji} size={22} color="var(--txm)" opacity={0.8}/> : <span style={{ fontSize: 22, color: 'var(--txd)' }}>+</span>}</button>
                             <input className="inp" style={{ flex: 1 }} placeholder="Label (e.g. Dry fruits)" value={newDailyItem.label}
                                 onChange={(e) => setNewDailyItem(p => ({ ...p, label: e.target.value }))} />
                         </div>
-                        <button className="btn" style={{ marginTop: 0 }} onClick={() => {
+                        {iconPickerFor === 'new' && (
+                            <div className="icon-picker-grid">
+                                {PRESET_ICONS.map(ic => (
+                                    <button key={ic} className={`icon-picker-btn ${newDailyItem.emoji === ic ? 'sel' : ''}`}
+                                        onClick={() => { setNewDailyItem(p => ({ ...p, emoji: ic })); setIconPickerFor(null); }}><PhosphorIcon name={ic} size={18} color="var(--txm)" opacity={0.8}/></button>
+                                ))}
+                            </div>
+                        )}
+                        <button className="btn" style={{ marginTop: 10 }} onClick={() => {
                             const label = newDailyItem.label.trim();
                             if (!label) { showToast('Enter a label first', 'error'); return; }
                             const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
                             update({ customDailyItems: [...(config.customDailyItems || []), { id, label, emoji: newDailyItem.emoji || '✅' }] });
                             setNewDailyItem({ label: '', emoji: '' });
+                            setIconPickerFor(null);
                             showToast(`${label} added`, 'success');
                         }}>Add item</button>
                     </div>
@@ -2304,34 +2788,6 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
                 ))}
             </div>
 
-            {/* Snack options */}
-            <div className="sec">
-                <SecHd label="Snack options" k="snackopts" />
-                {open.snackopts && <div className="set-row">
-                    <div className="free-list" style={{ marginBottom: 10 }}>
-                        {config.snackOptions.map((s, i) => (
-                            <div key={i} className="chip">
-                                {s}
-                                <button onClick={() => {
-                                    update({ snackOptions: config.snackOptions.filter((_, idx) => idx !== i) });
-                                    showToast(`${s} removed`, 'info');
-                                }}>×</button>
-                            </div>
-                        ))}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <input className="inp" placeholder="Add snack..." value={newSnack} onChange={(e) => setNewSnack(e.target.value)} />
-                        <button className="btn" style={{ width: 'auto', marginTop: 0, padding: '0 16px' }} onClick={() => {
-                            const t = newSnack.trim();
-                            if (!t) { showToast('Enter a snack name', 'error'); return; }
-                            if (config.snackOptions.includes(t)) { showToast('Already in list', 'warn'); return; }
-                            update({ snackOptions: [...config.snackOptions, t] });
-                            setNewSnack('');
-                            showToast(`${t} added`, 'success');
-                        }}>Add</button>
-                    </div>
-                </div>}
-            </div>
 
             {/* Data */}
             <div className="sec">
@@ -2399,6 +2855,7 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
                         </div>
                     )}
                 </>}
+            </div>
             </div>
         </div>
     );
@@ -2509,7 +2966,6 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
             const mwL = effectiveMorningWater(d);
             if ((mwL + (d.water || 0)) >= config.waterTarget) pts++;
             if ((d.eggs || 0) >= config.eggsTarget) pts++;
-            if (d.curd) pts++;
             if (d.amSkinDone) pts++;
             if (d.pmSkinDone) pts++;
             return pts;
@@ -2518,16 +2974,14 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
         const d = new Date();
         // If today has no record yet, start counting from yesterday so streak doesn't show 0
         const todayK = todayKey(d);
-        if (!allData[todayK] || dayLevel(allData[todayK]) === 0) {
+        if (!allData[todayK] || dayLevel(allData[todayK]) < 2) {
             d.setDate(d.getDate() - 1);
         }
         let safety = 0;
         while (safety < 365) {
-            const k = todayKey(d);
-            const rec = allData[k];
-            if (rec && dayLevel(rec) > 0) { s++; d.setDate(d.getDate() - 1); }
+            const rec = allData[todayKey(d)];
+            if (rec && dayLevel(rec) >= 2) { s++; d.setDate(d.getDate() - 1); safety++; }
             else break;
-            safety++;
         }
         return s;
     }, [allData, config]);
