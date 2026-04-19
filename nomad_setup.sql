@@ -158,3 +158,23 @@ CREATE TABLE IF NOT EXISTS user_registry (
 );
 
 ALTER TABLE user_registry DISABLE ROW LEVEL SECURITY;
+
+-- ── 4. ROUTINE TRACKER TABLES ─────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS daily_logs (
+  id               TEXT PRIMARY KEY,
+  data             JSONB,
+  last_modified_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_config (
+  id               TEXT PRIMARY KEY,
+  data             JSONB,
+  last_modified_at TEXT
+);
+
+ALTER TABLE daily_logs  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_config DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE daily_logs  REPLICA IDENTITY DEFAULT;
+ALTER TABLE user_config REPLICA IDENTITY DEFAULT;
