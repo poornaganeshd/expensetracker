@@ -10,8 +10,12 @@ import {
   Tooltip,
 } from "recharts";
 
-const EXPENSE_COLOR = "#E07A5F";
-const NET_COLOR = "#D4AF37";
+const EXPENSE_COLOR = "#C97B63";
+const NET_COLOR = "#7C3AED";
+const POSITIVE_COLOR = "#22C55E";
+const NEGATIVE_COLOR = "#EF4444";
+const EXPENSE_GRADIENT_TOP = "#E8C7AA";
+const EXPENSE_GRADIENT_BOTTOM = "#C97B63";
 
 const monthShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const dayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -155,6 +159,7 @@ export function buildTrendChartData({ expenses = [], incomes = [], period = "mon
     data: [...rows.values()].map((row) => ({
       ...row,
       net: toNumber(row.income - row.totalExpense),
+      netVisual: Math.max(toNumber(row.income - row.totalExpense), 0),
     })),
   };
 }
@@ -172,7 +177,7 @@ function TrendTooltip({ active, payload, formatter = formatDetailCurrency }) {
     <div
       style={{
         background: "rgba(10,10,10,0.94)",
-        border: "1px solid rgba(212,175,55,0.14)",
+        border: "1px solid rgba(201,123,99,0.18)",
         borderRadius: 12,
         padding: "11px 12px",
         boxShadow: "0 16px 32px rgba(0,0,0,0.28)",
@@ -187,11 +192,11 @@ function TrendTooltip({ active, payload, formatter = formatDetailCurrency }) {
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
           <span style={{ color: "rgba(244,239,226,0.62)", fontSize: 11 }}>Income</span>
-          <span style={{ color: "#7ecb8d", fontSize: 11, fontWeight: 700 }}>{formatter(row.income)}</span>
+          <span style={{ color: POSITIVE_COLOR, fontSize: 11, fontWeight: 700 }}>{formatter(row.income)}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
           <span style={{ color: "rgba(244,239,226,0.62)", fontSize: 11 }}>Net</span>
-          <span style={{ color: row.net >= 0 ? NET_COLOR : "#e07a5f", fontSize: 11, fontWeight: 700 }}>
+          <span style={{ color: row.net >= 0 ? NET_COLOR : NEGATIVE_COLOR, fontSize: 11, fontWeight: 700 }}>
             {formatter(row.net)}
           </span>
         </div>
@@ -210,6 +215,12 @@ export default function TrendChart({
     () => buildTrendChartData({ expenses, incomes, period }),
     [expenses, incomes, period]
   );
+  const yMax = useMemo(() => {
+    if (!data.length) return 1000;
+    const peak = Math.max(...data.map((row) => Math.max(row.totalExpense || 0, row.income || 0, row.netVisual || 0)));
+    const padded = Math.max(1000, peak * 1.12);
+    return Math.ceil(padded / 100) * 100;
+  }, [data]);
 
   if (!data.length || data.every((row) => row.totalExpense === 0 && row.income === 0)) {
     return (
@@ -228,8 +239,8 @@ export default function TrendChart({
   }
 
   return (
-    <div style={{ width: "100%", minWidth: 0 }}>
-      <div style={{ width: "100%", height: 280, minWidth: 0 }}>
+    <div style={{ width: "100%", minWidth: 0, minHeight: 0 }}>
+      <div style={{ width: "100%", height: 280, minWidth: 0, minHeight: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={data}
@@ -237,7 +248,13 @@ export default function TrendChart({
             barGap={8}
             barCategoryGap="32%"
           >
-            <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
+            <defs>
+              <linearGradient id="trendExpenseFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={EXPENSE_GRADIENT_TOP} stopOpacity="0.95" />
+                <stop offset="100%" stopColor={EXPENSE_GRADIENT_BOTTOM} stopOpacity="0.88" />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="rgba(255,255,255,0.035)" vertical={false} />
             <XAxis
               dataKey="label"
               tickLine={false}
@@ -251,29 +268,23 @@ export default function TrendChart({
               type="number"
               scale="linear"
               tickCount={6}
+              allowDecimals={false}
               tickFormatter={formatAxisCurrency}
-              domain={([dataMin, dataMax]) => {
-                const min = Math.min(0, Number(dataMin || 0));
-                const max = Math.max(0, Number(dataMax || 0));
-                const span = max - min || 1000;
-                const padding = Math.max(120, Math.round(span * 0.12));
-                return [Math.floor((min - padding) / 100) * 100, Math.ceil((max + padding) / 100) * 100];
-              }}
+              domain={[0, yMax]}
               tick={{ fill: "var(--muted)", fontSize: 10, fontFamily: "var(--font-h)" }}
             />
-            <Tooltip content={<TrendTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(212,175,55,0.06)" }} />
+            <Tooltip content={<TrendTooltip formatter={formatCurrency} />} cursor={{ fill: "rgba(201,123,99,0.08)" }} />
             <Bar
               dataKey="totalExpense"
               name="Expense"
-              fill={EXPENSE_COLOR}
-              fillOpacity={0.78}
+              fill="url(#trendExpenseFill)"
               radius={[6, 6, 0, 0]}
               maxBarSize={28}
               animationDuration={650}
             />
             <Line
               type="monotone"
-              dataKey="net"
+              dataKey="netVisual"
               name="Net"
               stroke={NET_COLOR}
               strokeWidth={2.5}
