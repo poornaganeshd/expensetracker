@@ -481,6 +481,9 @@ export default function Nomad() {
   const [reportSelCats, sReportSelCats] = useState([]);
   const [reportActive, sReportActive] = useState(false);
   const [reportSaving, sReportSaving] = useState(false);
+  const [dbSetupModal, sDbSetupModal] = useState(false);
+  const [dbSetupToken, sDbSetupToken] = useState("");
+  const [dbSetupRunning, sDbSetupRunning] = useState(false);
   const [trendPeriod, sTrendPeriod] = useState("month");
   const [recCats, sRecCats] = useState(RC);
   const [tab, sTab] = useState("dashboard"), [ex, sEx] = useState([]), [inc, sInc] = useState([]), [tr, sTr] = useState([]), [stl, sStl] = useState([]), [cats, sCats] = useState(DC), [isrc, sIsrc] = useState(DI), [sp, sSp] = useState([]), [evs, sEvs] = useState([]), [rec, sRec] = useState([]), [fm, sFm] = useState("all"), [loaded, sL] = useState(false), [ld, sLd] = useState(false), [dm, sDm] = useState(false), [toasts, sToasts] = useState([]), [nn, sNN] = useState(""), [ne2, sNE2] = useState("📁"), [nc, sNC] = useState("#E07A5F"), [mt, sMt] = useState("expense"), [clr, sClr] = useState(false), [nukeTxt, sNukeTxt] = useState(""), [spX, sSpX] = useState(false), [calW, sCalW] = useState(null), [wsb, sWsb] = useState({ upi_lite: 0, bank: 0, cash: 0 });
@@ -783,38 +786,42 @@ export default function Nomad() {
       })
       .catch(() => {});
   };
-  const saveReportSchedule = async () => {
-    if (!reportEmail.trim()) { showT("Enter an email address", "error"); return; }
-    if (!SB_ENABLED) { showT("Supabase not configured", "error"); return; }
-    sReportSaving(true);
-    const uid = SB_URL.replace("https://", "").split(".")[0];
+  const _doSaveSchedule = async () => {
+    const userId = SB_URL.replace("https://", "").split(".")[0];
     const next = new Date();
     if (reportFreq === "weekly") next.setUTCDate(next.getUTCDate() + 7);
     else if (reportFreq === "monthly") next.setUTCMonth(next.getUTCMonth() + 1);
     else if (reportFreq === "quarterly") next.setUTCMonth(next.getUTCMonth() + 3);
     else next.setUTCDate(next.getUTCDate() + (reportCustomDays || 7));
     next.setUTCHours(reportSendHour, 0, 0, 0);
+    const r = await fetch(`${SB_URL}/rest/v1/report_schedules`, {
+      method: "POST",
+      headers: { ...sbH, "Prefer": "resolution=merge-duplicates" },
+      body: JSON.stringify([{
+        user_id: userId,
+        email: reportEmail.trim(),
+        frequency: reportFreq,
+        custom_days: reportFreq === "custom" ? (reportCustomDays || 7) : null,
+        send_hour: reportSendHour,
+        include_expenses: reportIncExp,
+        include_incomes: reportIncInc,
+        include_transfers: reportIncTr,
+        selected_categories: reportSelCats.length ? reportSelCats : null,
+        next_send_at: next.toISOString(),
+        is_active: reportActive,
+      }])
+    });
+    return r;
+  };
+
+  const saveReportSchedule = async () => {
+    if (!reportEmail.trim()) { showT("Enter an email address", "error"); return; }
+    if (!SB_ENABLED) { showT("Supabase not configured", "error"); return; }
+    sReportSaving(true);
     try {
-      const r = await fetch(`${SB_URL}/rest/v1/report_schedules`, {
-        method: "POST",
-        headers: { ...sbH, "Prefer": "resolution=merge-duplicates" },
-        body: JSON.stringify([{
-          user_id: uid,
-          email: reportEmail.trim(),
-          frequency: reportFreq,
-          custom_days: reportFreq === "custom" ? (reportCustomDays || 7) : null,
-          send_hour: reportSendHour,
-          include_expenses: reportIncExp,
-          include_incomes: reportIncInc,
-          include_transfers: reportIncTr,
-          selected_categories: reportSelCats.length ? reportSelCats : null,
-          next_send_at: next.toISOString(),
-          is_active: reportActive,
-        }])
-      });
+      const r = await _doSaveSchedule();
       if (r.ok) {
         showT("Report schedule saved", "success");
-        // Register this user's Supabase in the owner's central registry
         const registryUrl = import.meta.env.VITE_SUPABASE_URL;
         const registryKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
         if (registryUrl && registryKey) {
@@ -824,9 +831,48 @@ export default function Nomad() {
             body: JSON.stringify([{ supabase_url: SB_URL, anon_key: _creds.sbKey }])
           }).catch(() => {});
         }
-      } else showT("Failed to save — run supabase_setup_reports.sql first", "error");
+      } else {
+        // Check if this is a missing-table error (42P01 = relation does not exist)
+        const errBody = await r.json().catch(() => ({}));
+        const isMissingTable = errBody?.code === "42P01" || (errBody?.message ?? "").includes("does not exist");
+        if (isMissingTable) {
+          sDbSetupModal(true);
+        } else {
+          showT(`Failed to save (${r.status})`, "error");
+        }
+      }
     } catch { showT("Failed to save schedule", "error"); }
     sReportSaving(false);
+  };
+
+  const runDbSetup = async () => {
+    if (!dbSetupToken.trim()) { showT("Enter your Supabase access token", "error"); return; }
+    sDbSetupRunning(true);
+    try {
+      const r = await fetch(`/api/setup-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ supabase_url: SB_URL, access_token: dbSetupToken.trim() }),
+      });
+      if (r.ok) {
+        showT("Database tables created!", "success");
+        sDbSetupModal(false);
+        sDbSetupToken("");
+        // Retry the save now that tables exist
+        sReportSaving(true);
+        try {
+          const r2 = await _doSaveSchedule();
+          if (r2.ok) showT("Report schedule saved", "success");
+          else showT("Tables created but save failed — try again", "error");
+        } catch { showT("Tables created but save failed — try again", "error"); }
+        sReportSaving(false);
+      } else {
+        const errBody = await r.json().catch(() => ({}));
+        const detail = errBody?.detail || errBody?.error || `Status ${r.status}`;
+        showT(`Setup failed: ${detail}`, "error");
+      }
+    } catch { showT("Setup request failed — check connection", "error"); }
+    sDbSetupRunning(false);
   };
   const impBackup = (file) => { const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); if (!d._v || !d._v.startsWith("nomad")) { showT("Invalid backup file", "error"); return } const arrFields = ["expenses", "incomes", "transfers", "settlements", "splits", "recurring", "events", "categories", "incomeSources"]; for (const f of arrFields) { if (d[f] !== undefined && !Array.isArray(d[f])) { showT(`Backup corrupt: ${f}`, "error"); return; } } sEx(d.expenses || []); sInc(d.incomes || []); sTr(d.transfers || []); sStl(d.settlements || []); sSp(d.splits || []); sRec(d.recurring || []); sEvs(d.events || []); if (d.categories?.length) sCats(d.categories); if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.darkMode !== undefined) sDm(d.darkMode); if (d.walletStartBal && typeof d.walletStartBal === "object") sWsb(d.walletStartBal); showT("Backup restored on this device", "success") } catch { showT("Failed to read file", "error") } }; r.readAsText(file) };
 
@@ -972,6 +1018,35 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
     {module === "finance" && <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--nav-bg)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "center", maxWidth: 430, margin: "0 auto", zIndex: 50, paddingBottom: "env(safe-area-inset-bottom)" }}>{[{ id: "dashboard", label: "Home" }, { id: "add", label: "Add" }, { id: "events", label: "Events" }, { id: "history", label: "History" }, { id: "settings", label: "Settings" }].map(n => <button key={n.id} onClick={() => sTab(n.id)} style={{ flex: 1, padding: "10px 0 8px", border: "none", background: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", opacity: tab === n.id ? 1 : 0.45 }}><NI type={n.id} active={tab === n.id} /><span style={{ fontFamily: "var(--font-h)", fontSize: 9, color: tab === n.id ? "#E07A5F" : "var(--muted)", fontWeight: tab === n.id ? 600 : 400 }}>{n.label}</span></button>)}</div>}
 
     {calW && <CalM wallet={calW} currentBal={wBal[calW.id] || 0} onSave={v => handleCal(calW.id, v)} onClose={() => sCalW(null)} />}
+
+    {dbSetupModal && (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ background: "var(--card)", borderRadius: 16, padding: 24, maxWidth: 380, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.3)" }}>
+          <div style={{ fontSize: 24, marginBottom: 8 }}>🔧</div>
+          <div style={{ fontFamily: "var(--font-h)", fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>One-time Database Setup</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.7, marginBottom: 16 }}>
+            The required tables don't exist in your Supabase yet. Provide your <strong style={{ color: "var(--text)" }}>Supabase personal access token</strong> to create them automatically.
+            <br /><br />
+            Get it at: <span style={{ color: "#c9a96e", fontFamily: "monospace", fontSize: 11 }}>supabase.com → Account → Access Tokens</span>
+          </div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", letterSpacing: "1px", marginBottom: 6, textTransform: "uppercase" }}>Personal Access Token</label>
+          <input
+            type="password"
+            value={dbSetupToken}
+            onChange={e => sDbSetupToken(e.target.value)}
+            placeholder="sbp_..."
+            style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: "1.5px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "var(--font-b)", outline: "none", boxSizing: "border-box", marginBottom: 16 }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => { sDbSetupModal(false); sDbSetupToken(""); }} style={{ flex: 1, padding: "11px", border: "1.5px solid var(--border)", borderRadius: 10, background: "var(--card)", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+            <button onClick={runDbSetup} disabled={dbSetupRunning || !dbSetupToken.trim()} style={{ flex: 2, padding: "11px", border: "none", borderRadius: 10, background: dbSetupRunning ? "#c9a96e88" : "#c9a96e", color: "#1a1a1a", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, cursor: dbSetupRunning ? "not-allowed" : "pointer" }}>
+              {dbSetupRunning ? "Setting up…" : "Create Tables & Save"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {toasts.length > 0 && (
       <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", zIndex: 300, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, pointerEvents: "none" }}>
         {toasts.map(t => (
