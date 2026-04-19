@@ -217,6 +217,14 @@ const CSS = `
 }
 #nomad-routine .screen::-webkit-scrollbar { display: none; }
 
+/* ---- Sky header per-screen color themes ---- */
+#nomad-routine .sky-skin     { --sky:#d4eef5; --sky-horizon:#e4f0ec; --sky-grass:#a8d4b8; }
+#nomad-routine .sky-log      { --sky:#e8eef4; --sky-horizon:#eef0e8; --sky-grass:#c8d8b0; }
+#nomad-routine .sky-settings { --sky:#f0ece4; --sky-horizon:#e8e4dc; --sky-grass:#d0c8b8; }
+#nomad-routine.dark .sky-skin     { --sky:#0e2828; --sky-horizon:#142e1e; --sky-grass:#0e2818; }
+#nomad-routine.dark .sky-log      { --sky:#181e2e; --sky-horizon:#1a2418; --sky-grass:#162410; }
+#nomad-routine.dark .sky-settings { --sky:#1e1c18; --sky-horizon:#201e18; --sky-grass:#1a1810; }
+
 /* ---- Sky header ---- */
 #nomad-routine .sky-header {
   background: var(--sky);
@@ -1690,7 +1698,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                 <div className="sec-lbl">Today's rituals</div>
 
                 {/* Eggs counter bar */}
-                <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: day.eggs >= config.eggsTarget ? '#8ED952' : 'var(--sf)', boxShadow: day.eggs >= config.eggsTarget ? '0 3px 0 #5CA828' : 'var(--card-shadow)' }}>
+                <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: day.eggs >= config.eggsTarget ? '#8ED952' : '#FFF4CC', boxShadow: day.eggs >= config.eggsTarget ? '0 3px 0 #5CA828' : '0 3px 0 #E8D880' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div className="hc-icon ic-done" style={{ flexShrink: 0, background: 'rgba(255,255,255,0.45)' }}>
                             <PhosphorIcon name="egg" size={22} color={day.eggs >= config.eggsTarget ? 'rgba(0,0,0,0.45)' : '#4a8a22'} opacity={0.4} />
@@ -1905,8 +1913,8 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
 
     const [amOpen, setAmOpen] = useState(!day.amSkinDone);
     const [pmOpen, setPmOpen] = useState(day.amSkinDone && !day.pmSkinDone);
-    const [amSteps, setAmSteps] = useState([false, false, false, false, false]);
-    const [pmSteps, setPmSteps] = useState([false, false, false, false, false]);
+    const amSteps = day.amSteps || [];
+    const pmSteps = day.pmSteps || [];
 
     const phaseLabel = { 1: 'Phase 1 · 2×/wk', 2: 'Phase 2 · 3×/wk', 3: 'Phase 3 · nightly' }[config.retinolPhase];
 
@@ -1924,17 +1932,19 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
     }, [day.amSkinDone, day.pmSkinDone]);
 
     const toggleAmStep = (i) => {
-        const next = [...amSteps]; next[i] = !next[i]; setAmSteps(next);
-        if (next.slice(0, amStepList.length).every(Boolean)) update({ amSkinDone: true });
+        const next = [...amSteps]; next[i] = !next[i];
+        const allDone = next.slice(0, amStepList.length).every(Boolean);
+        update({ amSteps: next, ...(allDone ? { amSkinDone: true } : {}) });
     };
     const togglePmStep = (i) => {
-        const next = [...pmSteps]; next[i] = !next[i]; setPmSteps(next);
-        if (next.slice(0, pmStepList.length).every(Boolean)) update({ pmSkinDone: true });
+        const next = [...pmSteps]; next[i] = !next[i];
+        const allDone = next.slice(0, pmStepList.length).every(Boolean);
+        update({ pmSteps: next, ...(allDone ? { pmSkinDone: true } : {}) });
     };
 
     return (
         <div className="screen">
-            <div className="sky-header" style={{ '--sky': '#d4eef5', '--sky-horizon': '#e4f0ec', '--sky-grass': '#a8d4b8' }}>
+            <div className="sky-header sky-skin">
                 <div className="sky-cloud" style={{ width: 100, height: 30, top: 10, left: -10 }} />
                 <div className="sky-cloud" style={{ width: 75, height: 24, top: 5, left: 60 }} />
                 <div className="sky-cloud" style={{ width: 120, height: 36, top: 16, right: -20 }} />
@@ -1943,8 +1953,8 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                 <div className="sky-content">
                     <div className="sky-top-row">
                         <div>
-                            <div className="sky-date-big" style={{ color: '#1a3a32' }}>{dow} · {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</div>
-                            <div className="sky-date-sub" style={{ color: '#2a6050' }}>Skin ritual</div>
+                            <div className="sky-date-big">{dow} · {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</div>
+                            <div className="sky-date-sub">Skin ritual</div>
                         </div>
                         <div className="phase-badge">{phaseLabel}</div>
                     </div>
@@ -1980,7 +1990,7 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                             </div>
                         ))}
                         {!day.amSkinDone && (
-                            <button className="btn teal" onClick={() => { haptic(10); update({ amSkinDone: true }); setAmSteps([true, true, true, true, true]); }}>
+                            <button className="btn teal" onClick={() => { haptic(10); update({ amSkinDone: true, amSteps: amStepList.map(() => true) }); }}>
                                 Mark AM done
                             </button>
                         )}
@@ -2008,7 +2018,7 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                             </div>
                         ))}
                         {!day.pmSkinDone && (
-                            <button className="btn teal" onClick={() => { haptic(10); update({ pmSkinDone: true }); setPmSteps([true, true, true, true, true]); }}>
+                            <button className="btn teal" onClick={() => { haptic(10); update({ pmSkinDone: true, pmSteps: pmStepList.map(() => true) }); }}>
                                 Mark PM done
                             </button>
                         )}
@@ -2322,7 +2332,7 @@ const LogScreen = ({ allData, config }) => {
 
     return (
         <div className="screen">
-            <div className="sky-header" style={{ '--sky': '#e8eef4', '--sky-horizon': '#eef0e8', '--sky-grass': '#c8d8b0' }}>
+            <div className="sky-header sky-log">
                 <div className="sky-cloud" style={{ width: 90, height: 28, top: 10, left: -10 }} />
                 <div className="sky-cloud" style={{ width: 130, height: 38, top: 18, right: -20 }} />
                 <div className="sky-horizon" />
@@ -2570,7 +2580,7 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
 
     return (
         <div className="screen">
-            <div className="sky-header" style={{ '--sky': '#f0ece4', '--sky-horizon': '#e8e4dc', '--sky-grass': '#d0c8b8' }}>
+            <div className="sky-header sky-settings">
                 <div className="sky-cloud" style={{ width: 100, height: 30, top: 10, left: -10, background: 'rgba(255,255,255,0.4)' }} />
                 <div className="sky-horizon" />
                 <div className="sky-content">
