@@ -479,8 +479,9 @@ export default function Nomad() {
   const [reportIncInc, sReportIncInc] = useState(true);
   const [reportIncTr, sReportIncTr] = useState(false);
   const [reportSelCats, sReportSelCats] = useState([]);
-  const [reportActive, sReportActive] = useState(false);
+  const [reportActive, sReportActive] = useState(true);
   const [reportSaving, sReportSaving] = useState(false);
+  const [reportScheduleId, sReportScheduleId] = useState(null);
   const [dbSetupModal, sDbSetupModal] = useState(false);
   const [dbSetupToken, sDbSetupToken] = useState("");
   const [dbSetupRunning, sDbSetupRunning] = useState(false);
@@ -774,6 +775,7 @@ export default function Nomad() {
       .then(d => {
         if (!d[0]) return;
         const s = d[0];
+        sReportScheduleId(s.id ?? null);
         sReportEmail(s.email ?? "");
         sReportFreq(s.frequency ?? "monthly");
         sReportCustomDays(s.custom_days ?? 14);
@@ -794,24 +796,41 @@ export default function Nomad() {
     else if (reportFreq === "quarterly") next.setUTCMonth(next.getUTCMonth() + 3);
     else next.setUTCDate(next.getUTCDate() + (reportCustomDays || 7));
     next.setUTCHours(reportSendHour, 0, 0, 0);
-    const r = await fetch(`${SB_URL}/rest/v1/report_schedules`, {
-      method: "POST",
-      headers: { ...sbH, "Prefer": "resolution=merge-duplicates" },
-      body: JSON.stringify([{
-        user_id: userId,
-        email: reportEmail.trim(),
-        frequency: reportFreq,
-        custom_days: reportFreq === "custom" ? (reportCustomDays || 7) : null,
-        send_hour: reportSendHour,
-        include_expenses: reportIncExp,
-        include_incomes: reportIncInc,
-        include_transfers: reportIncTr,
-        selected_categories: reportSelCats.length ? reportSelCats : null,
-        next_send_at: next.toISOString(),
-        is_active: reportActive,
-      }])
-    });
-    return r;
+    const payload = {
+      user_id: userId,
+      email: reportEmail.trim(),
+      frequency: reportFreq,
+      custom_days: reportFreq === "custom" ? (reportCustomDays || 7) : null,
+      send_hour: reportSendHour,
+      include_expenses: reportIncExp,
+      include_incomes: reportIncInc,
+      include_transfers: reportIncTr,
+      selected_categories: reportSelCats.length ? reportSelCats : null,
+      next_send_at: next.toISOString(),
+      is_active: reportActive,
+    };
+    if (reportScheduleId) {
+      // Existing record — use PATCH to avoid unique constraint conflict
+      const r = await fetch(`${SB_URL}/rest/v1/report_schedules?id=eq.${reportScheduleId}`, {
+        method: "PATCH",
+        headers: { ...sbH, "Prefer": "return=minimal" },
+        body: JSON.stringify(payload),
+      });
+      return r;
+    } else {
+      // New record — INSERT
+      const r = await fetch(`${SB_URL}/rest/v1/report_schedules`, {
+        method: "POST",
+        headers: { ...sbH, "Prefer": "return=representation" },
+        body: JSON.stringify([payload]),
+      });
+      if (r.ok) {
+        // Store the returned id so future saves use PATCH
+        const created = await r.json().catch(() => []);
+        if (created[0]?.id) sReportScheduleId(created[0].id);
+      }
+      return r;
+    }
   };
 
   const saveReportSchedule = async () => {
@@ -1004,7 +1023,21 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
               <span style={{ fontSize: 13, fontFamily: "var(--font-h)", fontWeight: 600, color: "var(--text)" }}>Active</span>
               <div style={{ width: 44, height: 24, borderRadius: 12, background: reportActive ? "#c9a96e" : "var(--border)", position: "relative", flexShrink: 0 }}><div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: reportActive ? 23 : 3, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} /></div>
             </div>
-            <button onClick={saveReportSchedule} disabled={reportSaving} style={{ width: "100%", padding: "12px", border: "none", borderRadius: 10, background: reportSaving ? "#c9a96e88" : "#c9a96e", color: "#1a1a1a", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, cursor: reportSaving ? "not-allowed" : "pointer" }}>{reportSaving ? "Saving…" : "Save Report Schedule"}</button>
+            <button onClick={saveReportSchedule} disabled={reportSaving} style={{ width: "100%", padding: "12px", border: "none", borderRadius: 10, background: reportSaving ? "#c9a96e88" : "#c9a96e", color: "#1a1a1a", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, cursor: reportSaving ? "not-allowed" : "pointer", marginBottom: 8 }}>{reportSaving ? "Saving…" : "Save Report Schedule"}</button>
+            {reportScheduleId && <button onClick={async () => {
+              if (!SB_ENABLED) return;
+              sReportSaving(true);
+              try {
+                await fetch(`${SB_URL}/rest/v1/report_schedules?id=eq.${reportScheduleId}`, {
+                  method: "PATCH",
+                  headers: { ...sbH, "Prefer": "return=minimal" },
+                  body: JSON.stringify({ next_send_at: new Date(Date.now() - 60000).toISOString(), is_active: true }),
+                });
+                showT("Marked for immediate send — trigger the cron now", "success");
+                sReportActive(true);
+              } catch { showT("Failed", "error"); }
+              sReportSaving(false);
+            }} disabled={reportSaving} style={{ width: "100%", padding: "10px", border: "1.5px solid #7B8CDE", borderRadius: 10, background: "#7B8CDE12", color: "#7B8CDE", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>⚡ Send Test Email Now</button>}
           </div>}
         </div>
         <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Recurring ({rec.length})</div>{rec.length === 0 && <p style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", padding: "12px 0", fontStyle: "italic" }}>No recurring expenses set up yet.</p>}{rec.map(r => { const rc = RC.find(c => c.id === r.categoryId) || { name: r.categoryName || r.categoryId, color: "#8A8A9A", neon: "#A0A0B0", id: r.categoryId }; const fl = r.frequency === "monthly" ? `Every month on the ${r.dayOfMonth}${[, "st", "nd", "rd"][r.dayOfMonth] || "th"}` : r.frequency === "yearly" ? `Yearly on ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][(r.yearMonth || 1) - 1]} ${r.yearDay}` : `Every ${r.intervalDays} days`; return <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--bg)", borderRadius: 10, marginBottom: 6, border: "1px solid var(--border)", opacity: r.active ? 1 : 0.45 }}><DI2 id={rc.id} accent={rc.neon || rc.color} size={18} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600, fontFamily: "var(--font-h)", color: "var(--text)" }}>{r.name} — {fmt(r.amount)}</div><div style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 1 }}>{fl}</div></div><div onClick={() => { const updated = rec.map(x => x.id === r.id ? { ...x, active: !x.active } : x); sRec(updated); sbUpsert("recurring", [toSB(updated.find(x => x.id === r.id), ["id", "name", "amount", "categoryId", "categoryName", "walletId", "frequency", "dayOfMonth", "intervalDays", "yearMonth", "yearDay", "startDate", "active", "lastPaidDate", "lastSkippedDate"])]) }} style={{ width: 36, height: 20, borderRadius: 10, background: r.active ? "#A78BFA" : "var(--border)", cursor: "pointer", position: "relative", flexShrink: 0 }}><div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: r.active ? 19 : 3, transition: "left 0.2s" }} /></div>{recDelConfirm === r.id ? <div style={{ display: "flex", gap: 4, flexShrink: 0, alignItems: "center" }}><span style={{ fontSize: 10, color: "#D4726A", fontFamily: "var(--font-h)", fontWeight: 600, whiteSpace: "nowrap" }}>Delete?</span><button onClick={() => sRecDelConfirm(null)} style={{ background: "none", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 8px", fontSize: 10, color: "var(--muted)", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 600 }}>No</button><button onClick={() => { sRec(p => p.filter(x => x.id !== r.id)); sbDelete("recurring", r.id); sRecDelConfirm(null); showT(r.name + " deleted", "info") }} style={{ background: "#D4726A", border: "none", borderRadius: 6, padding: "3px 8px", fontSize: 10, color: "#fff", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 600 }}>Yes</button></div> : <button onClick={() => sRecDelConfirm(r.id)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.5, flexShrink: 0 }}>✕</button>}</div> })}</div>
