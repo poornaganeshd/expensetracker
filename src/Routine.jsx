@@ -1698,7 +1698,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                 <div className="sec-lbl">Today's rituals</div>
 
                 {/* Eggs counter bar */}
-                <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: day.eggs >= config.eggsTarget ? '#8ED952' : '#FFF4CC', boxShadow: day.eggs >= config.eggsTarget ? '0 3px 0 #5CA828' : '0 3px 0 #E8D880' }}>
+                <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: day.eggs >= config.eggsTarget ? '#F5C030' : '#FFF4CC', boxShadow: day.eggs >= config.eggsTarget ? '0 3px 0 #C89010' : '0 3px 0 #E8D880' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div className="hc-icon ic-done" style={{ flexShrink: 0, background: 'rgba(255,255,255,0.45)' }}>
                             <PhosphorIcon name="egg" size={22} color={day.eggs >= config.eggsTarget ? 'rgba(0,0,0,0.45)' : '#4a8a22'} opacity={0.4} />
@@ -1715,7 +1715,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                     </div>
                     <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>
                         {Array.from({ length: config.eggsTarget }, (_, i) => (
-                            <div key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: i < day.eggs ? (day.eggs >= config.eggsTarget ? 'rgba(0,0,0,0.3)' : '#8ED952') : 'rgba(0,0,0,0.1)', transition: 'background 0.2s' }} />
+                            <div key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: i < day.eggs ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.1)', transition: 'background 0.2s' }} />
                         ))}
                     </div>
                 </div>
@@ -1932,14 +1932,16 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
     }, [day.amSkinDone, day.pmSkinDone]);
 
     const toggleAmStep = (i) => {
-        const next = [...amSteps]; next[i] = !next[i];
-        const allDone = next.slice(0, amStepList.length).every(Boolean);
-        update({ amSteps: next, ...(allDone ? { amSkinDone: true } : {}) });
+        const next = [...(day.amSteps || [])];
+        next[i] = !next[i];
+        const allDone = amStepList.every((_, idx) => !!next[idx]);
+        update({ amSteps: next, amSkinDone: allDone });
     };
     const togglePmStep = (i) => {
-        const next = [...pmSteps]; next[i] = !next[i];
-        const allDone = next.slice(0, pmStepList.length).every(Boolean);
-        update({ pmSteps: next, ...(allDone ? { pmSkinDone: true } : {}) });
+        const next = [...(day.pmSteps || [])];
+        next[i] = !next[i];
+        const allDone = pmStepList.every((_, idx) => !!next[idx]);
+        update({ pmSteps: next, pmSkinDone: allDone });
     };
 
     return (
@@ -1982,7 +1984,7 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                     <div className="steps">
                         {amStepList.map((s, i) => (
                             <div key={i} className="step">
-                                <Check on={amSteps[i] || day.amSkinDone} teal onClick={() => toggleAmStep(i)} />
+                                <Check on={!!amSteps[i]} teal onClick={() => toggleAmStep(i)} />
                                 <div className="info">
                                     <div className="name">{config.showProductNames ? s.name : s.kind}</div>
                                     <div className="kind">{s.kind}</div>
@@ -2010,7 +2012,7 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                     <div className="steps">
                         {pmStepList.map((s, i) => (
                             <div key={i} className="step">
-                                <Check on={pmSteps[i] || day.pmSkinDone} teal onClick={() => togglePmStep(i)} />
+                                <Check on={!!pmSteps[i]} teal onClick={() => togglePmStep(i)} />
                                 <div className="info">
                                     <div className="name">{config.showProductNames ? s.name : s.kind}</div>
                                     <div className="kind">{s.kind}</div>
