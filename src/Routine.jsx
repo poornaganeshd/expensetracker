@@ -1244,8 +1244,8 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 /* Hero / sky header — Soft Pastel Design */
 #nomad-routine.dark .sky-header { background: var(--sky) !important; border-bottom: 1px solid rgba(255,255,255,0.08) !important; }
 #nomad-routine.dark .sky-cloud  { background: rgba(255,255,255,0.03) !important; }
-#nomad-routine.dark .sky-horizon { background: #2B2F3A !important; }
-#nomad-routine.dark .sky-grass   { background: #2B2F3A !important; }
+#nomad-routine.dark .sky-horizon { display: none !important; }
+#nomad-routine.dark .sky-grass   { display: none !important; }
 #nomad-routine.dark .sky-date-big { color: #FFFFFF !important; }
 #nomad-routine.dark .sky-date-sub { color: #A0A7B5 !important; }
 #nomad-routine.dark .sky-prog-track { background: rgba(255,255,255,0.08) !important; }
@@ -1345,23 +1345,28 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 #nomad-routine.dark .prog-fill     { box-shadow: none; }
 
 /* Pills */
-#nomad-routine.dark .pill.on       { background: rgba(244,162,97,0.12) !important; border-color: rgba(244,162,97,0.25) !important; color: var(--amber) !important; border-radius: 10px; }
-#nomad-routine.dark .pill.on.teal  { background: rgba(168,230,240,0.12) !important; border-color: rgba(168,230,240,0.25) !important; color: var(--teal) !important; border-radius: 10px; }
-#nomad-routine.dark .pill.on.green { background: rgba(183,231,120,0.12) !important; border-color: rgba(183,231,120,0.25) !important; color: var(--green) !important; border-radius: 10px; }
+#nomad-routine.dark .pill.on       { background: rgba(244,162,97,0.08) !important; border-color: rgba(244,162,97,0.15) !important; color: rgba(244,162,97,0.7) !important; border-radius: 10px; }
+#nomad-routine.dark .pill.on.teal  { background: rgba(168,230,240,0.08) !important; border-color: rgba(168,230,240,0.15) !important; color: rgba(168,230,240,0.7) !important; border-radius: 10px; }
+#nomad-routine.dark .pill.on.green { background: rgba(183,231,120,0.08) !important; border-color: rgba(183,231,120,0.15) !important; color: rgba(183,231,120,0.7) !important; border-radius: 10px; }
 
 /* Phase badge */
-#nomad-routine.dark .phase-badge { background: rgba(168,230,240,0.12) !important; color: var(--teal) !important; border-color: rgba(168,230,240,0.20) !important; border-radius: 8px; }
+#nomad-routine.dark .phase-badge { background: rgba(168,230,240,0.08) !important; color: rgba(168,230,240,0.7) !important; border-color: rgba(168,230,240,0.15) !important; border-radius: 8px; }
 
 /* Tap card */
-#nomad-routine.dark .tap-card.on           { background: rgba(183,231,120,0.12) !important; border-color: rgba(183,231,120,0.20) !important; color: var(--green) !important; border-radius: 10px; }
-#nomad-routine.dark .tap-card.teal.on      { background: rgba(168,230,240,0.12) !important; border-color: rgba(168,230,240,0.20) !important; color: var(--teal) !important; border-radius: 10px; }
+#nomad-routine.dark .tap-card.on           { background: rgba(183,231,120,0.08) !important; border-color: rgba(183,231,120,0.15) !important; color: rgba(183,231,120,0.7) !important; border-radius: 10px; }
+#nomad-routine.dark .tap-card.teal.on      { background: rgba(168,230,240,0.08) !important; border-color: rgba(168,230,240,0.15) !important; color: rgba(168,230,240,0.7) !important; border-radius: 10px; }
 
 /* Check glow */
 #nomad-routine.dark .check.on { box-shadow: none; }
 
 /* Confirm button glow */
-#nomad-routine.dark .confirm-btn       { box-shadow: 0px 6px 16px rgba(0,0,0,0.20); background: var(--green); color: #1F2933; border-radius: 10px; }
-#nomad-routine.dark .confirm-btn.teal  { box-shadow: 0px 6px 16px rgba(0,0,0,0.20); background: var(--teal); color: #1F2933; border-radius: 10px; }
+#nomad-routine.dark .confirm-btn       { box-shadow: 0px 6px 16px rgba(0,0,0,0.20); background: #8ED952; color: #1F2933; border-radius: 10px; }
+#nomad-routine.dark .confirm-btn.teal  { box-shadow: 0px 6px 16px rgba(0,0,0,0.20); background: #5DD4D4; color: #1F2933; border-radius: 10px; }
+
+/* Main buttons in dark mode */
+#nomad-routine.dark .btn.teal  { background: #5DD4D4 !important; color: #1F2933 !important; }
+#nomad-routine.dark .btn.green { background: #8ED952 !important; color: #1F2933 !important; }
+#nomad-routine.dark .btn.amber { background: #D4A574 !important; color: #1F2933 !important; }
 
 /* Log card */
 #nomad-routine.dark .log-card-icon { background: rgba(183,231,120,0.15) !important; border-radius: 10px; }
@@ -1383,9 +1388,23 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 #nomad-routine.dark .dl-food-icon  { background: rgba(183,231,120,0.15) !important; border-radius: 8px; }
 #nomad-routine.dark .dl-skin-icon  { background: rgba(168,230,240,0.15) !important; border-radius: 8px; }
 
-/* Stat cards */
-#nomad-routine.dark .stat   { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0px 6px 16px rgba(0,0,0,0.20) !important; border-radius: 14px !important; }
-#nomad-routine.dark .stat .v { text-shadow: none; }
+/* DL cards and log entries */
+#nomad-routine.dark .dl-section-icon { background: rgba(126,232,166,0.15) !important; }
+#nomad-routine.dark .dl-section-lbl { color: #A0A7B5 !important; }
+#nomad-routine.dark .dl-card { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.08) !important; }
+#nomad-routine.dark .dl-row { border-bottom-color: rgba(255,255,255,0.06) !important; }
+#nomad-routine.dark .dl-key { color: #FFFFFF !important; }
+#nomad-routine.dark .dl-val { color: #A0A7B5 !important; }
+#nomad-routine.dark .dl-val.dl-ok { color: #7EE8A6 !important; }
+#nomad-routine.dark .dl-food-icon { background: rgba(183,231,120,0.15) !important; }
+#nomad-routine.dark .dl-skin-icon { background: rgba(93,223,219,0.15) !important; }
+
+/* Eggs card in dark mode */
+#nomad-routine.dark .card[style*="F6E7C8"],
+#nomad-routine.dark .card[style*="FFFFFF"] { 
+  background: #1A1A1A !important; 
+  box-shadow: 0px 6px 16px rgba(0,0,0,0.20) !important;
+}
 
 /* Icon picker */
 #nomad-routine.dark .icon-picker-btn { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
@@ -1890,13 +1909,13 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                 <div className="sky-content">
                     <div className="sky-top-row">
                         <div>
-                            <div className="sky-date-big">{dateLabel}</div>
+                            <div className="sky-date-big">{pct}%</div>
                             <div className="sky-date-sub">{dow} · {doneCount} of {totalCount} done</div>
                             <div className="sky-progress-row">
                                 <div className="sky-prog-track">
                                     <div className="sky-prog-fill" style={{ width: `${pct}%` }} />
                                 </div>
-                                <div className="sky-prog-txt">{pct}%</div>
+                                <div className="sky-prog-txt">{doneCount}/{totalCount}</div>
                             </div>
                         </div>
                         {streak > 0 && (
@@ -1906,7 +1925,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                             </div>
                         )}
                     </div>
-                    <div className="sky-panda-row">
+                    <div className="sky-panda-row" style={{ marginTop: '-8px' }}>
                         <div className="sky-panda-av">
                             <img src={PANDA_SRC} alt="panda" />
                         </div>
@@ -1920,24 +1939,24 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                 <div className="sec-lbl">Today's rituals</div>
 
                 {/* Eggs counter bar */}
-                <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: day.eggs >= config.eggsTarget ? '#F6E7C8' : '#FFFFFF', boxShadow: day.eggs >= config.eggsTarget ? '0 3px 0 #D6B47A' : '0 3px 0 #E7E1D7' }}>
+                <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: 'var(--sf)', boxShadow: '0px 6px 16px rgba(0,0,0,0.20)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div className="hc-icon ic-done" style={{ flexShrink: 0, background: 'rgba(255,255,255,0.45)' }}>
-                            <PhosphorIcon name="egg" size={22} color={day.eggs >= config.eggsTarget ? 'rgba(0,0,0,0.45)' : '#4a8a22'} opacity={0.4} />
+                        <div className="hc-icon ic-done" style={{ flexShrink: 0, background: 'rgba(255,255,255,0.15)' }}>
+                            <PhosphorIcon name="egg" size={22} color={day.eggs >= config.eggsTarget ? '#B7E778' : '#B7E778'} opacity={0.7} />
                         </div>
                         <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 14, fontWeight: 800, color: 'rgba(0,0,0,0.72)' }}>Eggs</div>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(0,0,0,0.40)', marginTop: 1 }}>{day.eggs >= config.eggsTarget ? 'target hit!' : `${config.eggsTarget - day.eggs} more to go`}</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: '#FFFFFF' }}>Eggs</div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#A0A7B5', marginTop: 1 }}>{day.eggs >= config.eggsTarget ? 'target hit!' : `${config.eggsTarget - day.eggs} more to go`}</div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <button onClick={() => { haptic(); update({ eggs: Math.max(0, day.eggs - 1) }); }} disabled={day.eggs <= 0} style={{ width: 32, height: 32, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.5)', color: 'rgba(0,0,0,0.55)', fontSize: 20, fontWeight: 300, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                            <span style={{ fontSize: 28, fontWeight: 800, minWidth: 28, textAlign: 'center', color: day.eggs >= config.eggsTarget ? 'rgba(0,0,0,0.72)' : 'var(--tx)' }}>{day.eggs}</span>
-                            <button onClick={() => { haptic(); update({ eggs: Math.min(config.eggsTarget, day.eggs + 1) }); }} disabled={day.eggs >= config.eggsTarget} style={{ width: 32, height: 32, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.5)', color: 'rgba(0,0,0,0.55)', fontSize: 20, fontWeight: 300, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                            <button onClick={() => { haptic(); update({ eggs: Math.max(0, day.eggs - 1) }); }} disabled={day.eggs <= 0} style={{ width: 32, height: 32, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.10)', color: '#A0A7B5', fontSize: 20, fontWeight: 300, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                            <span style={{ fontSize: 28, fontWeight: 800, minWidth: 28, textAlign: 'center', color: '#B7E778' }}>{day.eggs}</span>
+                            <button onClick={() => { haptic(); update({ eggs: Math.min(config.eggsTarget, day.eggs + 1) }); }} disabled={day.eggs >= config.eggsTarget} style={{ width: 32, height: 32, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.10)', color: '#A0A7B5', fontSize: 20, fontWeight: 300, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>
                         {Array.from({ length: config.eggsTarget }, (_, i) => (
-                            <div key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: i < day.eggs ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.1)', transition: 'background 0.2s' }} />
+                            <div key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: i < day.eggs ? 'rgba(183,231,120,0.4)' : 'rgba(255,255,255,0.08)', transition: 'background 0.2s' }} />
                         ))}
                     </div>
                 </div>
@@ -2190,7 +2209,7 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                         </div>
                         <div className="phase-badge">{phaseLabel}</div>
                     </div>
-                    <div className="sky-panda-row">
+                    <div className="sky-panda-row" style={{ marginTop: '-8px' }}>
                         <div className="sky-panda-av">
                             <img src={PANDA_SRC} alt="panda" />
                         </div>
@@ -2572,8 +2591,8 @@ const LogScreen = ({ allData, config }) => {
                 <div className="sky-horizon" />
                 <div className="sky-grass" />
                 <div className="sky-content">
-                    <div className="sky-date-big" style={{ color: '#2a3228' }}>Log</div>
-                    <div className="sky-date-sub" style={{ color: '#5a6050' }}>Your history</div>
+                    <div className="sky-date-big">Log</div>
+                    <div className="sky-date-sub">Your history</div>
                 </div>
             </div>
             <div className="body-pad">
