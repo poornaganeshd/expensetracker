@@ -21,126 +21,126 @@ const PhosphorIcon = ({ name, size = 24, color = 'currentColor', opacity = 0.3 }
     const icons = {
         drop: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <path d="M208,144a80,80,0,0,1-160,0C48,80,128,16,128,16S208,80,208,144Z" fill={color} opacity={opacity}/>
-                <path d="M208,144a80,80,0,0,1-160,0C48,80,128,16,128,16S208,80,208,144Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                <line x1="128" y1="200" x2="128" y2="224" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+                <path d="M208,144a80,80,0,0,1-160,0C48,80,128,16,128,16S208,80,208,144Z" fill={color} opacity={opacity} />
+                <path d="M208,144a80,80,0,0,1-160,0C48,80,128,16,128,16S208,80,208,144Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <line x1="128" y1="200" x2="128" y2="224" stroke={color} strokeWidth="14" strokeLinecap="round" />
             </svg>
         ),
         egg: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <ellipse cx="128" cy="135" rx="80" ry="97" fill={color} opacity={opacity}/>
-                <ellipse cx="128" cy="135" rx="80" ry="97" stroke={color} strokeWidth="14" fill="none"/>
-                <path d="M80,112C95,90,161,90,176,112" stroke={color} strokeWidth="14" strokeLinecap="round" fill="none"/>
+                <ellipse cx="128" cy="135" rx="80" ry="97" fill={color} opacity={opacity} />
+                <ellipse cx="128" cy="135" rx="80" ry="97" stroke={color} strokeWidth="14" fill="none" />
+                <path d="M80,112C95,90,161,90,176,112" stroke={color} strokeWidth="14" strokeLinecap="round" fill="none" />
             </svg>
         ),
         bowl: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <path d="M32,104H224a96,96,0,0,1-192,0Z" fill={color} opacity={opacity}/>
-                <path d="M32,104H224a96,96,0,0,1-192,0Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                <line x1="72" y1="224" x2="184" y2="224" stroke={color} strokeWidth="14" strokeLinecap="round"/>
-                <line x1="32" y1="72" x2="224" y2="72" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+                <path d="M32,104H224a96,96,0,0,1-192,0Z" fill={color} opacity={opacity} />
+                <path d="M32,104H224a96,96,0,0,1-192,0Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <line x1="72" y1="224" x2="184" y2="224" stroke={color} strokeWidth="14" strokeLinecap="round" />
+                <line x1="32" y1="72" x2="224" y2="72" stroke={color} strokeWidth="14" strokeLinecap="round" />
             </svg>
         ),
         leaf: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <path d="M152,32C80,32,40,88,40,152c0,0,48-24,88-16s72,48,72,48C228,120,224,32,152,32Z" fill={color} opacity={opacity}/>
-                <path d="M152,32C80,32,40,88,40,152c0,0,48-24,88-16s72,48,72,48C228,120,224,32,152,32Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                <line x1="40" y1="216" x2="120" y2="136" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+                <path d="M152,32C80,32,40,88,40,152c0,0,48-24,88-16s72,48,72,48C228,120,224,32,152,32Z" fill={color} opacity={opacity} />
+                <path d="M152,32C80,32,40,88,40,152c0,0,48-24,88-16s72,48,72,48C228,120,224,32,152,32Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <line x1="40" y1="216" x2="120" y2="136" stroke={color} strokeWidth="14" strokeLinecap="round" />
             </svg>
         ),
         bottle: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <rect x="88" y="56" width="80" height="160" rx="24" fill={color} opacity={opacity}/>
-                <rect x="88" y="56" width="80" height="160" rx="24" stroke={color} strokeWidth="14" fill="none"/>
-                <line x1="88" y1="120" x2="168" y2="120" stroke={color} strokeWidth="12" strokeLinecap="round"/>
-                <path d="M88,152c20,16,64,16,80,0" stroke={color} strokeWidth="12" strokeLinecap="round" fill="none"/>
-                <path d="M108,56V32M148,56V32" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+                <rect x="88" y="56" width="80" height="160" rx="24" fill={color} opacity={opacity} />
+                <rect x="88" y="56" width="80" height="160" rx="24" stroke={color} strokeWidth="14" fill="none" />
+                <line x1="88" y1="120" x2="168" y2="120" stroke={color} strokeWidth="12" strokeLinecap="round" />
+                <path d="M88,152c20,16,64,16,80,0" stroke={color} strokeWidth="12" strokeLinecap="round" fill="none" />
+                <path d="M108,56V32M148,56V32" stroke={color} strokeWidth="14" strokeLinecap="round" />
             </svg>
         ),
         notepad: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <rect x="48" y="40" width="160" height="176" rx="16" fill={color} opacity={opacity}/>
-                <rect x="48" y="40" width="160" height="176" rx="16" stroke={color} strokeWidth="14" fill="none"/>
-                <line x1="88" y1="100" x2="168" y2="100" stroke={color} strokeWidth="14" strokeLinecap="round"/>
-                <line x1="88" y1="132" x2="168" y2="132" stroke={color} strokeWidth="14" strokeLinecap="round"/>
-                <line x1="88" y1="164" x2="136" y2="164" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+                <rect x="48" y="40" width="160" height="176" rx="16" fill={color} opacity={opacity} />
+                <rect x="48" y="40" width="160" height="176" rx="16" stroke={color} strokeWidth="14" fill="none" />
+                <line x1="88" y1="100" x2="168" y2="100" stroke={color} strokeWidth="14" strokeLinecap="round" />
+                <line x1="88" y1="132" x2="168" y2="132" stroke={color} strokeWidth="14" strokeLinecap="round" />
+                <line x1="88" y1="164" x2="136" y2="164" stroke={color} strokeWidth="14" strokeLinecap="round" />
             </svg>
         ),
         sparkle: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <path d="M128,24l24,80H232l-68,48,24,80L128,184,68,232l24-80L24,104h80Z" fill={color} opacity={opacity}/>
-                <path d="M128,24l24,80H232l-68,48,24,80L128,184,68,232l24-80L24,104h80Z" stroke={color} strokeWidth="14" strokeLinejoin="round" fill="none"/>
+                <path d="M128,24l24,80H232l-68,48,24,80L128,184,68,232l24-80L24,104h80Z" fill={color} opacity={opacity} />
+                <path d="M128,24l24,80H232l-68,48,24,80L128,184,68,232l24-80L24,104h80Z" stroke={color} strokeWidth="14" strokeLinejoin="round" fill="none" />
             </svg>
         ),
         sun: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <circle cx="128" cy="128" r="60" fill={color} opacity={opacity}/>
-                <circle cx="128" cy="128" r="60" stroke={color} strokeWidth="14" fill="none"/>
-                {[[128,24],[128,232],[24,128],[232,128],[60,60],[196,196],[60,196],[196,60]].map(([x1,y1],i)=>{
-                    const cx=128,cy=128,dx=x1-cx,dy=y1-cy,len=Math.sqrt(dx*dx+dy*dy),nx=dx/len,ny=dy/len;
-                    return <line key={i} x1={cx+nx*72} y1={cy+ny*72} x2={cx+nx*88} y2={cy+ny*88} stroke={color} strokeWidth="14" strokeLinecap="round"/>;
+                <circle cx="128" cy="128" r="60" fill={color} opacity={opacity} />
+                <circle cx="128" cy="128" r="60" stroke={color} strokeWidth="14" fill="none" />
+                {[[128, 24], [128, 232], [24, 128], [232, 128], [60, 60], [196, 196], [60, 196], [196, 60]].map(([x1, y1], i) => {
+                    const cx = 128, cy = 128, dx = x1 - cx, dy = y1 - cy, len = Math.sqrt(dx * dx + dy * dy), nx = dx / len, ny = dy / len;
+                    return <line key={i} x1={cx + nx * 72} y1={cy + ny * 72} x2={cx + nx * 88} y2={cy + ny * 88} stroke={color} strokeWidth="14" strokeLinecap="round" />;
                 })}
             </svg>
         ),
         moon: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <path d="M216,112A88,88,0,0,1,112,216c-40,0-74-22-90-56,0,0,42,10,74-8s52-54,38-96C172,58,216,82,216,112Z" fill={color} opacity={opacity}/>
-                <path d="M216,112A88,88,0,0,1,112,216c-40,0-74-22-90-56,0,0,42,10,74-8s52-54,38-96C172,58,216,82,216,112Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <path d="M216,112A88,88,0,0,1,112,216c-40,0-74-22-90-56,0,0,42,10,74-8s52-54,38-96C172,58,216,82,216,112Z" fill={color} opacity={opacity} />
+                <path d="M216,112A88,88,0,0,1,112,216c-40,0-74-22-90-56,0,0,42,10,74-8s52-54,38-96C172,58,216,82,216,112Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </svg>
         ),
         heart: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <path d="M128,224S24,160,24,96a52,52,0,0,1,104,0,52,52,0,0,1,104,0C232,160,128,224,128,224Z" fill={color} opacity={opacity}/>
-                <path d="M128,224S24,160,24,96a52,52,0,0,1,104,0,52,52,0,0,1,104,0C232,160,128,224,128,224Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <path d="M128,224S24,160,24,96a52,52,0,0,1,104,0,52,52,0,0,1,104,0C232,160,128,224,128,224Z" fill={color} opacity={opacity} />
+                <path d="M128,224S24,160,24,96a52,52,0,0,1,104,0,52,52,0,0,1,104,0C232,160,128,224,128,224Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </svg>
         ),
         flame: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <path d="M96,224c0-80,80-88,80-160,0,0,32,32,32,80a96,96,0,0,1-192,0C16,112,96,136,96,224Z" fill={color} opacity={opacity}/>
-                <path d="M96,224c0-80,80-88,80-160,0,0,32,32,32,80a96,96,0,0,1-192,0C16,112,96,136,96,224Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <path d="M96,224c0-80,80-88,80-160,0,0,32,32,32,80a96,96,0,0,1-192,0C16,112,96,136,96,224Z" fill={color} opacity={opacity} />
+                <path d="M96,224c0-80,80-88,80-160,0,0,32,32,32,80a96,96,0,0,1-192,0C16,112,96,136,96,224Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </svg>
         ),
         cup: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <path d="M56,56H200l-24,128H80Z" fill={color} opacity={opacity}/>
-                <path d="M56,56H200l-24,128H80Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                <line x1="64" y1="208" x2="192" y2="208" stroke={color} strokeWidth="14" strokeLinecap="round"/>
-                <path d="M200,88h24a24,24,0,0,1,0,48H200" stroke={color} strokeWidth="14" strokeLinecap="round" fill="none"/>
+                <path d="M56,56H200l-24,128H80Z" fill={color} opacity={opacity} />
+                <path d="M56,56H200l-24,128H80Z" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <line x1="64" y1="208" x2="192" y2="208" stroke={color} strokeWidth="14" strokeLinecap="round" />
+                <path d="M200,88h24a24,24,0,0,1,0,48H200" stroke={color} strokeWidth="14" strokeLinecap="round" fill="none" />
             </svg>
         ),
         pill: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <rect x="36" y="100" width="184" height="56" rx="28" fill={color} opacity={opacity}/>
-                <rect x="36" y="100" width="184" height="56" rx="28" stroke={color} strokeWidth="14" fill="none"/>
-                <line x1="128" y1="100" x2="128" y2="156" stroke={color} strokeWidth="12"/>
+                <rect x="36" y="100" width="184" height="56" rx="28" fill={color} opacity={opacity} />
+                <rect x="36" y="100" width="184" height="56" rx="28" stroke={color} strokeWidth="14" fill="none" />
+                <line x1="128" y1="100" x2="128" y2="156" stroke={color} strokeWidth="12" />
             </svg>
         ),
         book: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <path d="M40,196V56a16,16,0,0,1,16-16H216V196Z" fill={color} opacity={opacity}/>
-                <path d="M40,196V56a16,16,0,0,1,16-16H216V196H56A16,16,0,0,0,40,212V196" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                <path d="M56,212H216" stroke={color} strokeWidth="14" strokeLinecap="round"/>
+                <path d="M40,196V56a16,16,0,0,1,16-16H216V196Z" fill={color} opacity={opacity} />
+                <path d="M40,196V56a16,16,0,0,1,16-16H216V196H56A16,16,0,0,0,40,212V196" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <path d="M56,212H216" stroke={color} strokeWidth="14" strokeLinecap="round" />
             </svg>
         ),
         star: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <path d="M128,24l26,54,60,8-44,42,10,60L128,160l-52,28,10-60L42,86l60-8Z" fill={color} opacity={opacity}/>
-                <path d="M128,24l26,54,60,8-44,42,10,60L128,160l-52,28,10-60L42,86l60-8Z" stroke={color} strokeWidth="14" strokeLinejoin="round" fill="none"/>
+                <path d="M128,24l26,54,60,8-44,42,10,60L128,160l-52,28,10-60L42,86l60-8Z" fill={color} opacity={opacity} />
+                <path d="M128,24l26,54,60,8-44,42,10,60L128,160l-52,28,10-60L42,86l60-8Z" stroke={color} strokeWidth="14" strokeLinejoin="round" fill="none" />
             </svg>
         ),
         run: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
-                <circle cx="164" cy="44" r="20" fill={color} opacity={opacity}/>
-                <circle cx="164" cy="44" r="20" stroke={color} strokeWidth="14" fill="none"/>
-                <path d="M80,160l40-56,40,24,32,56" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                <path d="M120,104l-40,80" stroke={color} strokeWidth="14" strokeLinecap="round" fill="none"/>
+                <circle cx="164" cy="44" r="20" fill={color} opacity={opacity} />
+                <circle cx="164" cy="44" r="20" stroke={color} strokeWidth="14" fill="none" />
+                <path d="M80,160l40-56,40,24,32,56" stroke={color} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <path d="M120,104l-40,80" stroke={color} strokeWidth="14" strokeLinecap="round" fill="none" />
             </svg>
         ),
     };
     return icons[name] || null;
 };
 
-const PHOSPHOR_NAMES = new Set(['drop','egg','bowl','leaf','bottle','notepad','sparkle','sun','moon','heart','flame','cup','pill','book','star','run']);
+const PHOSPHOR_NAMES = new Set(['drop', 'egg', 'bowl', 'leaf', 'bottle', 'notepad', 'sparkle', 'sun', 'moon', 'heart', 'flame', 'cup', 'pill', 'book', 'star', 'run']);
 const ItemIcon = ({ name, size = 22, color = 'rgba(0,0,0,0.45)', opacity = 0.35 }) =>
     PHOSPHOR_NAMES.has(name)
         ? <PhosphorIcon name={name} size={size} color={color} opacity={opacity} />
@@ -176,28 +176,105 @@ const CSS = `
   --sky: #d4e8f5;
   --sky-horizon: #e8f0e4;
   --sky-grass: #c8dba0;
+  /* ── tile color tokens (light) ── */
+  --ti-amber-bg:#FFD04D;  --ti-amber-sh:0 3px 0 #C8960C;
+  --ti-amber-i-bg:#FFF4CC; --ti-amber-i-sh:0 3px 0 #E8D880;
+  --ti-green-bg:#8ED952;  --ti-green-sh:0 3px 0 #5CA828;
+  --ti-green-i-bg:#E0F8C0; --ti-green-i-sh:0 3px 0 #B0DC80;
+  --ti-teal-bg:#3DC9B4;   --ti-teal-sh:0 3px 0 #1A9888;
+  --ti-teal-i-bg:#C4F0EC;  --ti-teal-i-sh:0 3px 0 #88D4CC;
+  --ti-sage-bg:#A0CC6A;   --ti-sage-sh:0 3px 0 #72A038;
+  --ti-sage-i-bg:#D8F4B8;  --ti-sage-i-sh:0 3px 0 #ACCC80;
+  --ti-purple-bg:#C070F0; --ti-purple-sh:0 3px 0 #8C30C0;
+  --ti-purple-i-bg:#EED8FC; --ti-purple-i-sh:0 3px 0 #C8A0E8;
+  --ti-pink-bg:#F070B8;   --ti-pink-sh:0 3px 0 #C03888;
+  --ti-pink-i-bg:#FCD8EC;  --ti-pink-i-sh:0 3px 0 #E8A8CC;
+  --ti-name:rgba(0,0,0,0.62);
+  --ti-meta:rgba(0,0,0,0.32);
+  --ti-amber-meta:rgba(0,0,0,0.32);
+  --ti-green-meta:rgba(0,0,0,0.32);
+  --ti-teal-meta:rgba(0,0,0,0.32);
+  --ti-sage-meta:rgba(0,0,0,0.32);
+  --ti-purple-meta:rgba(0,0,0,0.32);
+  --ti-pink-meta:rgba(0,0,0,0.32);
+  --ti-icon-idle:#f5f2ee;
+  --ti-icon-done:rgba(255,255,255,0.45);
+  --ti-check-done:rgba(255,255,255,0.6);
+  --ti-stepper-bg:rgba(255,255,255,0.55);
+  --ti-stepper-col:rgba(0,0,0,0.5);
 }
+
+/* ── SOFT PASTEL + DARK GRADIENT — Premium Neumorphism Lite ── */
 #nomad-routine.dark {
-  --bg: #1a1e16;
-  --bg2: #222618;
-  --sf: #1e2418;
+  --bg: #0F0F0F;
+  --bg2: #1A1A1A;
+  --sf: #1A1A1A;
   --bd: rgba(255,255,255,0.08);
-  --bde: rgba(255,255,255,0.14);
-  --tx: rgba(240,245,235,0.92);
-  --txm: rgba(240,245,235,0.50);
-  --txd: rgba(240,245,235,0.28);
-  --green-sf: #3a5c1a;
-  --amber-sf: #4a3010;
-  --teal-sf: #0a3828;
-  --card-shadow: 0 3px 0 rgba(0,0,0,0.3);
-  --sky: #1a2e3a;
-  --sky-horizon: #1e2e1a;
-  --sky-grass: #1a3010;
+  --bde: rgba(255,255,255,0.12);
+  --tx: #FFFFFF;
+  --txm: #A0A7B5;
+  --txd: #6B7280;
+  --green: #B7E778;
+  --green-sf: rgba(183,231,120,0.12);
+  --green-deep: #B7E778;
+  --amber: #F4A261;
+  --amber-sf: rgba(244,162,97,0.12);
+  --amber-deep: #F4A261;
+  --teal: #A8E6F0;
+  --teal-sf: rgba(168,230,240,0.12);
+  --teal-deep: #A8E6F0;
+  --card-shadow: none;
+  --sky: #2B2F3A;
+  --sky-horizon: #2B2F3A;
+  --sky-grass: #2B2F3A;
+  /* ── tile color tokens (soft pastel + shadow) ── */
+  --ti-amber-bg: #F6D365;
+  --ti-amber-sh: 0px 6px 16px rgba(0,0,0,0.25);
+  --ti-amber-i-bg: rgba(246,211,101,0.15);
+  --ti-amber-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
+  --ti-green-bg: #B7E778;
+  --ti-green-sh: 0px 6px 16px rgba(0,0,0,0.25);
+  --ti-green-i-bg: rgba(183,231,120,0.15);
+  --ti-green-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
+  --ti-teal-bg: #A8E6F0;
+  --ti-teal-sh: 0px 6px 16px rgba(0,0,0,0.25);
+  --ti-teal-i-bg: rgba(168,230,240,0.15);
+  --ti-teal-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
+  --ti-sage-bg: #B7E778;
+  --ti-sage-sh: 0px 6px 16px rgba(0,0,0,0.25);
+  --ti-sage-i-bg: rgba(183,231,120,0.15);
+  --ti-sage-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
+  --ti-purple-bg: #CDB4DB;
+  --ti-purple-sh: 0px 6px 16px rgba(0,0,0,0.25);
+  --ti-purple-i-bg: rgba(205,180,219,0.15);
+  --ti-purple-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
+  --ti-pink-bg: #F4A261;
+  --ti-pink-sh: 0px 6px 16px rgba(0,0,0,0.25);
+  --ti-pink-i-bg: rgba(244,162,97,0.15);
+  --ti-pink-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
+  --ti-name: #1F2933;
+  --ti-meta: #1F2933;
+  --ti-amber-meta: #1F2933;
+  --ti-green-meta: #1F2933;
+  --ti-teal-meta: #1F2933;
+  --ti-sage-meta: #1F2933;
+  --ti-purple-meta: #1F2933;
+  --ti-pink-meta: #1F2933;
+  --ti-icon-idle: rgba(255,255,255,0.15);
+  --ti-icon-done: #B7E778;
+  --ti-check-done: #B7E778;
+  --ti-stepper-bg: rgba(255,255,255,0.10);
+  --ti-stepper-col: #A0A7B5;
 }
 
 #nomad-routine * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 #nomad-routine .hd { display: none !important; }
 #nomad-routine .skin-hd .date { display: none !important; }
+
+/* Dark mode main app background */
+#nomad-routine.dark .app {
+  background: #0F0F0F !important;
+}
 
 #nomad-routine .app {
   max-width: 430px;
@@ -217,13 +294,11 @@ const CSS = `
 }
 #nomad-routine .screen::-webkit-scrollbar { display: none; }
 
-/* ---- Sky header per-screen color themes ---- */
-#nomad-routine .sky-skin     { --sky:#d4eef5; --sky-horizon:#e4f0ec; --sky-grass:#a8d4b8; }
-#nomad-routine .sky-log      { --sky:#e8eef4; --sky-horizon:#eef0e8; --sky-grass:#c8d8b0; }
-#nomad-routine .sky-settings { --sky:#f0ece4; --sky-horizon:#e8e4dc; --sky-grass:#d0c8b8; }
-#nomad-routine.dark .sky-skin     { --sky:#0e2828; --sky-horizon:#142e1e; --sky-grass:#0e2818; }
-#nomad-routine.dark .sky-log      { --sky:#181e2e; --sky-horizon:#1a2418; --sky-grass:#162410; }
-#nomad-routine.dark .sky-settings { --sky:#1e1c18; --sky-horizon:#201e18; --sky-grass:#1a1810; }
+/* ---- Sky header per-screen color themes (DARK MODE) ---- */
+#nomad-routine.dark .sky-skin     { --sky: #1a2f4f; --sky-horizon:#0f1b2e; --sky-grass:#0f1b2e; }
+#nomad-routine.dark .sky-log      { --sky: #1a2f4f; --sky-horizon:#0f1b2e; --sky-grass:#0f1b2e; }
+#nomad-routine.dark .sky-settings { --sky: #1a2f4f; --sky-horizon:#0f1b2e; --sky-grass:#0f1b2e; }
+
 
 /* ---- Sky header ---- */
 #nomad-routine .sky-header {
@@ -324,7 +399,7 @@ const CSS = `
 /* ---- Panda bubble in sky ---- */
 #nomad-routine .sky-panda-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 10px;
 }
 #nomad-routine .sky-panda-av {
@@ -876,7 +951,6 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
   padding: 10px 0 20px;
   z-index: 100;
 }
-#nomad-routine.dark .nav { background: var(--sf); }
 #nomad-routine .nav button {
   flex: 1;
   background: none; border: none;
@@ -1117,23 +1191,6 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 #nomad-routine .hc-egg-dot.filled { opacity: 1; transform: scale(1.08); }
 #nomad-routine .hc-stepper button:active { opacity: 0.7; }
 
-/* ---- Dark mode hcard text fix (tiles stay light pastels, text must stay dark) ---- */
-#nomad-routine.dark .hcard .hc-name { color: rgba(0,0,0,0.72) !important; }
-#nomad-routine.dark .hcard .hc-meta { color: rgba(0,0,0,0.45) !important; }
-#nomad-routine.dark .hcard .hc-icon.ic-idle { background: rgba(255,255,255,0.3); }
-#nomad-routine.dark .hcard .hc-stepper button { background: rgba(0,0,0,0.12); color: rgba(0,0,0,0.6); }
-#nomad-routine.dark .hcard .hc-check-idle { border-color: rgba(0,0,0,0.2); }
-/* ---- Dark mode sky header text override ---- */
-#nomad-routine.dark .sky-date-big { color: rgba(220,240,225,0.95) !important; }
-#nomad-routine.dark .sky-date-sub { color: rgba(180,210,185,0.70) !important; }
-#nomad-routine.dark .sky-content .sec-lbl { color: rgba(180,210,185,0.6) !important; }
-#nomad-routine.dark .streak-card { background: rgba(0,0,0,0.25); }
-#nomad-routine.dark .sky-panda-bubble { background: rgba(30,40,30,0.85); color: rgba(220,240,225,0.9); }
-/* ---- Dark mode sky clouds ---- */
-#nomad-routine.dark .sky-cloud { background: rgba(255,255,255,0.08); }
-/* ---- Dark mode sky progress ---- */
-#nomad-routine.dark .sky-prog-track { background: rgba(0,0,0,0.25); }
-#nomad-routine.dark .sky-prog-txt { color: rgba(180,210,185,0.7); }
 
 /* ---- Detail sheet new design ---- */
 #nomad-routine .dl-section { margin-bottom: 18px; }
@@ -1179,16 +1236,181 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 #nomad-routine .eod-card .eod-item { font-size: 13px; font-family: var(--mono); display: flex; align-items: center; gap: 5px; }
 #nomad-routine .eod-card .eod-item .eod-ok { opacity: 1; }
 #nomad-routine .eod-card .eod-item .eod-miss { opacity: 0.38; }
+
+/* ================================================================
+   DARK MODE — all overrides live here at the end to win the cascade
+   ================================================================ */
+
+/* Hero / sky header — Soft Pastel Design */
+#nomad-routine.dark .sky-header { background: var(--sky) !important; border-bottom: 1px solid rgba(255,255,255,0.08) !important; }
+#nomad-routine.dark .sky-cloud  { background: rgba(255,255,255,0.03) !important; }
+#nomad-routine.dark .sky-horizon { background: #2B2F3A !important; }
+#nomad-routine.dark .sky-grass   { background: #2B2F3A !important; }
+#nomad-routine.dark .sky-date-big { color: #FFFFFF !important; }
+#nomad-routine.dark .sky-date-sub { color: #A0A7B5 !important; }
+#nomad-routine.dark .sky-prog-track { background: rgba(255,255,255,0.08) !important; }
+#nomad-routine.dark .sky-prog-fill  { background: var(--green) !important; box-shadow: 0 4px 12px rgba(183,231,120,0.20); border-radius: 4px; }
+#nomad-routine.dark .sky-prog-txt   { color: var(--green) !important; }
+#nomad-routine.dark .streak-card    { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.06) !important; border-radius: 16px !important; box-shadow: 0px 6px 16px rgba(0,0,0,0.25) !important; }
+#nomad-routine.dark .streak-card .s-num { color: #F4A261 !important; text-shadow: none; font-weight: 600; }
+#nomad-routine.dark .streak-card .s-lbl { color: #A0A7B5 !important; }
+#nomad-routine.dark .sky-panda-av   { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.12) !important; border-radius: 12px !important; }
+#nomad-routine.dark .sky-panda-bubble { background: #1A1A1A !important; border-color: rgba(255,255,255,0.06) !important; color: #FFFFFF !important; border-radius: 12px !important; box-shadow: 0px 6px 16px rgba(0,0,0,0.25) !important; }
+
+/* Habit tiles — Soft Pastel Cards */
+/* amber/yellow */
+#nomad-routine.dark .hcard.hc-amber,
+#nomad-routine.dark .hcard.hc-amber-idle {
+  background: var(--ti-amber-bg) !important;
+  border: none !important;
+  border-radius: 18px !important;
+  box-shadow: var(--ti-amber-sh) !important;
+}
+/* lime green */
+#nomad-routine.dark .hcard.hc-green,
+#nomad-routine.dark .hcard.hc-green-idle {
+  background: var(--ti-green-bg) !important;
+  border: none !important;
+  border-radius: 18px !important;
+  box-shadow: var(--ti-green-sh) !important;
+}
+/* cyan/teal */
+#nomad-routine.dark .hcard.hc-teal,
+#nomad-routine.dark .hcard.hc-teal-idle {
+  background: var(--ti-teal-bg) !important;
+  border: none !important;
+  border-radius: 18px !important;
+  box-shadow: var(--ti-teal-sh) !important;
+}
+/* sage (lime) */
+#nomad-routine.dark .hcard.hc-sage,
+#nomad-routine.dark .hcard.hc-sage-idle {
+  background: var(--ti-sage-bg) !important;
+  border: none !important;
+  border-radius: 18px !important;
+  box-shadow: var(--ti-sage-sh) !important;
+}
+/* purple */
+#nomad-routine.dark .hcard.hc-purple,
+#nomad-routine.dark .hcard.hc-purple-idle {
+  background: var(--ti-purple-bg) !important;
+  border: none !important;
+  border-radius: 18px !important;
+  box-shadow: var(--ti-purple-sh) !important;
+}
+/* pink/coral */
+#nomad-routine.dark .hcard.hc-pink,
+#nomad-routine.dark .hcard.hc-pink-idle {
+  background: var(--ti-pink-bg) !important;
+  border: none !important;
+  border-radius: 18px !important;
+  box-shadow: var(--ti-pink-sh) !important;
+}
+/* tile name — all variants */
+#nomad-routine.dark .hcard[class*="hc-"] .hc-name { color: var(--ti-name) !important; font-weight: 600; }
+/* tile meta per color */
+#nomad-routine.dark .hcard.hc-amber     .hc-meta,
+#nomad-routine.dark .hcard.hc-amber-idle .hc-meta { color: var(--ti-meta) !important; font-size: 0.85em; }
+#nomad-routine.dark .hcard.hc-green     .hc-meta,
+#nomad-routine.dark .hcard.hc-green-idle .hc-meta { color: var(--ti-meta) !important; font-size: 0.85em; }
+#nomad-routine.dark .hcard.hc-teal      .hc-meta,
+#nomad-routine.dark .hcard.hc-teal-idle  .hc-meta { color: var(--ti-meta) !important; font-size: 0.85em; }
+#nomad-routine.dark .hcard.hc-sage      .hc-meta,
+#nomad-routine.dark .hcard.hc-sage-idle  .hc-meta { color: var(--ti-meta) !important; font-size: 0.85em; }
+#nomad-routine.dark .hcard.hc-purple    .hc-meta,
+#nomad-routine.dark .hcard.hc-purple-idle .hc-meta { color: var(--ti-meta) !important; font-size: 0.85em; }
+#nomad-routine.dark .hcard.hc-pink      .hc-meta,
+#nomad-routine.dark .hcard.hc-pink-idle  .hc-meta { color: var(--ti-meta) !important; font-size: 0.85em; }
+/* tile icons / checks */
+#nomad-routine.dark .hc-icon.ic-idle { background: var(--ti-icon-idle) !important; border-radius: 10px !important; }
+#nomad-routine.dark .hc-icon.ic-done { background: var(--ti-icon-done) !important; border-radius: 10px !important; }
+#nomad-routine.dark .hc-check-idle   { border-color: rgba(255,255,255,0.20) !important; }
+#nomad-routine.dark .hcard .hc-stepper button { background: var(--ti-stepper-bg) !important; color: var(--ti-stepper-col) !important; box-shadow: none; border-radius: 8px; }
+
+/* Idle hcard (eggs counter, etc) */
+#nomad-routine.dark .hcard.hc-idle { background: #1A1A1A !important; box-shadow: 0px 6px 16px rgba(0,0,0,0.20) !important; border: none !important; border-radius: 18px !important; }
+
+/* .card (shared card shell) */
+#nomad-routine.dark .card         { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.06) !important; box-shadow: 0px 6px 16px rgba(0,0,0,0.20) !important; border-radius: 14px !important; }
+#nomad-routine.dark .card.done    { background: rgba(183,231,120,0.12) !important; border-color: rgba(183,231,120,0.20) !important; box-shadow: 0px 6px 16px rgba(0,0,0,0.20) !important; }
+#nomad-routine.dark .card.skin-done { background: rgba(168,230,240,0.12) !important; border-color: rgba(168,230,240,0.20) !important; box-shadow: 0px 6px 16px rgba(0,0,0,0.20) !important; }
+#nomad-routine.dark .card.confirmed { background: #2D3139 !important; border-color: rgba(255,255,255,0.06) !important; }
+
+/* Water card */
+#nomad-routine.dark .water-card-icon { background: rgba(244,162,97,0.15) !important; border-radius: 10px !important; }
+
+/* Track / progress */
+#nomad-routine.dark .track-pt.on   { background: var(--amber) !important; box-shadow: 0px 4px 8px rgba(244,162,97,0.25); border-radius: 3px; }
+#nomad-routine.dark .track-pt.soft { background: rgba(244,162,97,0.20) !important; }
+#nomad-routine.dark .prog-fill     { box-shadow: none; }
+
+/* Pills */
+#nomad-routine.dark .pill.on       { background: rgba(244,162,97,0.12) !important; border-color: rgba(244,162,97,0.25) !important; color: var(--amber) !important; border-radius: 10px; }
+#nomad-routine.dark .pill.on.teal  { background: rgba(168,230,240,0.12) !important; border-color: rgba(168,230,240,0.25) !important; color: var(--teal) !important; border-radius: 10px; }
+#nomad-routine.dark .pill.on.green { background: rgba(183,231,120,0.12) !important; border-color: rgba(183,231,120,0.25) !important; color: var(--green) !important; border-radius: 10px; }
+
+/* Phase badge */
+#nomad-routine.dark .phase-badge { background: rgba(168,230,240,0.12) !important; color: var(--teal) !important; border-color: rgba(168,230,240,0.20) !important; border-radius: 8px; }
+
+/* Tap card */
+#nomad-routine.dark .tap-card.on           { background: rgba(183,231,120,0.12) !important; border-color: rgba(183,231,120,0.20) !important; color: var(--green) !important; border-radius: 10px; }
+#nomad-routine.dark .tap-card.teal.on      { background: rgba(168,230,240,0.12) !important; border-color: rgba(168,230,240,0.20) !important; color: var(--teal) !important; border-radius: 10px; }
+
+/* Check glow */
+#nomad-routine.dark .check.on { box-shadow: none; }
+
+/* Confirm button glow */
+#nomad-routine.dark .confirm-btn       { box-shadow: 0px 6px 16px rgba(0,0,0,0.20); background: var(--green); color: #1F2933; border-radius: 10px; }
+#nomad-routine.dark .confirm-btn.teal  { box-shadow: 0px 6px 16px rgba(0,0,0,0.20); background: var(--teal); color: #1F2933; border-radius: 10px; }
+
+/* Log card */
+#nomad-routine.dark .log-card-icon { background: rgba(183,231,120,0.15) !important; border-radius: 10px; }
+#nomad-routine.dark .log-card-num  { color: #6B7280 !important; }
+#nomad-routine.dark .log-card-add  { background: rgba(183,231,120,0.15) !important; color: var(--green) !important; border-radius: 8px; }
+
+/* Chips / food chips */
+#nomad-routine.dark .food-chip      { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
+#nomad-routine.dark .food-chip-txt  { color: #FFFFFF !important; }
+#nomad-routine.dark .food-chip-tag  { color: #A0A7B5 !important; }
+#nomad-routine.dark .chip           { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
+
+/* DL detail chips */
+#nomad-routine.dark .dl-chip.amber { background: rgba(244,162,97,0.12) !important; color: #1F2933 !important; border-color: rgba(244,162,97,0.20) !important; border-radius: 8px; }
+#nomad-routine.dark .dl-chip.green { background: rgba(183,231,120,0.12) !important; color: #1F2933 !important; border-color: rgba(183,231,120,0.20) !important; border-radius: 8px; }
+#nomad-routine.dark .dl-chip.teal  { background: rgba(168,230,240,0.12) !important; color: #1F2933 !important; border-color: rgba(168,230,240,0.20) !important; border-radius: 8px; }
+#nomad-routine.dark .dl-chip.pink  { background: rgba(244,162,97,0.12) !important; color: #1F2933 !important; border-color: rgba(244,162,97,0.20) !important; border-radius: 8px; }
+#nomad-routine.dark .dl-val.dl-ok  { color: var(--green) !important; }
+#nomad-routine.dark .dl-food-icon  { background: rgba(183,231,120,0.15) !important; border-radius: 8px; }
+#nomad-routine.dark .dl-skin-icon  { background: rgba(168,230,240,0.15) !important; border-radius: 8px; }
+
+/* Stat cards */
+#nomad-routine.dark .stat   { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0px 6px 16px rgba(0,0,0,0.20) !important; border-radius: 14px !important; }
+#nomad-routine.dark .stat .v { text-shadow: none; }
+
+/* Icon picker */
+#nomad-routine.dark .icon-picker-btn { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
+#nomad-routine.dark .icon-picker-btn.sel { background: rgba(244,162,97,0.15) !important; border-color: #F4A261 !important; box-shadow: none; }
+
+/* Section label */
+#nomad-routine.dark .sec-lbl { color: #6B7280 !important; }
+
+/* Nav bar */
+#nomad-routine.dark .nav { background: #0F0F0F !important; border-top: 1px solid rgba(255,255,255,0.08) !important; border-radius: 0; }
+#nomad-routine.dark .nav button.active.food { color: var(--green) !important; }
+#nomad-routine.dark .nav button.active.skin { color: var(--teal) !important; }
+#nomad-routine.dark .nav button.active.log  { color: var(--green) !important; }
+
+/* Input */
+#nomad-routine.dark .inp:focus { border-color: rgba(168,230,240,0.35) !important; box-shadow: 0 0 0 2px rgba(168,230,240,0.10); border-radius: 10px; }
 `;
 
 // Inject CSS immediately at module load so styles exist before first paint.
 // Prevents the "header empty space" flash where elements render unstyled
 // for one frame before useEffect runs.
-if (typeof document !== 'undefined' && !document.getElementById('form-style')) {
-    const _s = document.createElement('style');
-    _s.id = 'form-style';
+if (typeof document !== 'undefined') {
+    let _s = document.getElementById('form-style');
+    if (!_s) { _s = document.createElement('style'); _s.id = 'form-style'; document.head.appendChild(_s); }
     _s.textContent = CSS;
-    document.head.appendChild(_s);
 }
 
 /* ---------- helpers ---------- */
@@ -1733,7 +1955,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                                 <PhosphorIcon name="drop" size={24} color={day.morningWater ? 'rgba(0,0,0,0.5)' : '#c8820a'} opacity={0.35} />
                             </div>
                             {day.morningWater
-                                ? <div className="hc-check-done"><svg width="9" height="8" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="rgba(0,0,0,0.45)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
+                                ? <div className="hc-check-done"><svg width="9" height="8" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="rgba(0,0,0,0.45)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
                                 : <div className="hc-check-idle" />
                             }
                         </div>
@@ -1753,7 +1975,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                                 <PhosphorIcon name="leaf" size={24} color={day.snack ? 'rgba(0,0,0,0.45)' : '#3b6d11'} opacity={0.35} />
                             </div>
                             {day.snack
-                                ? <div className="hc-check-done"><svg width="9" height="8" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="rgba(0,0,0,0.45)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
+                                ? <div className="hc-check-done"><svg width="9" height="8" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="rgba(0,0,0,0.45)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
                                 : <div className="hc-check-idle" />
                             }
                         </div>
@@ -1780,7 +2002,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                                         <ItemIcon name={it.emoji} size={22} color={done ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.45)'} opacity={0.35} />
                                     </div>
                                     {done
-                                        ? <div className="hc-check-done"><svg width="9" height="8" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="rgba(0,0,0,0.45)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
+                                        ? <div className="hc-check-done"><svg width="9" height="8" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="rgba(0,0,0,0.45)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
                                         : <div className="hc-check-idle" />
                                     }
                                 </div>
@@ -1874,9 +2096,9 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                 {/* Notes card */}
                 <div className={`card ${day.notesConfirmed ? 'confirmed' : ''}`} style={{ marginBottom: 24 }}>
                     <div className="label">Notes</div>
-                    <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Skin feel</div>
+                    <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Digestion</div>
                     <div className="pills" style={{ marginBottom: 10, opacity: day.notesConfirmed ? 0.6 : 1 }}>
-                        {['oily', 'normal', 'dry'].map((k) => (
+                        {['light', 'normal', 'heavy'].map((k) => (
                             <div key={k} className={`pill ${day.skinFeelChip === k ? 'on' : ''}`}
                                 onClick={() => !day.notesConfirmed && update({ skinFeelChip: day.skinFeelChip === k ? '' : k })}>
                                 {k[0].toUpperCase() + k.slice(1)}
@@ -1978,95 +2200,95 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
             </div>
             <div className="body-pad">
 
-            <ProgressDots day={day} config={config} mode="skin" />
+                <ProgressDots day={day} config={config} mode="skin" />
 
-            {/* AM Card */}
-            <div className={`card ${day.amSkinDone ? 'skin-done' : ''}`}>
-                <div className="coll-hd" onClick={() => setAmOpen(!amOpen)}>
-                    <div className="t">
-                        {day.amSkinDone && '✓ '}{amLabel.split(' · ')[0]}<span className="ct">{amLabel.split(' · ')[1]}</span>
-                    </div>
-                    <div className={`chev ${amOpen ? 'open' : ''}`}><Icon name="chev" /></div>
-                </div>
-                {amOpen && (
-                    <div className="steps">
-                        {amStepList.map((s, i) => (
-                            <div key={i} className="step">
-                                <Check on={!!amSteps[i]} teal onClick={() => toggleAmStep(i)} />
-                                <div className="info">
-                                    <div className="name">{config.showProductNames ? s.name : s.kind}</div>
-                                    <div className="kind">{s.kind}</div>
-                                </div>
-                            </div>
-                        ))}
-                        {!day.amSkinDone && (
-                            <button className="btn teal" onClick={() => { haptic(10); update({ amSkinDone: true, amSteps: amStepList.map(() => true) }); }}>
-                                Mark AM done
-                            </button>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {/* PM Card */}
-            <div className={`card ${day.pmSkinDone ? 'skin-done' : ''}`}>
-                <div className="coll-hd" onClick={() => setPmOpen(!pmOpen)}>
-                    <div className="t">
-                        {day.pmSkinDone && '✓ '}{pmLabel.split(' · ')[0]}<span className="ct">{pmLabel.split(' · ')[1]}</span>
-                    </div>
-                    <div className={`chev ${pmOpen ? 'open' : ''}`}><Icon name="chev" /></div>
-                </div>
-                {pmOpen && (
-                    <div className="steps">
-                        {pmStepList.map((s, i) => (
-                            <div key={i} className="step">
-                                <Check on={!!pmSteps[i]} teal onClick={() => togglePmStep(i)} />
-                                <div className="info">
-                                    <div className="name">{config.showProductNames ? s.name : s.kind}</div>
-                                    <div className="kind">{s.kind}</div>
-                                </div>
-                            </div>
-                        ))}
-                        {!day.pmSkinDone && (
-                            <button className="btn teal" onClick={() => { haptic(10); update({ pmSkinDone: true, pmSteps: pmStepList.map(() => true) }); }}>
-                                Mark PM done
-                            </button>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {/* Skin notes — with confirm */}
-            <div className={`card ${day.skinNotesConfirmed ? 'confirmed' : ''}`}>
-                <div className="label">Skin notes</div>
-                <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Skin today</div>
-                <div className="pills" style={{ marginBottom: 10, opacity: day.skinNotesConfirmed ? 0.6 : 1 }}>
-                    {['clear', 'breakouts', 'purging', 'oily', 'dry'].map((k) => (
-                        <div key={k} className={`pill ${day.skinTodayChip === k ? 'on teal' : ''}`}
-                            onClick={() => !day.skinNotesConfirmed && update({ skinTodayChip: day.skinTodayChip === k ? '' : k })}>
-                            {k[0].toUpperCase() + k.slice(1)}
+                {/* AM Card */}
+                <div className={`card ${day.amSkinDone ? 'skin-done' : ''}`}>
+                    <div className="coll-hd" onClick={() => setAmOpen(!amOpen)}>
+                        <div className="t">
+                            {day.amSkinDone && '✓ '}{amLabel.split(' · ')[0]}<span className="ct">{amLabel.split(' · ')[1]}</span>
                         </div>
-                    ))}
+                        <div className={`chev ${amOpen ? 'open' : ''}`}><Icon name="chev" /></div>
+                    </div>
+                    {amOpen && (
+                        <div className="steps">
+                            {amStepList.map((s, i) => (
+                                <div key={i} className="step">
+                                    <Check on={!!amSteps[i]} teal onClick={() => toggleAmStep(i)} />
+                                    <div className="info">
+                                        <div className="name">{config.showProductNames ? s.name : s.kind}</div>
+                                        <div className="kind">{s.kind}</div>
+                                    </div>
+                                </div>
+                            ))}
+                            {!day.amSkinDone && (
+                                <button className="btn teal" onClick={() => { haptic(10); update({ amSkinDone: true, amSteps: amStepList.map(() => true) }); }}>
+                                    Mark AM done
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Skin reaction</div>
-                <div className="pills" style={{ marginBottom: 12, opacity: day.skinNotesConfirmed ? 0.6 : 1 }}>
-                    {[['none', 'None'], ['mild', 'Mild dryness'], ['irritation', 'Irritation']].map(([k, l]) => (
-                        <div key={k} className={`pill ${day.reactionChip === k ? 'on teal' : ''}`}
-                            onClick={() => !day.skinNotesConfirmed && update({ reactionChip: day.reactionChip === k ? '' : k })}>{l}</div>
-                    ))}
+
+                {/* PM Card */}
+                <div className={`card ${day.pmSkinDone ? 'skin-done' : ''}`}>
+                    <div className="coll-hd" onClick={() => setPmOpen(!pmOpen)}>
+                        <div className="t">
+                            {day.pmSkinDone && '✓ '}{pmLabel.split(' · ')[0]}<span className="ct">{pmLabel.split(' · ')[1]}</span>
+                        </div>
+                        <div className={`chev ${pmOpen ? 'open' : ''}`}><Icon name="chev" /></div>
+                    </div>
+                    {pmOpen && (
+                        <div className="steps">
+                            {pmStepList.map((s, i) => (
+                                <div key={i} className="step">
+                                    <Check on={!!pmSteps[i]} teal onClick={() => togglePmStep(i)} />
+                                    <div className="info">
+                                        <div className="name">{config.showProductNames ? s.name : s.kind}</div>
+                                        <div className="kind">{s.kind}</div>
+                                    </div>
+                                </div>
+                            ))}
+                            {!day.pmSkinDone && (
+                                <button className="btn teal" onClick={() => { haptic(10); update({ pmSkinDone: true, pmSteps: pmStepList.map(() => true) }); }}>
+                                    Mark PM done
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
-                <textarea
-                    className="inp"
-                    placeholder="Anything else about skin..."
-                    value={day.skinNotes}
-                    readOnly={day.skinNotesConfirmed}
-                    onChange={(e) => !day.skinNotesConfirmed && update({ skinNotes: e.target.value })}
-                />
-                {!day.skinNotesConfirmed
-                    ? <button className="confirm-btn teal" onClick={() => { haptic(); update({ skinNotesConfirmed: true }); }}>Confirm notes</button>
-                    : <span className="saved-link" onClick={() => update({ skinNotesConfirmed: false })}>✓ Saved · Edit</span>
-                }
-            </div>
+
+                {/* Skin notes — with confirm */}
+                <div className={`card ${day.skinNotesConfirmed ? 'confirmed' : ''}`}>
+                    <div className="label">Skin notes</div>
+                    <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Skin today</div>
+                    <div className="pills" style={{ marginBottom: 10, opacity: day.skinNotesConfirmed ? 0.6 : 1 }}>
+                        {['clear', 'breakouts', 'purging', 'oily', 'dry'].map((k) => (
+                            <div key={k} className={`pill ${day.skinTodayChip === k ? 'on teal' : ''}`}
+                                onClick={() => !day.skinNotesConfirmed && update({ skinTodayChip: day.skinTodayChip === k ? '' : k })}>
+                                {k[0].toUpperCase() + k.slice(1)}
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--txm)', marginBottom: 6 }}>Skin reaction</div>
+                    <div className="pills" style={{ marginBottom: 12, opacity: day.skinNotesConfirmed ? 0.6 : 1 }}>
+                        {[['none', 'None'], ['mild', 'Mild dryness'], ['irritation', 'Irritation']].map(([k, l]) => (
+                            <div key={k} className={`pill ${day.reactionChip === k ? 'on teal' : ''}`}
+                                onClick={() => !day.skinNotesConfirmed && update({ reactionChip: day.reactionChip === k ? '' : k })}>{l}</div>
+                        ))}
+                    </div>
+                    <textarea
+                        className="inp"
+                        placeholder="Anything else about skin..."
+                        value={day.skinNotes}
+                        readOnly={day.skinNotesConfirmed}
+                        onChange={(e) => !day.skinNotesConfirmed && update({ skinNotes: e.target.value })}
+                    />
+                    {!day.skinNotesConfirmed
+                        ? <button className="confirm-btn teal" onClick={() => { haptic(); update({ skinNotesConfirmed: true }); }}>Confirm notes</button>
+                        : <span className="saved-link" onClick={() => update({ skinNotesConfirmed: false })}>✓ Saved · Edit</span>
+                    }
+                </div>
             </div>
         </div>
     );
@@ -2264,27 +2486,27 @@ const LogScreen = ({ allData, config }) => {
                 {/* Food section */}
                 <div className="dl-section">
                     <div className="dl-section-hd">
-                        <div className="dl-section-icon dl-food-icon"><PhosphorIcon name="bowl" size={16} color="#3a7010" opacity={0.7}/></div>
+                        <div className="dl-section-icon dl-food-icon"><PhosphorIcon name="bowl" size={16} color="#3a7010" opacity={0.7} /></div>
                         <span className="dl-section-lbl">Food</span>
                     </div>
                     <div className="dl-card">
                         <div className="dl-row">
-                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="drop" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">Water</span></div>
+                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="drop" size={16} color="var(--txm)" opacity={0.8} /></div><span className="dl-key">Water</span></div>
                             <span className={`dl-val ${waterOk ? 'dl-ok' : ''}`}>{totalW} / {config.waterTarget}L</span>
                         </div>
                         <div className="dl-row">
-                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="egg" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">Eggs</span></div>
+                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="egg" size={16} color="var(--txm)" opacity={0.8} /></div><span className="dl-key">Eggs</span></div>
                             <span className={`dl-val ${eggsOk ? 'dl-ok' : ''}`}>{rec.eggs || 0} / {config.eggsTarget}</span>
                         </div>
                         {rec.snack && (
                             <div className="dl-row">
-                                <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="leaf" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">Snack</span></div>
+                                <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="leaf" size={16} color="var(--txm)" opacity={0.8} /></div><span className="dl-key">Snack</span></div>
                                 <span className="dl-val" style={{ color: 'var(--tx)' }}>{rec.snack}</span>
                             </div>
                         )}
                         {(config.customDailyItems || []).filter(it => !it.archived).map(it => (
                             <div key={it.id} className="dl-row">
-                                <div className="dl-row-left"><div className="dl-ph-icon"><ItemIcon name={it.emoji} size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">{it.label}</span></div>
+                                <div className="dl-row-left"><div className="dl-ph-icon"><ItemIcon name={it.emoji} size={16} color="var(--txm)" opacity={0.8} /></div><span className="dl-key">{it.label}</span></div>
                                 <span className={`dl-val ${rec.dailyChecks?.[it.id] ? 'dl-ok' : 'dl-miss'}`}>{rec.dailyChecks?.[it.id] ? '✓' : '—'}</span>
                             </div>
                         ))}
@@ -2315,17 +2537,17 @@ const LogScreen = ({ allData, config }) => {
                 {/* Skin section */}
                 <div className="dl-section">
                     <div className="dl-section-hd">
-                        <div className="dl-section-icon dl-skin-icon"><PhosphorIcon name="sparkle" size={16} color="#0a6058" opacity={0.7}/></div>
+                        <div className="dl-section-icon dl-skin-icon"><PhosphorIcon name="sparkle" size={16} color="#0a6058" opacity={0.7} /></div>
                         <span className="dl-section-lbl">Skin</span>
                     </div>
                     <div className="dl-card">
                         <div className="dl-row">
-                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="sun" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">AM Routine</span></div>
+                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="sun" size={16} color="var(--txm)" opacity={0.8} /></div><span className="dl-key">AM Routine</span></div>
                             <span className={`dl-val ${(rec.amSkinDone || amLoggedCount > 0) ? 'dl-ok' : 'dl-miss'}`}>{rec.amSkinDone ? 'Done' : amLoggedCount > 0 ? `${amLoggedCount}/${r2.am.length} logged` : '-'}</span>
                         </div>
                         {amLoggedNames && <div className="dl-sub-row">{amLoggedNames}</div>}
                         <div className="dl-row">
-                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="moon" size={16} color="var(--txm)" opacity={0.8}/></div><span className="dl-key">PM Routine</span></div>
+                            <div className="dl-row-left"><div className="dl-ph-icon"><PhosphorIcon name="moon" size={16} color="var(--txm)" opacity={0.8} /></div><span className="dl-key">PM Routine</span></div>
                             <span className={`dl-val ${(rec.pmSkinDone || pmLoggedCount > 0) ? 'dl-ok' : 'dl-miss'}`}>{rec.pmSkinDone ? 'Done' : pmLoggedCount > 0 ? `${pmLoggedCount}/${r2.pm.length} logged` : '-'}</span>
                         </div>
                         {pmLoggedNames && <div className="dl-sub-row">{pmLoggedNames}</div>}
@@ -2356,52 +2578,52 @@ const LogScreen = ({ allData, config }) => {
             </div>
             <div className="body-pad">
 
-            <div className="stats" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                <div className="stat green"><div className="v">{streak}</div><div className="l">Streak</div></div>
-                <div className="stat teal"><div className="v">{daysTrackedThisMonth}</div><div className="l">This month</div></div>
-                <div className="stat amber"><div className="v">{completionPct}%</div><div className="l">Completion</div></div>
-                <div className="stat" style={{ '--v-color': 'var(--teal-deep)' }}>
-                    <div className="v" style={{ color: 'var(--teal-deep)' }}>{avgWater}{avgWater !== '—' ? 'L' : ''}</div>
-                    <div className="l">Avg water</div>
-                </div>
-            </div>
-
-            <div className="card">
-                <div className="cal-hd">
-                    <button onClick={() => setMonthOffset(monthOffset - 1)}>‹</button>
-                    <div className="m">{monthName}</div>
-                    <button onClick={() => setMonthOffset(Math.min(0, monthOffset + 1))}>›</button>
-                </div>
-                {Object.keys(allData).length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--txm)' }}>
-                        <div style={{ fontSize: 32, marginBottom: 10 }}>🌱</div>
-                        <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>No data yet</div>
-                        <div style={{ fontSize: 12 }}>Start logging on the Food and Skin tabs — your history will appear here.</div>
+                <div className="stats" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                    <div className="stat green"><div className="v">{streak}</div><div className="l">Streak</div></div>
+                    <div className="stat teal"><div className="v">{daysTrackedThisMonth}</div><div className="l">This month</div></div>
+                    <div className="stat amber"><div className="v">{completionPct}%</div><div className="l">Completion</div></div>
+                    <div className="stat" style={{ '--v-color': 'var(--teal-deep)' }}>
+                        <div className="v" style={{ color: 'var(--teal-deep)' }}>{avgWater}{avgWater !== '—' ? 'L' : ''}</div>
+                        <div className="l">Avg water</div>
                     </div>
-                ) : (
-                    <div className="cal" key={monthOffset}>
-                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} className="cal-day-lbl">{d}</div>)}
-                        {cells.map((c) => c.empty
-                            ? <div key={c.key} className="cal-cell empty" />
-                            : <div
-                                key={c.key}
-                                className={`cal-cell lvl${c.lvl} ${c.isToday ? 'today' : ''}`}
-                                onClick={() => c.rec && setActiveDay({ key: c.key, rec: c.rec })}
-                                style={{ position: 'relative' }}
-                            >
-                                {c.d}
-                                {c.rec && (c.rec.notes || c.rec.skinNotes) && (
-                                    <div style={{ position: 'absolute', bottom: 3, right: 4, width: 4, height: 4, borderRadius: '50%', background: 'currentColor', opacity: 0.6 }} />
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
+                </div>
 
-            <button className={`btn ${exported ? 'green' : ''}`} onClick={exportData}>
-                {exported ? 'Exported ✓' : 'Export data'}
-            </button>
+                <div className="card">
+                    <div className="cal-hd">
+                        <button onClick={() => setMonthOffset(monthOffset - 1)}>‹</button>
+                        <div className="m">{monthName}</div>
+                        <button onClick={() => setMonthOffset(Math.min(0, monthOffset + 1))}>›</button>
+                    </div>
+                    {Object.keys(allData).length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--txm)' }}>
+                            <div style={{ fontSize: 32, marginBottom: 10 }}>🌱</div>
+                            <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>No data yet</div>
+                            <div style={{ fontSize: 12 }}>Start logging on the Food and Skin tabs — your history will appear here.</div>
+                        </div>
+                    ) : (
+                        <div className="cal" key={monthOffset}>
+                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} className="cal-day-lbl">{d}</div>)}
+                            {cells.map((c) => c.empty
+                                ? <div key={c.key} className="cal-cell empty" />
+                                : <div
+                                    key={c.key}
+                                    className={`cal-cell lvl${c.lvl} ${c.isToday ? 'today' : ''}`}
+                                    onClick={() => c.rec && setActiveDay({ key: c.key, rec: c.rec })}
+                                    style={{ position: 'relative' }}
+                                >
+                                    {c.d}
+                                    {c.rec && (c.rec.notes || c.rec.skinNotes) && (
+                                        <div style={{ position: 'absolute', bottom: 3, right: 4, width: 4, height: 4, borderRadius: '50%', background: 'currentColor', opacity: 0.6 }} />
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                <button className={`btn ${exported ? 'green' : ''}`} onClick={exportData}>
+                    {exported ? 'Exported ✓' : 'Export data'}
+                </button>
 
             </div>
 
@@ -2501,7 +2723,7 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
     const [newProduct, setNewProduct] = useState({ kind: '', name: '', slot: 'both' });
     const [newDailyItem, setNewDailyItem] = useState({ label: '', emoji: '' });
     const [iconPickerFor, setIconPickerFor] = useState(null); // item id or 'new'
-    const PRESET_ICONS = ['leaf','drop','bowl','bottle','egg','sparkle','heart','flame','cup','pill','book','star','run','sun','moon','notepad'];
+    const PRESET_ICONS = ['leaf', 'drop', 'bowl', 'bottle', 'egg', 'sparkle', 'heart', 'flame', 'cup', 'pill', 'book', 'star', 'run', 'sun', 'moon', 'notepad'];
 
     const toggle = (k) => setOpen(o => ({ ...o, [k]: !o[k] }));
     const SecHd = ({ label, k }) => (
@@ -2602,282 +2824,282 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
             </div>
             <div className="body-pad">
 
-            {/* Targets */}
-            <div className="sec">
-                <SecHd label="Targets" k="targets" />
-                {open.targets && <>
-                    <div className="set-row">
-                        <div className="r">
-                            <div>
-                                <div className="lbl">Water target</div>
-                                <div className="desc">Daily goal in litres</div>
-                            </div>
-                            <div className="stepper">
-                                <button onClick={() => update({ waterTarget: Math.max(1.5, config.waterTarget - 0.5) })}>−</button>
-                                <div className="val">{config.waterTarget}L</div>
-                                <button onClick={() => update({ waterTarget: Math.min(5, config.waterTarget + 0.5) })}>+</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="set-row">
-                        <div className="r">
-                            <div>
-                                <div className="lbl">Egg target</div>
-                                <div className="desc">Daily count</div>
-                            </div>
-                            <div className="stepper">
-                                <button onClick={() => update({ eggsTarget: Math.max(1, config.eggsTarget - 1) })}>−</button>
-                                <div className="val">{config.eggsTarget}</div>
-                                <button onClick={() => update({ eggsTarget: Math.min(4, config.eggsTarget + 1) })}>+</button>
+                {/* Targets */}
+                <div className="sec">
+                    <SecHd label="Targets" k="targets" />
+                    {open.targets && <>
+                        <div className="set-row">
+                            <div className="r">
+                                <div>
+                                    <div className="lbl">Water target</div>
+                                    <div className="desc">Daily goal in litres</div>
+                                </div>
+                                <div className="stepper">
+                                    <button onClick={() => update({ waterTarget: Math.max(1.5, config.waterTarget - 0.5) })}>−</button>
+                                    <div className="val">{config.waterTarget}L</div>
+                                    <button onClick={() => update({ waterTarget: Math.min(5, config.waterTarget + 0.5) })}>+</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </>}
-            </div>
+                        <div className="set-row">
+                            <div className="r">
+                                <div>
+                                    <div className="lbl">Egg target</div>
+                                    <div className="desc">Daily count</div>
+                                </div>
+                                <div className="stepper">
+                                    <button onClick={() => update({ eggsTarget: Math.max(1, config.eggsTarget - 1) })}>−</button>
+                                    <div className="val">{config.eggsTarget}</div>
+                                    <button onClick={() => update({ eggsTarget: Math.min(4, config.eggsTarget + 1) })}>+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </>}
+                </div>
 
-            {/* Daily items */}
-            <div className="sec">
-                <SecHd label="Daily items" k="dailyitems" />
-                {open.dailyitems && <>
-                    {(config.customDailyItems || []).filter(it => !it.archived).map((it) => (
-                        <div key={it.id} className="set-row" style={{ background: 'var(--bg2)', borderRadius: 12, marginBottom: 8, padding: '10px 12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <button
-                                    onClick={() => setIconPickerFor(iconPickerFor === it.id ? null : it.id)}
-                                    style={{ width: 40, height: 40, borderRadius: 12, border: '1.5px solid var(--bd)', background: 'var(--bg)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                ><ItemIcon name={it.emoji || 'sparkle'} size={20} color="var(--txm)" opacity={0.8}/></button>
-                                <input className="inp" style={{ flex: 1 }} value={it.label}
-                                    onChange={(e) => update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, label: e.target.value } : x) })} />
-                                <button style={{ background: 'none', border: 'none', color: 'var(--txd)', fontSize: 20, cursor: 'pointer', flexShrink: 0, padding: '0 2px' }}
-                                    onClick={() => {
-                                        update({ customDailyItems: config.customDailyItems.filter(x => x.id !== it.id) });
-                                        showToast(`${it.label} removed`, 'info');
-                                    }}>×</button>
+                {/* Daily items */}
+                <div className="sec">
+                    <SecHd label="Daily items" k="dailyitems" />
+                    {open.dailyitems && <>
+                        {(config.customDailyItems || []).filter(it => !it.archived).map((it) => (
+                            <div key={it.id} className="set-row" style={{ background: 'var(--bg2)', borderRadius: 12, marginBottom: 8, padding: '10px 12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <button
+                                        onClick={() => setIconPickerFor(iconPickerFor === it.id ? null : it.id)}
+                                        style={{ width: 40, height: 40, borderRadius: 12, border: '1.5px solid var(--bd)', background: 'var(--bg)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    ><ItemIcon name={it.emoji || 'sparkle'} size={20} color="var(--txm)" opacity={0.8} /></button>
+                                    <input className="inp" style={{ flex: 1 }} value={it.label}
+                                        onChange={(e) => update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, label: e.target.value } : x) })} />
+                                    <button style={{ background: 'none', border: 'none', color: 'var(--txd)', fontSize: 20, cursor: 'pointer', flexShrink: 0, padding: '0 2px' }}
+                                        onClick={() => {
+                                            update({ customDailyItems: config.customDailyItems.filter(x => x.id !== it.id) });
+                                            showToast(`${it.label} removed`, 'info');
+                                        }}>×</button>
+                                </div>
+                                {iconPickerFor === it.id && (
+                                    <div className="icon-picker-grid">
+                                        {PRESET_ICONS.map(ic => (
+                                            <button key={ic} className={`icon-picker-btn ${it.emoji === ic ? 'sel' : ''}`}
+                                                onClick={() => {
+                                                    update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, emoji: ic } : x) });
+                                                    setIconPickerFor(null);
+                                                }}><PhosphorIcon name={ic} size={18} color="var(--txm)" opacity={0.8} /></button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
-                            {iconPickerFor === it.id && (
+                        ))}
+                        <div className="set-row" style={{ padding: '12px 12px', background: 'var(--bg2)', borderRadius: 12, marginBottom: 8 }}>
+                            <div className="lbl" style={{ marginBottom: 10 }}>Add item</div>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: iconPickerFor === 'new' ? 0 : 8 }}>
+                                <button
+                                    onClick={() => setIconPickerFor(iconPickerFor === 'new' ? null : 'new')}
+                                    style={{ width: 44, height: 44, borderRadius: 12, border: '1.5px solid var(--bd)', background: 'var(--bg)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                >{newDailyItem.emoji ? <PhosphorIcon name={newDailyItem.emoji} size={22} color="var(--txm)" opacity={0.8} /> : <span style={{ fontSize: 22, color: 'var(--txd)' }}>+</span>}</button>
+                                <input className="inp" style={{ flex: 1 }} placeholder="Label (e.g. Dry fruits)" value={newDailyItem.label}
+                                    onChange={(e) => setNewDailyItem(p => ({ ...p, label: e.target.value }))} />
+                            </div>
+                            {iconPickerFor === 'new' && (
                                 <div className="icon-picker-grid">
                                     {PRESET_ICONS.map(ic => (
-                                        <button key={ic} className={`icon-picker-btn ${it.emoji === ic ? 'sel' : ''}`}
-                                            onClick={() => {
-                                                update({ customDailyItems: config.customDailyItems.map(x => x.id === it.id ? { ...x, emoji: ic } : x) });
-                                                setIconPickerFor(null);
-                                            }}><PhosphorIcon name={ic} size={18} color="var(--txm)" opacity={0.8}/></button>
+                                        <button key={ic} className={`icon-picker-btn ${newDailyItem.emoji === ic ? 'sel' : ''}`}
+                                            onClick={() => { setNewDailyItem(p => ({ ...p, emoji: ic })); setIconPickerFor(null); }}><PhosphorIcon name={ic} size={18} color="var(--txm)" opacity={0.8} /></button>
                                     ))}
                                 </div>
                             )}
+                            <button className="btn" style={{ marginTop: 10 }} onClick={() => {
+                                const label = newDailyItem.label.trim();
+                                if (!label) { showToast('Enter a label first', 'error'); return; }
+                                const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+                                update({ customDailyItems: [...(config.customDailyItems || []), { id, label, emoji: newDailyItem.emoji || '✅' }] });
+                                setNewDailyItem({ label: '', emoji: '' });
+                                setIconPickerFor(null);
+                                showToast(`${label} added`, 'success');
+                            }}>Add item</button>
                         </div>
-                    ))}
-                    <div className="set-row" style={{ padding: '12px 12px', background: 'var(--bg2)', borderRadius: 12, marginBottom: 8 }}>
-                        <div className="lbl" style={{ marginBottom: 10 }}>Add item</div>
-                        <div style={{ display: 'flex', gap: 8, marginBottom: iconPickerFor === 'new' ? 0 : 8 }}>
-                            <button
-                                onClick={() => setIconPickerFor(iconPickerFor === 'new' ? null : 'new')}
-                                style={{ width: 44, height: 44, borderRadius: 12, border: '1.5px solid var(--bd)', background: 'var(--bg)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            >{newDailyItem.emoji ? <PhosphorIcon name={newDailyItem.emoji} size={22} color="var(--txm)" opacity={0.8}/> : <span style={{ fontSize: 22, color: 'var(--txd)' }}>+</span>}</button>
-                            <input className="inp" style={{ flex: 1 }} placeholder="Label (e.g. Dry fruits)" value={newDailyItem.label}
-                                onChange={(e) => setNewDailyItem(p => ({ ...p, label: e.target.value }))} />
-                        </div>
-                        {iconPickerFor === 'new' && (
-                            <div className="icon-picker-grid">
-                                {PRESET_ICONS.map(ic => (
-                                    <button key={ic} className={`icon-picker-btn ${newDailyItem.emoji === ic ? 'sel' : ''}`}
-                                        onClick={() => { setNewDailyItem(p => ({ ...p, emoji: ic })); setIconPickerFor(null); }}><PhosphorIcon name={ic} size={18} color="var(--txm)" opacity={0.8}/></button>
+                    </>}
+                </div>
+
+                {/* Skincare */}
+                <div className="sec">
+                    <SecHd label="Skincare" k="skincare" />
+                    {open.skincare && <>
+                        <div className="set-row">
+                            <div className="lbl" style={{ marginBottom: 10 }}>Retinol phase</div>
+                            <div className="seg">
+                                {[1, 2, 3].map((p) => (
+                                    <button key={p} className={config.retinolPhase === p ? 'on' : ''} onClick={() => update({ retinolPhase: p })}>
+                                        {p === 1 ? '2×/wk' : p === 2 ? '3×/wk' : 'Nightly'}
+                                    </button>
                                 ))}
                             </div>
-                        )}
-                        <button className="btn" style={{ marginTop: 10 }} onClick={() => {
-                            const label = newDailyItem.label.trim();
-                            if (!label) { showToast('Enter a label first', 'error'); return; }
-                            const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-                            update({ customDailyItems: [...(config.customDailyItems || []), { id, label, emoji: newDailyItem.emoji || '✅' }] });
-                            setNewDailyItem({ label: '', emoji: '' });
-                            setIconPickerFor(null);
-                            showToast(`${label} added`, 'success');
-                        }}>Add item</button>
-                    </div>
-                </>}
-            </div>
-
-            {/* Skincare */}
-            <div className="sec">
-                <SecHd label="Skincare" k="skincare" />
-                {open.skincare && <>
-                    <div className="set-row">
-                        <div className="lbl" style={{ marginBottom: 10 }}>Retinol phase</div>
-                        <div className="seg">
-                            {[1, 2, 3].map((p) => (
-                                <button key={p} className={config.retinolPhase === p ? 'on' : ''} onClick={() => update({ retinolPhase: p })}>
-                                    {p === 1 ? '2×/wk' : p === 2 ? '3×/wk' : 'Nightly'}
-                                </button>
-                            ))}
                         </div>
-                    </div>
-                    {/* Product list */}
-                    {(config.customProducts || []).filter(p => !p.archived).map((p) => (
-                        <div key={p.id} className="set-row" style={{ marginBottom: 10, padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, padding: '2px 8px', borderRadius: 100, background: p.slot === 'am' ? 'var(--amber-sf)' : p.slot === 'pm' ? 'var(--teal-sf)' : 'var(--green-sf)', color: p.slot === 'am' ? 'var(--amber-deep)' : p.slot === 'pm' ? 'var(--teal-deep)' : 'var(--green-deep)', cursor: 'pointer', userSelect: 'none' }}
-                                    onClick={() => {
-                                        const next = p.slot === 'am' ? 'pm' : p.slot === 'pm' ? 'both' : 'am';
-                                        update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, slot: next } : cp) });
-                                    }}>
-                                    {p.slot === 'both' ? 'AM+PM' : p.slot.toUpperCase()}
-                                </span>
-                                <button style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--txd)', fontSize: 18, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
-                                    onClick={() => {
-                                        update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, archived: true } : cp) });
-                                        showToast(`${p.name || p.kind} archived`, 'info');
-                                    }}>×</button>
+                        {/* Product list */}
+                        {(config.customProducts || []).filter(p => !p.archived).map((p) => (
+                            <div key={p.id} className="set-row" style={{ marginBottom: 10, padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, padding: '2px 8px', borderRadius: 100, background: p.slot === 'am' ? 'var(--amber-sf)' : p.slot === 'pm' ? 'var(--teal-sf)' : 'var(--green-sf)', color: p.slot === 'am' ? 'var(--amber-deep)' : p.slot === 'pm' ? 'var(--teal-deep)' : 'var(--green-deep)', cursor: 'pointer', userSelect: 'none' }}
+                                        onClick={() => {
+                                            const next = p.slot === 'am' ? 'pm' : p.slot === 'pm' ? 'both' : 'am';
+                                            update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, slot: next } : cp) });
+                                        }}>
+                                        {p.slot === 'both' ? 'AM+PM' : p.slot.toUpperCase()}
+                                    </span>
+                                    <button style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--txd)', fontSize: 18, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
+                                        onClick={() => {
+                                            update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, archived: true } : cp) });
+                                            showToast(`${p.name || p.kind} archived`, 'info');
+                                        }}>×</button>
+                                </div>
+                                <input className="inp" style={{ marginBottom: 6 }} placeholder="Type (e.g. Retinol)" value={p.kind}
+                                    onChange={(e) => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, kind: e.target.value } : cp) })} />
+                                <input className="inp" placeholder="Brand name" value={p.name}
+                                    onChange={(e) => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, name: e.target.value } : cp) })} />
                             </div>
-                            <input className="inp" style={{ marginBottom: 6 }} placeholder="Type (e.g. Retinol)" value={p.kind}
-                                onChange={(e) => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, kind: e.target.value } : cp) })} />
-                            <input className="inp" placeholder="Brand name" value={p.name}
-                                onChange={(e) => update({ customProducts: config.customProducts.map(cp => cp.id === p.id ? { ...cp, name: e.target.value } : cp) })} />
+                        ))}
+
+                        {/* Add product */}
+                        <div className="set-row" style={{ padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 10 }}>
+                            <div className="lbl" style={{ marginBottom: 8 }}>Add product</div>
+                            <input className="inp" style={{ marginBottom: 6 }} placeholder="Type (e.g. Vitamin C)" value={newProduct.kind}
+                                onChange={(e) => setNewProduct(np => ({ ...np, kind: e.target.value }))} />
+                            <input className="inp" style={{ marginBottom: 8 }} placeholder="Brand name (optional)" value={newProduct.name}
+                                onChange={(e) => setNewProduct(np => ({ ...np, name: e.target.value }))} />
+                            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                                {['am', 'pm', 'both'].map(s => (
+                                    <div key={s} onClick={() => setNewProduct(np => ({ ...np, slot: s }))}
+                                        style={{ flex: 1, textAlign: 'center', padding: '5px 0', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: newProduct.slot === s ? (s === 'am' ? 'var(--amber-sf)' : s === 'pm' ? 'var(--teal-sf)' : 'var(--green-sf)') : 'var(--sf)', border: '1px solid var(--bd)', color: newProduct.slot === s ? (s === 'am' ? 'var(--amber-deep)' : s === 'pm' ? 'var(--teal-deep)' : 'var(--green-deep)') : 'var(--txm)' }}>
+                                        {s === 'both' ? 'AM+PM' : s.toUpperCase()}
+                                    </div>
+                                ))}
+                            </div>
+                            <button className="btn" style={{ marginTop: 0 }} onClick={() => {
+                                const kind = newProduct.kind.trim();
+                                if (!kind) { showToast('Enter a product type first', 'error'); return; }
+                                const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                                const finalName = newProduct.name.trim() || kind;
+                                update({ customProducts: [...(config.customProducts || []), { id, kind, name: finalName, slot: newProduct.slot }] });
+                                setNewProduct({ kind: '', name: '', slot: 'both' });
+                                showToast(`${finalName} added`, 'success');
+                            }}>Add product</button>
+                        </div>
+
+                        <div className="set-row">
+                            <div className="r">
+                                <div>
+                                    <div className="lbl">Show product names</div>
+                                    <div className="desc">Off = show step types only</div>
+                                </div>
+                                <div className={`toggle ${config.showProductNames ? 'on' : ''}`} onClick={() => update({ showProductNames: !config.showProductNames })} />
+                            </div>
+                        </div>
+
+                        <div className="set-row">
+                            <div className="r">
+                                <div>
+                                    <div className="lbl">Vibration on tap</div>
+                                    <div className="desc">Off saves battery</div>
+                                </div>
+                                <div className={`toggle ${(localStorage.getItem('form_haptic_off') !== '1') ? 'on' : ''}`}
+                                    onClick={() => {
+                                        const cur = localStorage.getItem('form_haptic_off');
+                                        const turningOff = cur !== '1';
+                                        localStorage.setItem('form_haptic_off', turningOff ? '1' : '0');
+                                        setConfig(c => ({ ...c })); // force re-render
+                                        showToast(turningOff ? 'Vibration off' : 'Vibration on', 'info');
+                                    }} />
+                            </div>
+                        </div>
+                    </>}
+                </div>
+
+                {/* Skin routine */}
+                <div className="sec">
+                    <SecHd label="Skin routine" k="routine" />
+                    {open.routine && <RoutineEditor config={config} setConfig={setConfig} />}
+                </div>
+
+                {/* Snack rotation */}
+                <div className="sec">
+                    <SecHd label="Snack rotation" k="snackrot" />
+                    {open.snackrot && ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+                        <div key={d} className="set-row">
+                            <div className="r">
+                                <div className="lbl" style={{ width: 42 }}>{d}</div>
+                                <input className="inp" value={config.snackRotation[d] || ''} onChange={(e) => updateRotation(d, e.target.value)} />
+                            </div>
                         </div>
                     ))}
+                </div>
 
-                    {/* Add product */}
-                    <div className="set-row" style={{ padding: '10px 12px', background: 'var(--bg2)', borderRadius: 10, marginBottom: 10 }}>
-                        <div className="lbl" style={{ marginBottom: 8 }}>Add product</div>
-                        <input className="inp" style={{ marginBottom: 6 }} placeholder="Type (e.g. Vitamin C)" value={newProduct.kind}
-                            onChange={(e) => setNewProduct(np => ({ ...np, kind: e.target.value }))} />
-                        <input className="inp" style={{ marginBottom: 8 }} placeholder="Brand name (optional)" value={newProduct.name}
-                            onChange={(e) => setNewProduct(np => ({ ...np, name: e.target.value }))} />
-                        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                            {['am', 'pm', 'both'].map(s => (
-                                <div key={s} onClick={() => setNewProduct(np => ({ ...np, slot: s }))}
-                                    style={{ flex: 1, textAlign: 'center', padding: '5px 0', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: newProduct.slot === s ? (s === 'am' ? 'var(--amber-sf)' : s === 'pm' ? 'var(--teal-sf)' : 'var(--green-sf)') : 'var(--sf)', border: '1px solid var(--bd)', color: newProduct.slot === s ? (s === 'am' ? 'var(--amber-deep)' : s === 'pm' ? 'var(--teal-deep)' : 'var(--green-deep)') : 'var(--txm)' }}>
-                                    {s === 'both' ? 'AM+PM' : s.toUpperCase()}
-                                </div>
+
+                {/* Data */}
+                <div className="sec">
+                    <SecHd label="Data" k="data" />
+                    {open.data && <>
+                        <div style={{ fontSize: 11, color: 'var(--txm)', fontFamily: 'var(--mono, monospace)', marginBottom: 8 }}>
+                            {(() => {
+                                const m = parseInt(localStorage.getItem('form_data_modified') || '0', 10);
+                                if (!m) return 'Not synced yet';
+                                const ago = Math.floor((Date.now() - m) / 1000);
+                                if (ago < 60) return `Saved ${ago}s ago`;
+                                if (ago < 3600) return `Saved ${Math.floor(ago / 60)}m ago`;
+                                return `Saved ${Math.floor(ago / 3600)}h ago`;
+                            })()}
+                        </div>
+                        <button className="btn ghost" onClick={handleBackup}>Backup data</button>
+                        <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleRestore} />
+                        <div style={{ display: 'flex', gap: 6, marginTop: 8, fontSize: 11 }}>
+                            {['both', 'data', 'config'].map(m => (
+                                <button key={m} onClick={() => setRestoreMode(m)}
+                                    style={{
+                                        flex: 1, padding: '6px 8px', borderRadius: 6,
+                                        border: '1px solid var(--bd)', cursor: 'pointer',
+                                        background: restoreMode === m ? 'var(--tx)' : 'var(--bg2)',
+                                        color: restoreMode === m ? 'var(--bg)' : 'var(--tx)',
+                                        fontFamily: 'var(--mono, monospace)', textTransform: 'uppercase'
+                                    }}>{m}</button>
                             ))}
                         </div>
-                        <button className="btn" style={{ marginTop: 0 }} onClick={() => {
-                            const kind = newProduct.kind.trim();
-                            if (!kind) { showToast('Enter a product type first', 'error'); return; }
-                            const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-                            const finalName = newProduct.name.trim() || kind;
-                            update({ customProducts: [...(config.customProducts || []), { id, kind, name: finalName, slot: newProduct.slot }] });
-                            setNewProduct({ kind: '', name: '', slot: 'both' });
-                            showToast(`${finalName} added`, 'success');
-                        }}>Add product</button>
-                    </div>
-
-                    <div className="set-row">
-                        <div className="r">
-                            <div>
-                                <div className="lbl">Show product names</div>
-                                <div className="desc">Off = show step types only</div>
-                            </div>
-                            <div className={`toggle ${config.showProductNames ? 'on' : ''}`} onClick={() => update({ showProductNames: !config.showProductNames })} />
-                        </div>
-                    </div>
-
-                    <div className="set-row">
-                        <div className="r">
-                            <div>
-                                <div className="lbl">Vibration on tap</div>
-                                <div className="desc">Off saves battery</div>
-                            </div>
-                            <div className={`toggle ${(localStorage.getItem('form_haptic_off') !== '1') ? 'on' : ''}`}
-                                onClick={() => {
-                                    const cur = localStorage.getItem('form_haptic_off');
-                                    const turningOff = cur !== '1';
-                                    localStorage.setItem('form_haptic_off', turningOff ? '1' : '0');
-                                    setConfig(c => ({ ...c })); // force re-render
-                                    showToast(turningOff ? 'Vibration off' : 'Vibration on', 'info');
-                                }} />
-                        </div>
-                    </div>
-                </>}
-            </div>
-
-            {/* Skin routine */}
-            <div className="sec">
-                <SecHd label="Skin routine" k="routine" />
-                {open.routine && <RoutineEditor config={config} setConfig={setConfig} />}
-            </div>
-
-            {/* Snack rotation */}
-            <div className="sec">
-                <SecHd label="Snack rotation" k="snackrot" />
-                {open.snackrot && ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-                    <div key={d} className="set-row">
-                        <div className="r">
-                            <div className="lbl" style={{ width: 42 }}>{d}</div>
-                            <input className="inp" value={config.snackRotation[d] || ''} onChange={(e) => updateRotation(d, e.target.value)} />
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-
-            {/* Data */}
-            <div className="sec">
-                <SecHd label="Data" k="data" />
-                {open.data && <>
-                    <div style={{ fontSize: 11, color: 'var(--txm)', fontFamily: 'var(--mono, monospace)', marginBottom: 8 }}>
-                        {(() => {
-                            const m = parseInt(localStorage.getItem('form_data_modified') || '0', 10);
-                            if (!m) return 'Not synced yet';
-                            const ago = Math.floor((Date.now() - m) / 1000);
-                            if (ago < 60) return `Saved ${ago}s ago`;
-                            if (ago < 3600) return `Saved ${Math.floor(ago / 60)}m ago`;
-                            return `Saved ${Math.floor(ago / 3600)}h ago`;
-                        })()}
-                    </div>
-                    <button className="btn ghost" onClick={handleBackup}>Backup data</button>
-                    <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleRestore} />
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8, fontSize: 11 }}>
-                        {['both', 'data', 'config'].map(m => (
-                            <button key={m} onClick={() => setRestoreMode(m)}
-                                style={{
-                                    flex: 1, padding: '6px 8px', borderRadius: 6,
-                                    border: '1px solid var(--bd)', cursor: 'pointer',
-                                    background: restoreMode === m ? 'var(--tx)' : 'var(--bg2)',
-                                    color: restoreMode === m ? 'var(--bg)' : 'var(--tx)',
-                                    fontFamily: 'var(--mono, monospace)', textTransform: 'uppercase'
-                                }}>{m}</button>
-                        ))}
-                    </div>
-                    <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => fileRef.current && fileRef.current.click()}>
-                        Restore ({restoreMode})
-                    </button>
-
-                    {nukeStep === 0 ? (
-                        <button className="btn danger" onClick={handleNuke} style={{ marginTop: 8 }}>
-                            Clear all data
+                        <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => fileRef.current && fileRef.current.click()}>
+                            Restore ({restoreMode})
                         </button>
-                    ) : (
-                        <div style={{ marginTop: 8, background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 'var(--rsm)', padding: '14px' }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: '#991b1b', marginBottom: 4 }}>Clear all data?</div>
-                            <div style={{ fontSize: 12, color: '#b91c1c', marginBottom: 8 }}>This will permanently delete all your tracked days and reset settings. Cannot be undone.</div>
-                            <div style={{ fontSize: 11, color: '#7f1d1d', marginBottom: 6 }}>Type <strong>DELETE</strong> to confirm:</div>
-                            <input
-                                value={nukeText}
-                                onChange={(e) => setNukeText(e.target.value)}
-                                placeholder="DELETE"
-                                autoCapitalize="characters"
-                                style={{ width: '100%', padding: '8px 10px', border: '1px solid #fca5a5', borderRadius: 6, marginBottom: 10, fontSize: 13, fontFamily: 'var(--mono, monospace)' }}
-                            />
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button
-                                    onClick={handleNuke}
-                                    disabled={nukeText !== 'DELETE'}
-                                    style={{ flex: 1, background: nukeText === 'DELETE' ? '#dc2626' : '#fca5a5', color: '#fff', border: 'none', borderRadius: 8, padding: '10px', fontSize: 13, fontWeight: 600, cursor: nukeText === 'DELETE' ? 'pointer' : 'not-allowed' }}
-                                >
-                                    Yes, clear everything
-                                </button>
-                                <button
-                                    onClick={() => { setNukeStep(0); setNukeText(''); }}
-                                    style={{ flex: 1, background: 'var(--bg2)', color: 'var(--tx)', border: '1px solid var(--bd)', borderRadius: 8, padding: '10px', fontSize: 13, cursor: 'pointer' }}
-                                >
-                                    Cancel
-                                </button>
+
+                        {nukeStep === 0 ? (
+                            <button className="btn danger" onClick={handleNuke} style={{ marginTop: 8 }}>
+                                Clear all data
+                            </button>
+                        ) : (
+                            <div style={{ marginTop: 8, background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 'var(--rsm)', padding: '14px' }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#991b1b', marginBottom: 4 }}>Clear all data?</div>
+                                <div style={{ fontSize: 12, color: '#b91c1c', marginBottom: 8 }}>This will permanently delete all your tracked days and reset settings. Cannot be undone.</div>
+                                <div style={{ fontSize: 11, color: '#7f1d1d', marginBottom: 6 }}>Type <strong>DELETE</strong> to confirm:</div>
+                                <input
+                                    value={nukeText}
+                                    onChange={(e) => setNukeText(e.target.value)}
+                                    placeholder="DELETE"
+                                    autoCapitalize="characters"
+                                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #fca5a5', borderRadius: 6, marginBottom: 10, fontSize: 13, fontFamily: 'var(--mono, monospace)' }}
+                                />
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button
+                                        onClick={handleNuke}
+                                        disabled={nukeText !== 'DELETE'}
+                                        style={{ flex: 1, background: nukeText === 'DELETE' ? '#dc2626' : '#fca5a5', color: '#fff', border: 'none', borderRadius: 8, padding: '10px', fontSize: 13, fontWeight: 600, cursor: nukeText === 'DELETE' ? 'pointer' : 'not-allowed' }}
+                                    >
+                                        Yes, clear everything
+                                    </button>
+                                    <button
+                                        onClick={() => { setNukeStep(0); setNukeText(''); }}
+                                        style={{ flex: 1, background: 'var(--bg2)', color: 'var(--tx)', border: '1px solid var(--bd)', borderRadius: 8, padding: '10px', fontSize: 13, cursor: 'pointer' }}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                </>}
-            </div>
+                        )}
+                    </>}
+                </div>
             </div>
         </div>
     );

@@ -13,7 +13,13 @@
       "Bash(python \"C:\\\\Users\\\\poorn\\\\Desktop\\\\vscode\\\\expensetracker\\\\scripts\\\\redesign3.py\" \"C:\\\\Users\\\\poorn\\\\Desktop\\\\vscode\\\\expensetracker\\\\src\\\\App.jsx\")",
       "Bash(python /c/Users/poorn/Desktop/vscode/expensetracker/scripts/remove_breakdown.py /c/Users/poorn/Desktop/vscode/expensetracker/src/App.jsx)",
       "Bash(python /c/Users/poorn/Desktop/vscode/expensetracker/scripts/trends_rebuild.py /c/Users/poorn/Desktop/vscode/expensetracker/src/App.jsx)",
-      "Bash(python /c/Users/poorn/Desktop/vscode/expensetracker/scripts/final_rebuild.py /c/Users/poorn/Desktop/vscode/expensetracker/src/App.jsx)"
+      "Bash(python /c/Users/poorn/Desktop/vscode/expensetracker/scripts/final_rebuild.py /c/Users/poorn/Desktop/vscode/expensetracker/src/App.jsx)",
+      "WebSearch",
+      "WebFetch(domain:colorpickercode.com)",
+      "WebFetch(domain:developers.raycast.com)",
+      "WebFetch(domain:uicolors.org)",
+      "WebFetch(domain:mobbin.com)",
+      "WebFetch(domain:coloruxlab.com)"
     ]
   }
 }
