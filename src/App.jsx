@@ -1143,7 +1143,7 @@ export default function Nomad() {
   if (!loaded) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F2F0EB", fontFamily: "Plus Jakarta Sans,sans-serif", color: "#8A8A9A", flexDirection: "column", gap: 12 }}><span style={{ fontSize: 40 }}>🦁</span><span style={{ fontWeight: 700, letterSpacing: 2, fontSize: 18 }}>NOMAD</span></div>;
   const theme = dm ? { "--bg": "#000", "--card": "#111", "--border": "rgba(255,255,255,0.08)", "--text": "#FFF", "--ts": "#A0A0A0", "--muted": "#666", "--nav-bg": "rgba(0,0,0,0.92)" } : { "--bg": "#F2F0EB", "--card": "#FFF", "--border": "rgba(0,0,0,0.06)", "--text": "#1A1A2E", "--ts": "#4A4A5A", "--muted": "#8A8A9A", "--nav-bg": "rgba(242,240,235,0.92)" };
 
-  return <div style={{ ...theme, fontFamily: "var(--font-b)", background: "var(--bg)", color: "var(--text)", minHeight: "100vh", width: "100%", maxWidth: 430, margin: "0 auto", padding: "0 0 90px", overflowX: "hidden", boxSizing: "border-box" }}><style>{`
+  return <div style={{ ...theme, fontFamily: "var(--font-b)", background: "var(--bg)", color: "var(--text)", minHeight: "100vh", width: "100%", maxWidth: 430, margin: "0 auto", padding: "0 0 90px", boxSizing: "border-box" }}><style>{`
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Nunito:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500&display=swap');
 :root{--font-h:'Plus Jakarta Sans',sans-serif;--font-b:'Nunito',sans-serif}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
