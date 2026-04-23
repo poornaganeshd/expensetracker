@@ -157,7 +157,7 @@ const DI = [{ id: "allowance", name: "Allowance", color: "#34D399", neon: "#6EE7
 const RC = [{ id: "rent", name: "Rent / PG", color: "#A78BFA", neon: "#C4B5FD" }, { id: "emi", name: "EMI", color: "#F472B6", neon: "#FF8ED4" }, { id: "sip", name: "SIP / MF", color: "#34D399", neon: "#6EE7B7" }, { id: "insurance", name: "Insurance", color: "#00D4FF", neon: "#00E5FF" }, { id: "recharge", name: "Phone Recharge", color: "#FBBF24", neon: "#FDE68A" }, { id: "ott", name: "OTT / Subscriptions", color: "#E879F9", neon: "#F0ABFC" }, { id: "utilities", name: "Electricity / Bills", color: "#FF6B35", neon: "#FF9F1C" }, { id: "other_rec", name: "Other", color: "#8A8A9A", neon: "#A0A0B0" }];
 
 function DI2({ id, accent: A, size: sz = 18 }) {
-  const N = A || "#00E5FF", g = `drop-shadow(0 0 3px ${N}88) drop-shadow(0 0 8px ${N}44)`, p = { viewBox: "0 0 24 24", width: sz, height: sz, fill: "none", style: { filter: g } }, l = { stroke: N, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }, d = { ...l, opacity: 0.4 };
+  const N = A || "#22D3EE", p = { viewBox: "0 0 24 24", width: sz, height: sz, fill: "none" }, l = { stroke: N, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }, d = { ...l, opacity: 0.65 };
   switch (id) {
     case "food": return <svg {...p}><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"{...l} /><path d="M7 2v20"{...l} /><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"{...l} /></svg>;
     case "transport": return <svg {...p}><rect x="3" y="7" width="18" height="10" rx="2"{...l} /><circle cx="7.5" cy="17" r="2"{...l} /><circle cx="16.5" cy="17" r="2"{...l} /><path d="M5.5 7L7 3h10l1.5 4"{...d} /></svg>;
@@ -1248,15 +1248,15 @@ export default function Nomad() {
   const impBackup = (file) => { const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); if (!d._v || !d._v.startsWith("nomad")) { showT("Invalid backup file", "error"); return } const arrFields = ["expenses", "incomes", "transfers", "settlements", "splits", "recurring", "events", "categories", "incomeSources"]; for (const f of arrFields) { if (d[f] !== undefined && !Array.isArray(d[f])) { showT(`Backup corrupt: ${f}`, "error"); return; } } sEx(d.expenses || []); sInc(d.incomes || []); sTr(d.transfers || []); sStl(d.settlements || []); sSp(d.splits || []); sRec(d.recurring || []); sEvs(d.events || []); if (d.categories?.length) sCats(d.categories); if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.darkMode !== undefined) sDm(d.darkMode); if (d.walletStartBal && typeof d.walletStartBal === "object") sWsb(d.walletStartBal); showT("Backup restored on this device", "success") } catch { showT("Failed to read file", "error") } }; r.readAsText(file) };
 
   if (showSetup) return <CredentialSetup onDone={() => window.location.reload()} onCancel={needsSetup ? undefined : () => setShowSetup(false)} />;
-  if (!loaded) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F2F0EB", fontFamily: "Plus Jakarta Sans,sans-serif", color: "#8A8A9A", flexDirection: "column", gap: 12 }}><span style={{ fontSize: 40 }}>🦁</span><span style={{ fontWeight: 700, letterSpacing: 2, fontSize: 18 }}>NOMAD</span></div>;
-  const theme = dm ? { "--bg": "#000", "--card": "#111", "--border": "rgba(255,255,255,0.08)", "--text": "#FFF", "--ts": "#A0A0A0", "--muted": "#666", "--nav-bg": "rgba(0,0,0,0.92)" } : { "--bg": "#F2F0EB", "--card": "#FFF", "--border": "rgba(0,0,0,0.06)", "--text": "#1A1A2E", "--ts": "#4A4A5A", "--muted": "#8A8A9A", "--nav-bg": "rgba(242,240,235,0.92)" };
+  if (!loaded) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0B0F14", fontFamily: "Plus Jakarta Sans,sans-serif", color: "#6B7280", flexDirection: "column", gap: 12 }}><span style={{ fontSize: 40 }}>🦁</span><span style={{ fontWeight: 700, letterSpacing: 2, fontSize: 18, color: "#E5E7EB" }}>NOMAD</span></div>;
+  const theme = dm ? { "--bg": "#0B0F14", "--card": "#121821", "--border": "#1F2937", "--text": "#E5E7EB", "--ts": "#9CA3AF", "--muted": "#6B7280", "--nav-bg": "rgba(11,15,20,0.95)" } : { "--bg": "#F2F0EB", "--card": "#FFF", "--border": "rgba(0,0,0,0.06)", "--text": "#1A1A2E", "--ts": "#4A4A5A", "--muted": "#8A8A9A", "--nav-bg": "rgba(242,240,235,0.92)" };
 
   return <div style={{ ...theme, fontFamily: "var(--font-b)", background: "var(--bg)", color: "var(--text)", minHeight: "100vh", width: "100%", maxWidth: 430, margin: "0 auto", padding: "0 0 90px", overflowX: "hidden", boxSizing: "border-box" }}><style>{`
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Nunito:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500&display=swap');
 :root{--font-h:'Plus Jakarta Sans',sans-serif;--font-b:'Nunito',sans-serif}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{overflow-x:hidden;max-width:100%}
-body{background:${dm ? "#000" : "#F2F0EB"};overflow-x:hidden}
+body{background:${dm ? "#0B0F14" : "#F2F0EB"};overflow-x:hidden}
 input[type=date]{color-scheme:${dm ? "dark" : "light"}}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}input[type=number]{-moz-appearance:textfield}
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform:scale(0.96)}
@@ -1269,22 +1269,20 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
 .pe{animation:fi 0.3s ease-out}.pse{animation:fis 0.25s ease-out}
 .card-hover{transition:box-shadow 0.2s ease,transform 0.2s ease}
 .card-hover:hover{box-shadow:0 4px 24px rgba(0,0,0,0.08);transform:translateY(-1px)}
-#nomad-routine .hd{display:none!important}
-#nomad-routine .skin-hd .date{display:none!important}
 `}</style>
 
     {(!online || pendingSync > 0) && <div style={{ position: "sticky", top: 0, zIndex: 120, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: online ? "#FFF3D6" : "#FDE7E4", border: `1px solid ${online ? "#F1C96B" : "#E7A39B"}`, color: online ? "#7A5600" : "#9F3E33", fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, letterSpacing: "0.01em", textAlign: "center" }}>{!online ? "Offline. Changes sync later." : `Syncing ${pendingSync} change${pendingSync === 1 ? "" : "s"}.`}</div>}
 
 
     {(() => {
-      const isHome = (module === "finance" && tab === "dashboard") || (module === "routine" && routineTab === "food");
-      const isRoutineOther = module === "routine" && routineTab !== "food";
+      const isRoutine = module === "routine";
+      const routineLabel = routineTab.charAt(0).toUpperCase() + routineTab.slice(1);
       if (module === "finance" && tab !== "dashboard") return null;
-      return <div style={{ position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", background: dm ? "rgba(0,0,0,0.45)" : "rgba(242,240,235,0.55)", borderBottom: `1px solid ${dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`, padding: isRoutineOther ? "8px 20px" : "14px 20px 10px", transition: "padding 0.2s" }}>
-        {!isRoutineOther && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <span style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 500, color: "var(--text)", letterSpacing: "0.02em" }}>NOMAD</span>
-          <span style={{ fontFamily: "var(--font-h)", fontSize: 11, color: "var(--muted)", fontWeight: 600, letterSpacing: "1.5px" }}>{new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()} · {new Date().getDate()} {new Date().toLocaleDateString("en-US", { month: "short" }).toUpperCase()}</span>
-        </div>}
+      return <div style={{ position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", background: dm ? "rgba(11,15,20,0.92)" : "rgba(242,240,235,0.92)", borderBottom: `1px solid ${dm ? "#1F2937" : "rgba(0,0,0,0.06)"}`, padding: "12px 20px 10px", transition: "padding 0.2s" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 20, fontWeight: 700, color: dm ? "#E5E7EB" : "#1A1A2E", letterSpacing: "0.04em", lineHeight: 1 }}>NOMAD</div>
+          <span style={{ fontFamily: "var(--font-h)", fontSize: 11, color: dm ? "#6B7280" : "var(--muted)", fontWeight: 600, letterSpacing: "1.5px" }}>{new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()} · {new Date().getDate()} {new Date().toLocaleDateString("en-US", { month: "short" }).toUpperCase()}</span>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => { setModule("finance") }} style={{ flex: 1, padding: "7px 0", borderRadius: 100, fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 600, border: `1.5px solid ${module === "finance" ? "#E07A5F" : dm ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`, cursor: "pointer", background: module === "finance" ? "#E07A5F" : "transparent", color: module === "finance" ? "#fff" : dm ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.35)", letterSpacing: "0.5px", transition: "all 0.2s" }}>Finance</button>
           <button onClick={() => { setModule("routine"); setRoutineTab("food") }} style={{ flex: 1, padding: "7px 0", borderRadius: 100, fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 600, border: `1.5px solid ${module === "routine" ? "#EF9F27" : dm ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`, cursor: "pointer", background: module === "routine" ? "#EF9F27" : "transparent", color: module === "routine" ? "#fff" : dm ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.35)", letterSpacing: "0.5px", transition: "all 0.2s" }}>Routine</button>

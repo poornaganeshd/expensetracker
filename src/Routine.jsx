@@ -17,7 +17,7 @@ import { getCredentials as _getCreds } from './credentials';
    v7 → progress dots UI fix: column layout (dot + label + value), no wrap
    ============================================================ */
 
-const PhosphorIcon = ({ name, size = 24, color = 'currentColor', opacity = 0.3 }) => {
+const PhosphorIcon = ({ name, size = 24, color = 'currentColor', opacity = 0.7 }) => {
     const icons = {
         drop: (
             <svg width={size} height={size} viewBox="0 0 256 256" fill="none">
@@ -204,76 +204,74 @@ const CSS = `
   --ti-stepper-col:rgba(0,0,0,0.5);
 }
 
-/* ── SOFT PASTEL + DARK GRADIENT — Premium Neumorphism Lite ── */
+/* ── FINANCE-GRADE DARK THEME ── */
 #nomad-routine.dark {
-  --bg: #0F0F0F;
-  --bg2: #1A1A1A;
-  --sf: #1A1A1A;
-  --bd: rgba(255,255,255,0.08);
-  --bde: rgba(255,255,255,0.12);
-  --tx: #FFFFFF;
-  --txm: #A0A7B5;
+  --bg: #0B0F14;
+  --bg2: #121821;
+  --sf: #161E2B;
+  --bd: #1F2937;
+  --bde: #293548;
+  --tx: #E5E7EB;
+  --txm: #9CA3AF;
   --txd: #6B7280;
-  --green: #B7E778;
-  --green-sf: rgba(183,231,120,0.12);
-  --green-deep: #B7E778;
-  --amber: #F4A261;
-  --amber-sf: rgba(244,162,97,0.12);
-  --amber-deep: #F4A261;
-  --teal: #A8E6F0;
-  --teal-sf: rgba(168,230,240,0.12);
-  --teal-deep: #A8E6F0;
+  --green: #22C55E;
+  --green-sf: rgba(34,197,94,0.12);
+  --green-deep: #22C55E;
+  --amber: #F59E0B;
+  --amber-sf: rgba(245,158,11,0.12);
+  --amber-deep: #F59E0B;
+  --teal: #22D3EE;
+  --teal-sf: rgba(34,211,238,0.12);
+  --teal-deep: #22D3EE;
   --card-shadow: none;
-  --sky: #2B2F3A;
-  --sky-horizon: #2B2F3A;
-  --sky-grass: #2B2F3A;
-  /* ── tile color tokens (soft pastel + shadow) ── */
-  --ti-amber-bg: #F6D365;
-  --ti-amber-sh: 0px 6px 16px rgba(0,0,0,0.25);
-  --ti-amber-i-bg: rgba(246,211,101,0.15);
-  --ti-amber-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
-  --ti-green-bg: #B7E778;
-  --ti-green-sh: 0px 6px 16px rgba(0,0,0,0.25);
-  --ti-green-i-bg: rgba(183,231,120,0.15);
-  --ti-green-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
-  --ti-teal-bg: #A8E6F0;
-  --ti-teal-sh: 0px 6px 16px rgba(0,0,0,0.25);
-  --ti-teal-i-bg: rgba(168,230,240,0.15);
-  --ti-teal-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
-  --ti-sage-bg: #B7E778;
-  --ti-sage-sh: 0px 6px 16px rgba(0,0,0,0.25);
-  --ti-sage-i-bg: rgba(183,231,120,0.15);
-  --ti-sage-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
-  --ti-purple-bg: #CDB4DB;
-  --ti-purple-sh: 0px 6px 16px rgba(0,0,0,0.25);
-  --ti-purple-i-bg: rgba(205,180,219,0.15);
-  --ti-purple-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
-  --ti-pink-bg: #F4A261;
-  --ti-pink-sh: 0px 6px 16px rgba(0,0,0,0.25);
-  --ti-pink-i-bg: rgba(244,162,97,0.15);
-  --ti-pink-i-sh: 0px 4px 8px rgba(0,0,0,0.15);
-  --ti-name: #1F2933;
-  --ti-meta: #1F2933;
-  --ti-amber-meta: #1F2933;
-  --ti-green-meta: #1F2933;
-  --ti-teal-meta: #1F2933;
-  --ti-sage-meta: #1F2933;
-  --ti-purple-meta: #1F2933;
-  --ti-pink-meta: #1F2933;
-  --ti-icon-idle: rgba(255,255,255,0.15);
-  --ti-icon-done: #B7E778;
-  --ti-check-done: #B7E778;
-  --ti-stepper-bg: rgba(255,255,255,0.10);
-  --ti-stepper-col: #A0A7B5;
+  --sky: #121821;
+  --sky-horizon: #0B0F14;
+  --sky-grass: #0B0F14;
+  /* ── tile color tokens ── */
+  --ti-amber-bg: #F59E0B;
+  --ti-amber-sh: none;
+  --ti-amber-i-bg: rgba(245,158,11,0.15);
+  --ti-amber-i-sh: none;
+  --ti-green-bg: #22C55E;
+  --ti-green-sh: none;
+  --ti-green-i-bg: rgba(34,197,94,0.15);
+  --ti-green-i-sh: none;
+  --ti-teal-bg: #22D3EE;
+  --ti-teal-sh: none;
+  --ti-teal-i-bg: rgba(34,211,238,0.15);
+  --ti-teal-i-sh: none;
+  --ti-sage-bg: #22C55E;
+  --ti-sage-sh: none;
+  --ti-sage-i-bg: rgba(34,197,94,0.15);
+  --ti-sage-i-sh: none;
+  --ti-purple-bg: #A78BFA;
+  --ti-purple-sh: none;
+  --ti-purple-i-bg: rgba(167,139,250,0.15);
+  --ti-purple-i-sh: none;
+  --ti-pink-bg: #F472B6;
+  --ti-pink-sh: none;
+  --ti-pink-i-bg: rgba(244,114,182,0.15);
+  --ti-pink-i-sh: none;
+  --ti-name: #E5E7EB;
+  --ti-meta: #9CA3AF;
+  --ti-amber-meta: #9CA3AF;
+  --ti-green-meta: #9CA3AF;
+  --ti-teal-meta: #9CA3AF;
+  --ti-sage-meta: #9CA3AF;
+  --ti-purple-meta: #9CA3AF;
+  --ti-pink-meta: #9CA3AF;
+  --ti-icon-idle: #6B7280;
+  --ti-icon-done: #22C55E;
+  --ti-check-done: #22C55E;
+  --ti-stepper-bg: rgba(255,255,255,0.08);
+  --ti-stepper-col: #9CA3AF;
 }
 
 #nomad-routine * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-#nomad-routine .hd { display: none !important; }
-#nomad-routine .skin-hd .date { display: none !important; }
 
 /* Dark mode main app background */
 #nomad-routine.dark .app {
-  background: #0F0F0F !important;
+  background: #0B0F14 !important;
 }
 
 #nomad-routine .app {
@@ -295,18 +293,21 @@ const CSS = `
 #nomad-routine .screen::-webkit-scrollbar { display: none; }
 
 /* ---- Sky header per-screen color themes (DARK MODE) ---- */
-#nomad-routine.dark .sky-skin     { --sky: #1a2f4f; --sky-horizon:#0f1b2e; --sky-grass:#0f1b2e; }
-#nomad-routine.dark .sky-log      { --sky: #1a2f4f; --sky-horizon:#0f1b2e; --sky-grass:#0f1b2e; }
-#nomad-routine.dark .sky-settings { --sky: #1a2f4f; --sky-horizon:#0f1b2e; --sky-grass:#0f1b2e; }
+#nomad-routine.dark .sky-skin     { --sky: #121821 !important; --sky-horizon:#0B0F14 !important; --sky-grass:#0B0F14 !important; }
+#nomad-routine.dark .sky-log      { --sky: #121821 !important; --sky-horizon:#0B0F14 !important; --sky-grass:#0B0F14 !important; }
+#nomad-routine.dark .sky-settings { --sky: #121821 !important; --sky-horizon:#0B0F14 !important; --sky-grass:#0B0F14 !important; }
 
 
 /* ---- Sky header ---- */
 #nomad-routine .sky-header {
   background: var(--sky);
-  padding: 26px 18px 22px;
+  padding: 20px 18px 18px;
   position: relative;
   overflow: hidden;
+  border-bottom: 1px solid var(--bd);
 }
+/* Hide cloud decorations in dark mode */
+#nomad-routine.dark .sky-cloud { display: none !important; }
 #nomad-routine .sky-cloud {
   position: absolute;
   border-radius: 100px;
@@ -315,15 +316,17 @@ const CSS = `
 #nomad-routine .sky-horizon {
   position: absolute;
   bottom: 0; left: 0; right: 0;
-  height: 26px;
+  height: 0;
   background: var(--sky-horizon);
 }
+#nomad-routine.dark .sky-horizon { display: none; }
 #nomad-routine .sky-grass {
   position: absolute;
   bottom: 0; left: 0; right: 0;
-  height: 12px;
+  height: 0;
   background: var(--sky-grass);
 }
+#nomad-routine.dark .sky-grass { display: none; }
 #nomad-routine .sky-content { position: relative; z-index: 2; }
 #nomad-routine .sky-top-row {
   display: flex;
@@ -332,19 +335,21 @@ const CSS = `
   margin-bottom: 16px;
 }
 #nomad-routine .sky-date-big {
-  font-size: 28px;
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 700;
   color: #2a3a28;
   letter-spacing: -0.02em;
   line-height: 1;
   margin-bottom: 3px;
 }
+#nomad-routine.dark .sky-date-big { color: #E5E7EB; }
 #nomad-routine .sky-date-sub {
   font-size: 12px;
   font-weight: 600;
   color: #5a7050;
   letter-spacing: 0.01em;
 }
+#nomad-routine.dark .sky-date-sub { color: #6B7280; }
 #nomad-routine .sky-progress-row {
   display: flex;
   align-items: center;
@@ -353,31 +358,38 @@ const CSS = `
 }
 #nomad-routine .sky-prog-track {
   flex: 1;
-  height: 7px;
+  height: 5px;
   background: rgba(255,255,255,0.45);
   border-radius: 100px;
   overflow: hidden;
 }
+#nomad-routine.dark .sky-prog-track { background: #1F2937; }
 #nomad-routine .sky-prog-fill {
   height: 100%;
   background: #639922;
   border-radius: 100px;
   transition: width 0.4s ease;
 }
+#nomad-routine.dark .sky-prog-fill { background: #22D3EE; }
 #nomad-routine .sky-prog-txt {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   color: #3a5a30;
   white-space: nowrap;
   font-family: var(--mono);
 }
+#nomad-routine.dark .sky-prog-txt { color: #9CA3AF; }
 #nomad-routine .streak-card {
   background: rgba(255,255,255,0.7);
-  border-radius: 16px;
+  border-radius: 10px;
   padding: 8px 12px;
   text-align: center;
   border: 1.5px solid rgba(255,255,255,0.9);
   flex-shrink: 0;
+}
+#nomad-routine.dark .streak-card {
+  background: #161E2B;
+  border: 1px solid #1F2937;
 }
 #nomad-routine .streak-card .s-num {
   font-size: 22px;
@@ -423,6 +435,8 @@ const CSS = `
   line-height: 1.5;
   flex: 1;
 }
+#nomad-routine .sky-settings .sky-date-big { color: #2e2b26; }
+#nomad-routine .sky-settings .sky-date-sub { color: #7a7268; }
 
 /* ---- Body padding ---- */
 #nomad-routine .body-pad {
@@ -1026,6 +1040,7 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 #nomad-routine .cal-cell.lvl3 { background: var(--green-sf); color: var(--green-deep); }
 #nomad-routine .cal-cell.lvl4 { background: var(--green); color: #fff; }
 #nomad-routine .cal-cell.today { border-color: var(--tx); }
+#nomad-routine .cal-cell .note-dot { background: #3a4a30 !important; }
 
 /* ---- Sheet ---- */
 #nomad-routine .sheet {
@@ -1243,11 +1258,12 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 
 /* Hero / sky header — Soft Pastel Design */
 #nomad-routine.dark .sky-header { background: var(--sky) !important; border-bottom: 1px solid rgba(255,255,255,0.08) !important; }
-#nomad-routine.dark .sky-cloud  { background: rgba(255,255,255,0.03) !important; }
+#nomad-routine.dark .sky-cloud  { background: rgba(255,255,255,0.08) !important; }
 #nomad-routine.dark .sky-horizon { display: none !important; }
 #nomad-routine.dark .sky-grass   { display: none !important; }
 #nomad-routine.dark .sky-date-big { color: #FFFFFF !important; }
 #nomad-routine.dark .sky-date-sub { color: #A0A7B5 !important; }
+#nomad-routine.dark .sky-content { color: #FFFFFF !important; }
 #nomad-routine.dark .sky-prog-track { background: rgba(255,255,255,0.08) !important; }
 #nomad-routine.dark .sky-prog-fill  { background: var(--green) !important; box-shadow: 0 4px 12px rgba(183,231,120,0.20); border-radius: 4px; }
 #nomad-routine.dark .sky-prog-txt   { color: var(--green) !important; }
@@ -1255,7 +1271,10 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 #nomad-routine.dark .streak-card .s-num { color: #F4A261 !important; text-shadow: none; font-weight: 600; }
 #nomad-routine.dark .streak-card .s-lbl { color: #A0A7B5 !important; }
 #nomad-routine.dark .sky-panda-av   { background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.12) !important; border-radius: 12px !important; }
+#nomad-routine.dark .sky-panda-av img { opacity: 0.9; }
 #nomad-routine.dark .sky-panda-bubble { background: #1A1A1A !important; border-color: rgba(255,255,255,0.06) !important; color: #FFFFFF !important; border-radius: 12px !important; box-shadow: 0px 6px 16px rgba(0,0,0,0.25) !important; }
+#nomad-routine.dark .sky-settings .sky-date-big { color: #FFFFFF !important; }
+#nomad-routine.dark .sky-settings .sky-date-sub { color: #A0A7B5 !important; }
 
 /* Habit tiles — Soft Pastel Cards */
 /* amber/yellow */
@@ -1371,7 +1390,15 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 /* Log card */
 #nomad-routine.dark .log-card-icon { background: rgba(183,231,120,0.15) !important; border-radius: 10px; }
 #nomad-routine.dark .log-card-num  { color: #6B7280 !important; }
-#nomad-routine.dark .log-card-add  { background: rgba(183,231,120,0.15) !important; color: var(--green) !important; border-radius: 8px; }
+#nomad-routine.dark .log-card-name { color: #FFFFFF !important; }
+#nomad-routine.dark .log-card-add  { background: rgba(183,231,120,0.15) !important; color: #B7E778 !important; border-radius: 8px; }
+
+/* Stats (Log screen) */
+#nomad-routine.dark .stat { background: #2D3139 !important; border: 1px solid rgba(255,255,255,0.06) !important; box-shadow: 0px 6px 16px rgba(0,0,0,0.20) !important; }
+#nomad-routine.dark .stat .v { color: #B7E778 !important; }
+#nomad-routine.dark .stat .l { color: #A0A7B5 !important; }
+#nomad-routine.dark .stat.teal .v { color: #A8E6F0 !important; }
+#nomad-routine.dark .stat.amber .v { color: #F4A261 !important; }
 
 /* Chips / food chips */
 #nomad-routine.dark .food-chip      { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
@@ -1380,10 +1407,10 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 #nomad-routine.dark .chip           { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
 
 /* DL detail chips */
-#nomad-routine.dark .dl-chip.amber { background: rgba(244,162,97,0.12) !important; color: #1F2933 !important; border-color: rgba(244,162,97,0.20) !important; border-radius: 8px; }
-#nomad-routine.dark .dl-chip.green { background: rgba(183,231,120,0.12) !important; color: #1F2933 !important; border-color: rgba(183,231,120,0.20) !important; border-radius: 8px; }
-#nomad-routine.dark .dl-chip.teal  { background: rgba(168,230,240,0.12) !important; color: #1F2933 !important; border-color: rgba(168,230,240,0.20) !important; border-radius: 8px; }
-#nomad-routine.dark .dl-chip.pink  { background: rgba(244,162,97,0.12) !important; color: #1F2933 !important; border-color: rgba(244,162,97,0.20) !important; border-radius: 8px; }
+#nomad-routine.dark .dl-chip.amber { background: rgba(244,162,97,0.14) !important; color: #FFD7B3 !important; border-color: rgba(244,162,97,0.28) !important; border-radius: 8px; }
+#nomad-routine.dark .dl-chip.green { background: rgba(183,231,120,0.14) !important; color: #D9F7B8 !important; border-color: rgba(183,231,120,0.28) !important; border-radius: 8px; }
+#nomad-routine.dark .dl-chip.teal  { background: rgba(168,230,240,0.14) !important; color: #D4F8FF !important; border-color: rgba(168,230,240,0.28) !important; border-radius: 8px; }
+#nomad-routine.dark .dl-chip.pink  { background: rgba(240,140,178,0.14) !important; color: #FFD2E6 !important; border-color: rgba(240,140,178,0.28) !important; border-radius: 8px; }
 #nomad-routine.dark .dl-val.dl-ok  { color: var(--green) !important; }
 #nomad-routine.dark .dl-food-icon  { background: rgba(183,231,120,0.15) !important; border-radius: 8px; }
 #nomad-routine.dark .dl-skin-icon  { background: rgba(168,230,240,0.15) !important; border-radius: 8px; }
@@ -1396,8 +1423,13 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 #nomad-routine.dark .dl-key { color: #FFFFFF !important; }
 #nomad-routine.dark .dl-val { color: #A0A7B5 !important; }
 #nomad-routine.dark .dl-val.dl-ok { color: #7EE8A6 !important; }
+#nomad-routine.dark .dl-val.dl-miss { color: #6B7280 !important; }
+#nomad-routine.dark .dl-sub-row { color: #6B7280 !important; font-size: 11px; margin-top: 2px; }
 #nomad-routine.dark .dl-food-icon { background: rgba(183,231,120,0.15) !important; }
 #nomad-routine.dark .dl-skin-icon { background: rgba(93,223,219,0.15) !important; }
+#nomad-routine.dark .dl-note { background: #242830 !important; border-color: rgba(255,255,255,0.08) !important; color: #D4DAE5 !important; }
+#nomad-routine.dark .dl-log-tag { color: #6B7280 !important; }
+#nomad-routine.dark .dl-log-items { color: #FFFFFF !important; }
 
 /* Eggs card in dark mode */
 #nomad-routine.dark .card[style*="F6E7C8"],
@@ -1406,12 +1438,35 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
   box-shadow: 0px 6px 16px rgba(0,0,0,0.20) !important;
 }
 
+/* Calendar cells in dark mode */
+#nomad-routine.dark .cal-cell { background: #2D3139 !important; color: #A0A7B5 !important; }
+#nomad-routine.dark .cal-cell.lvl1 { background: rgba(246,211,101,0.25) !important; color: #F6D365 !important; }
+#nomad-routine.dark .cal-cell.lvl2 { background: rgba(246,211,101,0.40) !important; color: #F6D365 !important; }
+#nomad-routine.dark .cal-cell.lvl3 { background: rgba(183,231,120,0.25) !important; color: #B7E778 !important; }
+#nomad-routine.dark .cal-cell.lvl4 { background: #B7E778 !important; color: #1F2933 !important; }
+#nomad-routine.dark .cal-cell.today { border-color: #FFFFFF !important; }
+#nomad-routine.dark .cal-cell .note-dot { background: #FFFFFF !important; opacity: 0.9 !important; }
+
 /* Icon picker */
 #nomad-routine.dark .icon-picker-btn { background: #1A1A1A !important; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
 #nomad-routine.dark .icon-picker-btn.sel { background: rgba(244,162,97,0.15) !important; border-color: #F4A261 !important; box-shadow: none; }
 
 /* Section label */
 #nomad-routine.dark .sec-lbl { color: #6B7280 !important; }
+
+/* Settings screen */
+#nomad-routine.dark .lbl { color: #FFFFFF !important; }
+#nomad-routine.dark .desc { color: #A0A7B5 !important; }
+#nomad-routine.dark .stepper { background: #2D3139 !important; border: 1px solid rgba(255,255,255,0.08) !important; border-radius: 10px; }
+#nomad-routine.dark .stepper .val { color: #FFFFFF !important; }
+#nomad-routine.dark .stepper button { background: rgba(255,255,255,0.05) !important; color: #FFFFFF !important; border-color: rgba(255,255,255,0.08) !important; }
+#nomad-routine.dark .routine-day-lbl { color: #FFFFFF !important; }
+#nomad-routine.dark .routine-sub-label { color: #A0A7B5 !important; }
+#nomad-routine.dark .routine-chip { background: #2D3139 !important; border-color: rgba(255,255,255,0.08) !important; color: #FFFFFF !important; }
+#nomad-routine.dark .add-step-btn { background: #2D3139 !important; border-color: rgba(255,255,255,0.08) !important; color: #A0A7B5 !important; }
+#nomad-routine.dark .product-picker { background: #2D3139 !important; border: 1px solid rgba(255,255,255,0.08) !important; }
+#nomad-routine.dark .product-picker-item { background: #1A1A1A !important; color: #FFFFFF !important; border-bottom-color: rgba(255,255,255,0.06) !important; }
+#nomad-routine.dark .product-picker-item:hover { background: #2D3139 !important; }
 
 /* Nav bar */
 #nomad-routine.dark .nav { background: #0F0F0F !important; border-top: 1px solid rgba(255,255,255,0.08) !important; border-radius: 0; }
@@ -1420,7 +1475,15 @@ textarea.inp { resize: none; min-height: 60px; line-height: 1.4; }
 #nomad-routine.dark .nav button.active.log  { color: var(--green) !important; }
 
 /* Input */
+#nomad-routine.dark .inp { background: #2D3139 !important; border-color: rgba(255,255,255,0.08) !important; color: #FFFFFF !important; }
 #nomad-routine.dark .inp:focus { border-color: rgba(168,230,240,0.35) !important; box-shadow: 0 0 0 2px rgba(168,230,240,0.10); border-radius: 10px; }
+#nomad-routine.dark .inp::placeholder { color: #6B7280 !important; }
+
+/* Pills */
+#nomad-routine.dark .pill { background: #2D3139 !important; border-color: rgba(255,255,255,0.08) !important; color: #A0A7B5 !important; }
+#nomad-routine.dark .pill.on { background: rgba(183,231,120,0.15) !important; border-color: rgba(183,231,120,0.30) !important; color: #B7E778 !important; }
+#nomad-routine.dark .pill.on.teal { background: rgba(168,230,240,0.15) !important; border-color: rgba(168,230,240,0.30) !important; color: #A8E6F0 !important; }
+#nomad-routine.dark .pill.on.amber { background: rgba(244,162,97,0.15) !important; border-color: rgba(244,162,97,0.30) !important; color: #F4A261 !important; }
 `;
 
 // Inject CSS immediately at module load so styles exist before first paint.
@@ -2632,7 +2695,7 @@ const LogScreen = ({ allData, config }) => {
                                 >
                                     {c.d}
                                     {c.rec && (c.rec.notes || c.rec.skinNotes) && (
-                                        <div style={{ position: 'absolute', bottom: 3, right: 4, width: 4, height: 4, borderRadius: '50%', background: 'currentColor', opacity: 0.6 }} />
+                                        <div className="note-dot" style={{ position: 'absolute', bottom: 3, right: 4, width: 4, height: 4, borderRadius: '50%' }} />
                                     )}
                                 </div>
                             )}
@@ -2837,8 +2900,8 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
                 <div className="sky-cloud" style={{ width: 100, height: 30, top: 10, left: -10, background: 'rgba(255,255,255,0.4)' }} />
                 <div className="sky-horizon" />
                 <div className="sky-content">
-                    <div className="sky-date-big" style={{ color: '#2e2b26' }}>Settings</div>
-                    <div className="sky-date-sub" style={{ color: '#7a7268' }}>Routine & data</div>
+                    <div className="sky-date-big">Settings</div>
+                    <div className="sky-date-sub">Routine & data</div>
                 </div>
             </div>
             <div className="body-pad">
