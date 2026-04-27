@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nomad-app-v7';
+const CACHE_NAME = 'nomad-app-v9';
 const APP_SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -32,11 +32,11 @@ self.addEventListener('fetch', (event) => {
   const isSameOrigin = new URL(request.url).origin === self.location.origin;
   const isAsset = ['style', 'script', 'worker', 'font', 'image'].includes(request.destination);
 
-  if (isNavigation) {
+  if (isNavigation || (isSameOrigin && isAsset && ['style', 'script', 'worker'].includes(request.destination))) {
     event.respondWith(
       fetch(request)
         .then((response) => cacheResponse(request, response))
-        .catch(async () => (await caches.match(request)) || caches.match('/'))
+        .catch(async () => (await caches.match(request)) || (isNavigation ? caches.match('/') : undefined))
     );
     return;
   }
