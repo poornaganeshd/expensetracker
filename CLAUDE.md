@@ -20,9 +20,23 @@ npm run lint         # ESLint (JS/JSX only — no TypeScript checker for src/)
 
 # Preview built app
 npm run preview
+
+# Test
+npm test             # Run all tests once (vitest run)
+npm run test:watch   # Run tests in watch mode
+npm run test:coverage  # Run tests with v8 coverage report
 ```
 
-There are no automated tests in this repository.
+Tests use **Vitest** with a jsdom environment (configured in `vite.config.js` under the `test` key). Test files live in `src/__tests__/` (JS/JSX modules) and `api/__tests__/` (TypeScript API). Coverage is collected via `@vitest/coverage-v8`.
+
+| Test file | What it covers |
+|---|---|
+| `src/__tests__/billReminders.test.js` | `billReminders.js` — due/upcoming recurring-bill logic |
+| `src/__tests__/credentials.test.js` | `credentials.js` — localStorage credential read/write |
+| `src/__tests__/currencyConverter.test.js` | `currencyConverter.js` — exchange-rate fetch + cache |
+| `src/__tests__/financeUtils.test.js` | Date/finance utility helpers |
+| `src/__tests__/offlineSync.test.js` | `offlineSync.js` — write-ahead queue and replay |
+| `api/__tests__/_shared.test.ts` | `api/_shared.ts` — shared report/email utilities |
 
 The `api/` directory is TypeScript (`@vercel/node` serverless functions). It has its own `package.json` (`"type": "commonjs"`). The TypeScript in `api/` is compiled by Vercel at deploy time — there is no local tsc build step for it.
 
