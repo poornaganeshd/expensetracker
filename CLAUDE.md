@@ -20,9 +20,23 @@ npm run lint         # ESLint (JS/JSX only — no TypeScript checker for src/)
 
 # Preview built app
 npm run preview
+
+# Test
+npm test             # Run all tests once (vitest run)
+npm run test:watch   # Run tests in watch mode
+npm run test:coverage  # Run tests with v8 coverage report
 ```
 
-There are no automated tests in this repository.
+Tests use **Vitest** with a jsdom environment (configured in `vite.config.js` under the `test` key). Test files live in `src/__tests__/` (JS/JSX modules) and `api/__tests__/` (TypeScript API). Coverage is collected via `@vitest/coverage-v8`.
+
+| Test file | What it covers |
+|---|---|
+| `src/__tests__/billReminders.test.js` | `billReminders.js` — due/upcoming recurring-bill logic |
+| `src/__tests__/credentials.test.js` | `credentials.js` — localStorage credential read/write |
+| `src/__tests__/currencyConverter.test.js` | `currencyConverter.js` — exchange-rate fetch + cache |
+| `src/__tests__/financeUtils.test.js` | Date/finance utility helpers |
+| `src/__tests__/offlineSync.test.js` | `offlineSync.js` — write-ahead queue and replay |
+| `api/__tests__/_shared.test.ts` | `api/_shared.ts` — shared report/email utilities |
 
 The `api/` directory is TypeScript (`@vercel/node` serverless functions). It has its own `package.json` (`"type": "commonjs"`). The TypeScript in `api/` is compiled by Vercel at deploy time — there is no local tsc build step for it.
 
@@ -49,6 +63,7 @@ Each user brings their own Supabase project. On first run, `CredentialSetup.jsx`
 | `billReminders.js` | Computes due/upcoming recurring bills for toast reminders |
 | `receiptUpload.js` | Compresses images (canvas, 800px / 70% JPEG) then uploads to Cloudinary |
 | `currencyConverter.js` | Fetches INR exchange rates (daily-cached in localStorage) |
+| `financeUtils.js` | Shared math/date helpers (`roundMoney`, `localDateKey`, period utilities, `distributeAmount`) used across components and tests |
 
 ### Offline-first write path
 
@@ -57,6 +72,10 @@ All Supabase writes go through `sendSupabaseRequest` in `offlineSync.js`. If the
 ### Local backup
 
 The full in-memory state is also persisted to `localStorage` key `nomad-v5` as a JSON snapshot and loaded on startup as a fallback when Supabase is unreachable.
+
+### PWA
+
+The app is a Progressive Web App. `public/sw.js` is a cache-first service worker (cache key `nomad-app-v9`) that pre-caches the app shell (`/`, `/manifest.json`, `/icon-192.png`, `/icon-512.png`) on install and serves stale-while-revalidate for navigation requests. `public/manifest.json` declares `display: standalone` so the app installs to the home screen. When updating the service worker, increment `CACHE_NAME` to invalidate old caches.
 
 ### Backend (`api/` — Vercel serverless)
 
