@@ -63,6 +63,7 @@ Each user brings their own Supabase project. On first run, `CredentialSetup.jsx`
 | `billReminders.js` | Computes due/upcoming recurring bills for toast reminders |
 | `receiptUpload.js` | Compresses images (canvas, 800px / 70% JPEG) then uploads to Cloudinary |
 | `currencyConverter.js` | Fetches INR exchange rates (daily-cached in localStorage) |
+| `financeUtils.js` | Shared math/date helpers (`roundMoney`, `localDateKey`, period utilities, `distributeAmount`) used across components and tests |
 
 ### Offline-first write path
 
@@ -71,6 +72,10 @@ All Supabase writes go through `sendSupabaseRequest` in `offlineSync.js`. If the
 ### Local backup
 
 The full in-memory state is also persisted to `localStorage` key `nomad-v5` as a JSON snapshot and loaded on startup as a fallback when Supabase is unreachable.
+
+### PWA
+
+The app is a Progressive Web App. `public/sw.js` is a cache-first service worker (cache key `nomad-app-v9`) that pre-caches the app shell (`/`, `/manifest.json`, `/icon-192.png`, `/icon-512.png`) on install and serves stale-while-revalidate for navigation requests. `public/manifest.json` declares `display: standalone` so the app installs to the home screen. When updating the service worker, increment `CACHE_NAME` to invalidate old caches.
 
 ### Backend (`api/` — Vercel serverless)
 
