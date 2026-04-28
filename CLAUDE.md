@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NOMAD** is a personal finance tracker (expenses, income, transfers, recurring bills, splits) with an optional daily-routine sub-app. It is a React 19 + Vite SPA deployed on Vercel, backed by the user's own Supabase project (BYODB model — no central data store).
 
+## Tech stack
+
+- **Frontend:** React 19, Vite, Recharts
+- **Backend:** TypeScript, Vercel serverless functions (`api/`)
+- **Database:** Supabase (PostgreSQL) — user-hosted, credentials stored in localStorage
+- **Image uploads:** Cloudinary
+- **Email reports:** Nodemailer (Gmail SMTP)
+- **Date utilities:** date-fns
+
 ## Commands
 
 ```bash
@@ -27,18 +36,39 @@ npm run test:watch   # Run tests in watch mode
 npm run test:coverage  # Run tests with v8 coverage report
 ```
 
-Tests use **Vitest** with a jsdom environment (configured in `vite.config.js` under the `test` key). Test files live in `src/__tests__/` (JS/JSX modules) and `api/__tests__/` (TypeScript API). Coverage is collected via `@vitest/coverage-v8`.
+## Testing
 
-| Test file | What it covers |
+These are **automated tests** — running `npm test` executes all 126 test cases automatically with no manual interaction. Vitest finds every `*.test.js` / `*.test.ts` file, runs each `it(...)` case, and reports pass/fail in the terminal.
+
+**When to run them:**
+- Before merging any change — catch regressions before they ship
+- After refactoring — confirm behaviour is unchanged
+- In CI — add `npm test` to a GitHub Actions workflow to validate every push automatically
+
+**What they cover:** Unit tests for pure functions and utility modules (financial calculations, offline queue, credentials, currency conversion, bill reminders, backend scheduling logic). They test logic in isolation with mocked fetch and localStorage.
+
+**What they don't cover:** Full UI interactions (clicking buttons, rendering screens). That would require an end-to-end tool like Playwright or Cypress.
+
+Tests use **Vitest** with a **jsdom** environment (configured in `vite.config.js` under the `test` key). Coverage is collected via `@vitest/coverage-v8`.
+
+### Test file locations
+
+| Source file | Test file |
 |---|---|
-| `src/__tests__/billReminders.test.js` | `billReminders.js` — due/upcoming recurring-bill logic |
-| `src/__tests__/credentials.test.js` | `credentials.js` — localStorage credential read/write |
-| `src/__tests__/currencyConverter.test.js` | `currencyConverter.js` — exchange-rate fetch + cache |
-| `src/__tests__/financeUtils.test.js` | Date/finance utility helpers |
-| `src/__tests__/offlineSync.test.js` | `offlineSync.js` — write-ahead queue and replay |
-| `api/__tests__/_shared.test.ts` | `api/_shared.ts` — shared report/email utilities |
+| `src/financeUtils.js` | `src/__tests__/financeUtils.test.js` |
+| `src/billReminders.js` | `src/__tests__/billReminders.test.js` |
+| `src/credentials.js` | `src/__tests__/credentials.test.js` |
+| `src/currencyConverter.js` | `src/__tests__/currencyConverter.test.js` |
+| `src/offlineSync.js` | `src/__tests__/offlineSync.test.js` |
+| `api/_shared.ts` | `api/__tests__/_shared.test.ts` |
 
-The `api/` directory is TypeScript (`@vercel/node` serverless functions). It has its own `package.json` (`"type": "commonjs"`). The TypeScript in `api/` is compiled by Vercel at deploy time — there is no local tsc build step for it.
+### Testing conventions
+
+- **localStorage** is provided by jsdom. Call `localStorage.clear()` in `beforeEach`.
+- **fetch** is mocked with `global.fetch = vi.fn(...)`. Restore with `vi.restoreAllMocks()` in `afterEach`.
+- **navigator.onLine** is set via `Object.defineProperty(navigator, 'onLine', { value: ..., configurable: true })`.
+- **offlineSync.js** has module-level state (`listeners` Set, `syncInitialized` flag). Use `vi.resetModules()` + dynamic `import()` inside each test or `describe` block to get a clean module instance.
+- **Fake timers** (`vi.useFakeTimers`) — always pair with `afterEach(() => vi.useRealTimers())`. When testing code that throws after all retry attempts, register `expect(promise).rejects` **before** calling `vi.runAllTimersAsync()` to avoid unhandled-rejection warnings.
 
 ## Architecture
 
@@ -110,6 +140,13 @@ All monetary amounts are stored in **INR (₹)**. Foreign-currency input convert
 ### Hardcoded data
 
 Wallets (`WALLETS`), default expense categories (`DC`), income sources (`DI`), and recurring categories (`RC`) are defined as constants in `App.jsx`. Users can add custom categories/sources; these are stored in Supabase alongside transactions.
+
+## Key source conventions
+
+- `financeUtils.js` contains all pure financial calculations (`roundMoney`, `distributeAmount`, recurring due-date logic, etc.). Keep this file free of side effects — no localStorage, no fetch.
+- Supabase writes go through `sendSupabaseRequest` in `offlineSync.js`, which handles offline queuing automatically.
+- Credentials (Supabase URL + anon key) are read from localStorage via `getCredentials()` at module load time in `App.jsx`. Build-time env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) are fallbacks.
+- The API (`api/`) uses CommonJS (`"type": "commonjs"` in `api/package.json`) while the frontend uses ESM (`"type": "module"` in the root `package.json`). Do not mix them.
 
 ## ESLint
 
