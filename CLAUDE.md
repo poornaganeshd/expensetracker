@@ -48,6 +48,17 @@ npm run lint         # ESLint
 
 ## Testing
 
+These are **automated tests** — running `npm test` executes all 126 test cases automatically with no manual interaction. Vitest finds every `*.test.js` / `*.test.ts` file, runs each `it(...)` case, and reports pass/fail in the terminal.
+
+**When to run them:**
+- Before merging any change — catch regressions before they ship
+- After refactoring — confirm behaviour is unchanged
+- In CI — add `npm test` to a GitHub Actions workflow to validate every push automatically
+
+**What they cover:** Unit tests for pure functions and utility modules (financial calculations, offline queue, credentials, currency conversion, bill reminders, backend scheduling logic). They test logic in isolation with mocked fetch and localStorage.
+
+**What they don't cover:** Full UI interactions (clicking buttons, rendering screens). That would require an end-to-end tool like Playwright or Cypress.
+
 Tests use **Vitest** with a **jsdom** environment.
 
 ```bash
