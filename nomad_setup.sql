@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS expenses (
   date        TEXT,
   "eventId"   TEXT,
   "groupId"   TEXT,
-  receipt_url TEXT
+  receipt_url TEXT,
+  "paidBy"    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS incomes (
@@ -54,7 +55,8 @@ CREATE TABLE IF NOT EXISTS splits (
   direction TEXT,
   settled   BOOLEAN,
   "eventId" TEXT,
-  "groupId" TEXT
+  "groupId" TEXT,
+  note      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS recurring (
@@ -76,11 +78,13 @@ CREATE TABLE IF NOT EXISTS recurring (
 );
 
 CREATE TABLE IF NOT EXISTS events (
-  id     TEXT PRIMARY KEY,
-  name   TEXT,
-  emoji  TEXT,
-  date   TEXT,
-  status TEXT
+  id           TEXT    PRIMARY KEY,
+  name         TEXT,
+  emoji        TEXT,
+  date         TEXT,
+  status       TEXT,
+  type         TEXT    DEFAULT 'solo',
+  participants JSONB   DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS wallet_balances (
@@ -145,6 +149,13 @@ CREATE INDEX IF NOT EXISTS idx_report_schedules_due
 
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_week  INTEGER CHECK (send_day_of_week BETWEEN 0 AND 6);
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_month INTEGER CHECK (send_day_of_month BETWEEN 1 AND 28);
+
+-- ── MIGRATIONS: add columns to existing tables ────────────────
+-- Events feature overhaul (group events, split notes, paidBy)
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS "paidBy"      TEXT;
+ALTER TABLE splits   ADD COLUMN IF NOT EXISTS note          TEXT;
+ALTER TABLE events   ADD COLUMN IF NOT EXISTS type          TEXT DEFAULT 'solo';
+ALTER TABLE events   ADD COLUMN IF NOT EXISTS participants  JSONB DEFAULT '[]';
 
 ALTER TABLE report_schedules    DISABLE ROW LEVEL SECURITY;
 ALTER TABLE report_delivery_log DISABLE ROW LEVEL SECURITY;

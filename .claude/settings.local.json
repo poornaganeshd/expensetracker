@@ -19,7 +19,8 @@
       "WebFetch(domain:developers.raycast.com)",
       "WebFetch(domain:uicolors.org)",
       "WebFetch(domain:mobbin.com)",
-      "WebFetch(domain:coloruxlab.com)"
+      "WebFetch(domain:coloruxlab.com)",
+      "Bash(npm test *)"
     ]
   }
 }
