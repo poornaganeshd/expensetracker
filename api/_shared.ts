@@ -62,7 +62,11 @@ export function getNextSendAt(s: Schedule, now: Date): Date {
   } else {
     n.setUTCDate(n.getUTCDate() + (s.custom_days ?? 7));
   }
-  n.setUTCHours(s.send_hour, 0, 0, 0);
+  // Convert IST send_hour to UTC (IST = UTC+5:30)
+  const istMin = s.send_hour * 60 - 330;
+  const utcMin = ((istMin % 1440) + 1440) % 1440;
+  if (istMin < 0) n.setUTCDate(n.getUTCDate() - 1);
+  n.setUTCHours(Math.floor(utcMin / 60), utcMin % 60, 0, 0);
   return n;
 }
 
