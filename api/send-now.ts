@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const userId = supabase_url.replace("https://", "").split(".")[0];
   let schedules: Schedule[];
   try {
-    schedules = await userGet(supabase_url, anon_key, `/report_schedules?user_id=eq.${userId}&select=*&limit=1`);
+    schedules = await userGet(supabase_url, anon_key, `/report_schedules?user_id=eq.${userId}&select=*&limit=1`) as Schedule[];
   } catch (e) {
     return res.status(502).json({ error: "Could not reach Supabase", detail: (e as Error).message });
   }

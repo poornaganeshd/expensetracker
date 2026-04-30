@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const registryRaw = await fetch(`${REGISTRY_URL}/rest/v1/user_registry?select=*`, { headers: makeHeaders(REGISTRY_KEY) });
   let registry: UserEntry[] = [];
   if (registryRaw.ok) {
-    registry = await registryRaw.json();
+    registry = await registryRaw.json() as UserEntry[];
   } else {
     const body = await registryRaw.text().catch(() => "(unreadable)");
     console.error(`[send-reports] Registry fetch failed: ${registryRaw.status} — ${body}`);
@@ -47,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   for (const user of allUsers) {
     let schedules: Schedule[] = [];
     try {
-      schedules = await userGet(user.supabase_url, user.anon_key, `/report_schedules?is_active=eq.true&next_send_at=lte.${nowIso}&select=*`);
+      schedules = await userGet(user.supabase_url, user.anon_key, `/report_schedules?is_active=eq.true&next_send_at=lte.${nowIso}&select=*`) as Schedule[];
     } catch { continue; }
 
     for (const s of schedules) {
