@@ -887,6 +887,17 @@ export default function Nomad() {
             if (lp.categories?.length) sCats(lp.categories);
             if (lp.incomeSources?.length) sIsrc(lp.incomeSources);
           } catch { }
+          // Sync custom categories/sources from Supabase (cross-device)
+          try {
+            const cfgResp = await fetch(`${SB_URL}/rest/v1/user_config?id=eq.finance-config&select=*&limit=1`, { headers: sbH });
+            if (cfgResp.ok) {
+              const cfgRows = await cfgResp.json();
+              const cfg = cfgRows[0]?.data;
+              if (cfg?.categories?.length) sCats(cfg.categories);
+              if (cfg?.incomeSources?.length) sIsrc(cfg.incomeSources);
+              if (cfg?.recCats?.length) sRecCats(cfg.recCats);
+            }
+          } catch { }
         }
       } catch {
         loadLocalBackup({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sEvs, sDm, sWsb, sRecCats });
@@ -904,6 +915,16 @@ export default function Nomad() {
       try { localStorage.setItem("nomad-v5", JSON.stringify({ expenses: ex, incomes: inc, transfers: tr, settlements: stl, categories: cats, incomeSources: isrc, splits: sp, events: evs, recurring: rec, darkMode: dm, walletStartBal: wsb, recCats, _modified: Date.now() })) } catch { }
     }, 800);
   }, [ex, inc, tr, stl, cats, isrc, sp, evs, rec, dm, wsb, loaded]);
+
+  // Persist custom categories/sources/recCats to Supabase so new devices can sync them
+  const configSaveRef = useRef(null);
+  useEffect(() => {
+    if (!loaded || !SB_ENABLED) return;
+    if (configSaveRef.current) clearTimeout(configSaveRef.current);
+    configSaveRef.current = setTimeout(() => {
+      sbUpsert("user_config", [{ id: "finance-config", data: { categories: cats, incomeSources: isrc, recCats }, last_modified_at: Date.now().toString() }], "user_config:finance-config");
+    }, 800);
+  }, [cats, isrc, recCats, loaded]);
 
   const allM = useMemo(() => { const s = new Set(); ex.forEach(e => s.add(mk(e.date))); inc.forEach(i => s.add(mk(i.date))); return [...s].sort() }, [ex, inc]);
   const flt = useMemo(() => fm === "all" ? { expenses: ex, incomes: inc, settlements: stl } : { expenses: ex.filter(e => mk(e.date) === fm), incomes: inc.filter(i => mk(i.date) === fm), settlements: stl.filter(s => mk(s.date) === fm) }, [ex, inc, stl, fm]);
