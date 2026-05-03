@@ -95,11 +95,16 @@ describe('getPeriod', () => {
 describe('getNextSendAt', () => {
   const now = new Date('2024-04-15T08:00:00Z');
 
+  // send_hour is stored as IST; getNextSendAt converts to UTC (IST = UTC+5:30).
+  // So send_hour X IST → (X*60-330) minutes UTC → floor/30 for hours/minutes.
+  // When X < 6 (istMin < 0) the UTC time falls on the previous calendar day.
+
   it('weekly: adds 7 days', () => {
     const s = makeSchedule({ frequency: 'weekly', send_hour: 8 });
     const next = getNextSendAt(s, now);
     expect(next.toISOString().slice(0, 10)).toBe('2024-04-22');
-    expect(next.getUTCHours()).toBe(8);
+    expect(next.getUTCHours()).toBe(2);   // 8 IST → 2:30 UTC
+    expect(next.getUTCMinutes()).toBe(30);
   });
 
   it('weekly with send_day_of_week adjusts to correct weekday', () => {
@@ -107,14 +112,16 @@ describe('getNextSendAt', () => {
     const s = makeSchedule({ frequency: 'weekly', send_day_of_week: 3, send_hour: 9 });
     const next = getNextSendAt(s, now);
     expect(next.getUTCDay()).toBe(3); // Wednesday
-    expect(next.getUTCHours()).toBe(9);
+    expect(next.getUTCHours()).toBe(3);   // 9 IST → 3:30 UTC
+    expect(next.getUTCMinutes()).toBe(30);
   });
 
   it('monthly: adds 1 month', () => {
     const s = makeSchedule({ frequency: 'monthly', send_hour: 7 });
     const next = getNextSendAt(s, now);
     expect(next.getUTCMonth()).toBe(4); // May (0-indexed)
-    expect(next.getUTCHours()).toBe(7);
+    expect(next.getUTCHours()).toBe(1);   // 7 IST → 1:30 UTC
+    expect(next.getUTCMinutes()).toBe(30);
   });
 
   it('monthly with send_day_of_month clamps to 28', () => {
@@ -127,7 +134,8 @@ describe('getNextSendAt', () => {
     const s = makeSchedule({ frequency: 'quarterly', send_hour: 6 });
     const next = getNextSendAt(s, now);
     expect(next.getUTCMonth()).toBe(6); // July
-    expect(next.getUTCHours()).toBe(6);
+    expect(next.getUTCHours()).toBe(0);   // 6 IST → 0:30 UTC
+    expect(next.getUTCMinutes()).toBe(30);
   });
 
   it('custom: adds custom_days', () => {
@@ -136,21 +144,24 @@ describe('getNextSendAt', () => {
     const expectedDate = new Date(now);
     expectedDate.setUTCDate(expectedDate.getUTCDate() + 30);
     expect(next.toISOString().slice(0, 10)).toBe(expectedDate.toISOString().slice(0, 10));
-    expect(next.getUTCHours()).toBe(10);
+    expect(next.getUTCHours()).toBe(4);   // 10 IST → 4:30 UTC
+    expect(next.getUTCMinutes()).toBe(30);
   });
 
   it('custom falls back to 7 days when custom_days is null', () => {
+    // send_hour: 0 IST = 18:30 UTC of the previous day, so the date shifts back by 1.
     const s = makeSchedule({ frequency: 'custom', custom_days: null, send_hour: 0 });
     const next = getNextSendAt(s, now);
-    const expectedDate = new Date(now);
-    expectedDate.setUTCDate(expectedDate.getUTCDate() + 7);
-    expect(next.toISOString().slice(0, 10)).toBe(expectedDate.toISOString().slice(0, 10));
+    expect(next.toISOString().slice(0, 10)).toBe('2024-04-21'); // 7 days - 1 day (IST midnight → prev UTC day)
+    expect(next.getUTCHours()).toBe(18);  // 0 IST → 18:30 UTC
+    expect(next.getUTCMinutes()).toBe(30);
   });
 
-  it('sets minutes, seconds, and ms to 0', () => {
+  it('sets seconds and ms to 0 (minutes fixed at 30 due to IST offset)', () => {
     const s = makeSchedule({ frequency: 'weekly', send_hour: 14 });
     const next = getNextSendAt(s, now);
-    expect(next.getUTCMinutes()).toBe(0);
+    expect(next.getUTCHours()).toBe(8);   // 14 IST → 8:30 UTC
+    expect(next.getUTCMinutes()).toBe(30);
     expect(next.getUTCSeconds()).toBe(0);
     expect(next.getUTCMilliseconds()).toBe(0);
   });
