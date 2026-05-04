@@ -1,5 +1,13 @@
 const QUEUE_KEY = "nomad-sync-queue-v1";
+const REQUEST_TIMEOUT_MS = 15000;
+const FLUSH_BACKOFF_BASE_MS = 1000;
+const FLUSH_BACKOFF_MAX_MS = 60000;
+
 const listeners = new Set();
+const dropListeners = new Set();
+
+let consecutiveFlushFailures = 0;
+let nextFlushAllowedAt = 0;
 
 const canUseStorage = () => typeof window !== "undefined" && typeof localStorage !== "undefined";
 
@@ -11,16 +19,32 @@ const safeJsonParse = (value, fallback) => {
   }
 };
 
+const notifyDrops = (info) => {
+  dropListeners.forEach((listener) => {
+    try { listener(info); } catch { /* listener errors don't propagate */ }
+  });
+};
+
+const safeSetItem = (key, value) => {
+  if (!canUseStorage()) return false;
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    notifyDrops({ kind: "storage", error: e?.message ?? "storage error" });
+    return false;
+  }
+};
+
 const readQueue = () => {
   if (!canUseStorage()) return [];
   return safeJsonParse(localStorage.getItem(QUEUE_KEY) || "[]", []);
 };
 
 const writeQueue = (queue) => {
-  if (!canUseStorage()) return;
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-  const size = queue.length;
-  listeners.forEach((listener) => listener(size));
+  const ok = safeSetItem(QUEUE_KEY, JSON.stringify(queue));
+  if (!ok) return;
+  listeners.forEach((listener) => listener(queue.length));
 };
 
 export const getPendingSyncCount = () => readQueue().length;
@@ -29,6 +53,13 @@ export const subscribePendingSync = (listener) => {
   listeners.add(listener);
   listener(getPendingSyncCount());
   return () => listeners.delete(listener);
+};
+
+// Subscribers receive {kind: "rejected"|"storage", status?, item?, error?}
+// when an item is dropped from the queue (4xx, status:0, or storage failure).
+export const subscribeSyncDrops = (listener) => {
+  dropListeners.add(listener);
+  return () => dropListeners.delete(listener);
 };
 
 const buildQueueItem = ({ path, method = "GET", headers = {}, body = null, dedupeKey = null }) => ({
@@ -57,12 +88,20 @@ const dropQueuedByDedupeKey = (dedupeKey) => {
   if (next.length !== queue.length) writeQueue(next);
 };
 
-const performRequest = (item) =>
-  fetch(item.path, {
+const performRequest = (item) => {
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS) : null;
+  const p = fetch(item.path, {
     method: item.method,
     headers: item.headers,
     body: item.body,
+    signal: ctrl?.signal,
   });
+  if (timer) {
+    p.finally(() => clearTimeout(timer)).catch(() => {});
+  }
+  return p;
+};
 
 export const queueSupabaseRequest = (request) => enqueueRequest(buildQueueItem(request));
 
@@ -98,13 +137,23 @@ export const sendSupabaseRequest = async (request, options = {}) => {
 };
 
 export const flushSyncQueue = async () => {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return { synced: 0, pending: getPendingSyncCount() };
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return { synced: 0, pending: getPendingSyncCount() };
+  }
+  if (Date.now() < nextFlushAllowedAt) {
+    return { synced: 0, pending: getPendingSyncCount() };
+  }
 
   const queue = readQueue();
-  if (!queue.length) return { synced: 0, pending: 0 };
+  if (!queue.length) {
+    consecutiveFlushFailures = 0;
+    nextFlushAllowedAt = 0;
+    return { synced: 0, pending: 0 };
+  }
 
   const remaining = [];
   let synced = 0;
+  let progressedDuringFlush = false;
 
   for (let index = 0; index < queue.length; index += 1) {
     const item = queue[index];
@@ -112,28 +161,46 @@ export const flushSyncQueue = async () => {
       const response = await performRequest(item);
       if (response.ok) {
         synced += 1;
+        progressedDuringFlush = true;
         continue;
       }
 
-      // Keep failed items queued unless the server explicitly rejects them as client errors.
-      if (response.status >= 500 || response.status === 0) {
+      // Server-side problem: keep this and the rest, stop flushing.
+      if (response.status >= 500) {
         remaining.push(item, ...queue.slice(index + 1));
         break;
       }
 
-      if (response.status >= 400) {
-        continue;
-      }
-
-      remaining.push(item, ...queue.slice(index + 1));
-      break;
+      // Definitive client-side reject (4xx) OR opaque/CORS (status: 0).
+      // Drop and notify the UI so the user knows a write was lost.
+      progressedDuringFlush = true;
+      notifyDrops({ kind: "rejected", status: response.status, item });
+      continue;
     } catch {
+      // AbortError, network failure, DNS — keep this and the rest, stop.
       remaining.push(item, ...queue.slice(index + 1));
       break;
     }
   }
 
   writeQueue(remaining);
+
+  if (remaining.length === 0) {
+    consecutiveFlushFailures = 0;
+    nextFlushAllowedAt = 0;
+  } else if (!progressedDuringFlush) {
+    consecutiveFlushFailures += 1;
+    const delay = Math.min(
+      FLUSH_BACKOFF_MAX_MS,
+      FLUSH_BACKOFF_BASE_MS * (2 ** (consecutiveFlushFailures - 1))
+    );
+    nextFlushAllowedAt = Date.now() + delay;
+  } else {
+    // Made some progress — reset backoff.
+    consecutiveFlushFailures = 0;
+    nextFlushAllowedAt = 0;
+  }
+
   return { synced, pending: remaining.length };
 };
 

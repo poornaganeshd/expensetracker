@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { FilmSlate, ForkKnife, Airplane, GameController, ShoppingCart, MusicNote, Trophy, Confetti, BookOpen, Briefcase, Warning } from "@phosphor-icons/react";
 import { ComposedChart, Bar, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import RoutineApp from "./Routine";
-import { flushSyncQueue, getPendingSyncCount, sendSupabaseRequest, subscribePendingSync } from "./offlineSync";
+import { flushSyncQueue, getPendingSyncCount, sendSupabaseRequest, subscribePendingSync, subscribeSyncDrops } from "./offlineSync";
 import { checkBillReminders } from "./billReminders";
 import { getINRRate, saveCurrencyMeta, getCurrencyMeta } from "./currencyConverter";
 import ReceiptPicker from "./ReceiptPicker";
@@ -778,6 +778,11 @@ export default function Nomad() {
   const dismissToast = (id) => sToasts(prev => prev.filter(t => t.id !== id));
 
   useEffect(() => subscribePendingSync(sPendingSync), []);
+
+  useEffect(() => subscribeSyncDrops((info) => {
+    if (info.kind === "storage") { showT("Storage full — clear some data or export and reset", "error"); return; }
+    if (info.kind === "rejected") { const code = info.status === 0 ? "blocked" : info.status; showT(`Sync rejected (${code}) — change couldn't be saved`, "error"); }
+  }), []);
 
   useEffect(() => {
     if (!loaded || !SB_ENABLED) return;
