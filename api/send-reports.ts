@@ -44,11 +44,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ...registry.filter(u => u.supabase_url !== REGISTRY_URL),
   ];
 
-  for (const user of allUsers) {
+  // Per-user wall-clock cap: stops one slow Supabase project (cold start, throttled,
+  // paused free-tier) from blocking everyone behind it within the Vercel function's
+  // own timeout.
+  const PER_USER_TIMEOUT_MS = 30_000;
+  // Bounded concurrency. Gmail SMTP is the real bottleneck; 5 in flight keeps us
+  // well under per-second sending limits while overlapping the Supabase fetches.
+  const CONCURRENCY = 5;
+
+  const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> =>
+    Promise.race([
+      promise,
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
+    ]);
+
+  const processUser = async (user: UserEntry) => {
     let schedules: Schedule[] = [];
     try {
-      schedules = await userGet(user.supabase_url, user.anon_key, `/report_schedules?is_active=eq.true&next_send_at=lte.${nowIso}&select=*`) as Schedule[];
-    } catch { continue; }
+      schedules = await withTimeout(
+        userGet(user.supabase_url, user.anon_key, `/report_schedules?is_active=eq.true&next_send_at=lte.${nowIso}&select=*`),
+        PER_USER_TIMEOUT_MS,
+        `schedules ${user.supabase_url}`,
+      ) as Schedule[];
+    } catch (e) {
+      results.push({ user: user.supabase_url, scheduleId: "—", status: "failed", error: (e as Error).message });
+      return;
+    }
 
     for (const s of schedules) {
       const { start, end } = getPeriod(s, now);
@@ -58,7 +79,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let errMsg: string | undefined;
 
       try {
-        await withRetry(() => processSchedule(s, user.supabase_url, user.anon_key, transporter, GMAIL_USER, now));
+        await withTimeout(
+          withRetry(() => processSchedule(s, user.supabase_url, user.anon_key, transporter, GMAIL_USER, now)),
+          PER_USER_TIMEOUT_MS,
+          `send ${user.supabase_url}`,
+        );
         await userPatch(user.supabase_url, user.anon_key, `/report_schedules?id=eq.${s.id}`, {
           next_send_at: getNextSendAt(s, now).toISOString(),
           last_sent_at: nowIso,
@@ -76,6 +101,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       results.push({ user: user.supabase_url, scheduleId: s.id, status, error: errMsg });
     }
+  };
+
+  // Process users in chunks of CONCURRENCY at a time. Promise.allSettled means
+  // one user's failure cannot break the chunk for everyone else.
+  for (let i = 0; i < allUsers.length; i += CONCURRENCY) {
+    const chunk = allUsers.slice(i, i + CONCURRENCY);
+    await Promise.allSettled(chunk.map(processUser));
   }
 
   return res.status(200).json({ processed: results.length, results });
