@@ -7,8 +7,10 @@ import {
 import type { Schedule } from "./_shared.js";
 import { format } from "date-fns";
 
-const GMAIL_USER = process.env.GMAIL_USER!;
-const GMAIL_PASS = process.env.GMAIL_APP_PASSWORD!;
+const GMAIL_USER     = process.env.GMAIL_USER!;
+const GMAIL_PASS     = process.env.GMAIL_APP_PASSWORD!;
+const REGISTRY_URL   = process.env.VITE_SUPABASE_URL;
+const REGISTRY_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -16,6 +18,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { supabase_url, anon_key } = (req.body ?? {}) as { supabase_url?: string; anon_key?: string };
   if (!supabase_url || !anon_key) return res.status(400).json({ error: "supabase_url and anon_key required" });
+
+  // Reject the trivial open-relay abuse: caller's supabase_url must exist in the
+  // owner's user_registry (or be the owner's own URL). This stops attackers who
+  // spin up their own Supabase project just to relay spam through our Gmail.
+  if (REGISTRY_URL && REGISTRY_KEY && supabase_url !== REGISTRY_URL) {
+    const lookupUrl = `${REGISTRY_URL}/rest/v1/user_registry?supabase_url=eq.${encodeURIComponent(supabase_url)}&select=supabase_url`;
+    let lookupRes: Response;
+    try {
+      lookupRes = await fetch(lookupUrl, { headers: { apikey: REGISTRY_KEY, Authorization: `Bearer ${REGISTRY_KEY}` } });
+    } catch (e) {
+      return res.status(503).json({ error: "Could not verify caller", detail: (e as Error).message });
+    }
+    if (!lookupRes.ok) return res.status(503).json({ error: "Could not verify caller", status: lookupRes.status });
+    const rows = await lookupRes.json().catch(() => []) as Array<{ supabase_url: string }>;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(403).json({ error: "Caller is not a registered NOMAD user. Open the app once to register." });
+    }
+  }
 
   const userId = supabase_url.replace("https://", "").split(".")[0];
   let schedules: Schedule[];
