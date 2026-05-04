@@ -110,6 +110,36 @@ ALTER TABLE recurring       REPLICA IDENTITY DEFAULT;
 ALTER TABLE events          REPLICA IDENTITY DEFAULT;
 ALTER TABLE wallet_balances REPLICA IDENTITY DEFAULT;
 
+-- ── 1b. UPDATED_AT COLUMNS + TRIGGER ─────────────────────────
+-- Adds updated_at to every core table so future conflict detection
+-- (last-write-wins guards, incremental sync) has a server-stamped value
+-- to compare against. Idempotent — safe on re-run.
+
+CREATE OR REPLACE FUNCTION nomad_touch_updated_at() RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$
+DECLARE
+  t TEXT;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY[
+    'expenses','incomes','transfers','settlements','splits',
+    'recurring','events','wallet_balances'
+  ]) LOOP
+    EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()', t);
+    EXECUTE format('DROP TRIGGER IF EXISTS %I_touch_updated_at ON %I', t, t);
+    EXECUTE format($q$
+      CREATE TRIGGER %I_touch_updated_at
+        BEFORE INSERT OR UPDATE ON %I
+        FOR EACH ROW EXECUTE FUNCTION nomad_touch_updated_at()
+    $q$, t, t);
+  END LOOP;
+END $$;
+
 -- ── 2. EMAIL REPORT TABLES ───────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS report_schedules (
