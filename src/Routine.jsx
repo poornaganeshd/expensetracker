@@ -2420,8 +2420,9 @@ const LogScreen = ({ allData, config }) => {
         const d = new Date();
         const todayK = todayKey(d);
         if (!allData[todayK] || dayLevel(allData[todayK]) < 2) d.setDate(d.getDate() - 1);
+        // Walk back through history; cap is a sanity bound only (~13.7 years).
         let safety = 0;
-        while (safety < 365) {
+        while (safety < 5000) {
             const rec = allData[todayKey(d)];
             if (rec && dayLevel(rec) >= 2) { s++; d.setDate(d.getDate() - 1); safety++; }
             else break;
@@ -3303,8 +3304,9 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
         if (!allData[todayK] || dayLevel(allData[todayK]) < 2) {
             d.setDate(d.getDate() - 1);
         }
+        // Walk back through history; cap is a sanity bound only (~13.7 years).
         let safety = 0;
-        while (safety < 365) {
+        while (safety < 5000) {
             const rec = allData[todayKey(d)];
             if (rec && dayLevel(rec) >= 2) { s++; d.setDate(d.getDate() - 1); safety++; }
             else break;
