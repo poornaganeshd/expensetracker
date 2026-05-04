@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Tech stack
 
-- **Frontend:** React 19, Vite, Recharts
+- **Frontend:** React 19, Vite, Recharts, @phosphor-icons/react
 - **Backend:** TypeScript, Vercel serverless functions (`api/`)
 - **Database:** Supabase (PostgreSQL) — user-hosted, credentials stored in localStorage
 - **Image uploads:** Cloudinary
@@ -78,11 +78,11 @@ Each user brings their own Supabase project. On first run, `CredentialSetup.jsx`
 
 ### Frontend (`src/`)
 
-- **`App.jsx`** — Single large component (~2 000+ lines) that owns all state and renders the entire app. It contains inline helper functions (`sbGet`, `sbWrite`, `sbUpsert`, `sbDelete`), all date utilities, inline SVG icon components (`DI2`, `Lion`, `LionM`), and every view (expenses, income, transfers, recurring, splits, settings, reports). Avoid splitting it into separate files without a clear need — the current design is intentional.
-- **`Routine.jsx`** — Self-contained sub-app for daily food/skincare/habit tracking, accessible from a tab in the main app.
+- **`App.jsx`** — Single large component (~1 470 lines) that owns all state and renders the entire app. It contains inline helper functions (`sbGet`, `sbWrite`, `sbUpsert`, `sbDelete`), all date utilities, inline SVG icon components (`DI2`, `Lion`, `LionM`), the inline `SpendingBreakdown` chart component, and every view (expenses, income, transfers, recurring, splits, settings, reports). Avoid splitting it into separate files without a clear need — the current design is intentional.
+- **`Routine.jsx`** — Self-contained sub-app (~3 400 lines) for daily food/skincare/habit tracking, accessible from a tab in the main app. Larger than `App.jsx`.
 - **`CredentialSetup.jsx`** — Shown in place of the main app when no credentials exist. Also reachable from Settings.
 - **`ReceiptPicker.jsx`** — Receipt photo capture/picker for attaching to transactions.
-- **`components/TrendChart.jsx`** — Recharts-based spending trend chart.
+- **`components/TrendChart.jsx`** — Legacy Recharts-based spending trend chart. No longer imported by `App.jsx` (replaced by the inline `SpendingBreakdown` component); treat as dead code unless repurposed.
 
 ### Support modules (`src/`)
 
@@ -111,7 +111,7 @@ The app is a Progressive Web App. `public/sw.js` is a cache-first service worker
 
 | File | Route | Purpose |
 |---|---|---|
-| `send-reports.ts` | `POST /api/send-reports` (also Vercel cron at `0 2 * * *`) | Reads `user_registry` in the owner's Supabase, iterates all registered users, sends scheduled email reports via Gmail/nodemailer |
+| `send-reports.ts` | `POST /api/send-reports` (also Vercel cron at `30 2 * * *`) | Reads `user_registry` in the owner's Supabase, iterates all registered users, sends scheduled email reports via Gmail/nodemailer |
 | `send-now.ts` | `POST /api/send-now` | Sends a report immediately for a single user (manual trigger from Settings) |
 | `setup-user.ts` | `POST /api/setup-user` | Creates report tables in a user's Supabase via the Management API |
 | `_shared.ts` | — | Shared utilities: Supabase helpers, period/schedule math, HTML/CSV email builders |
@@ -140,6 +140,10 @@ All monetary amounts are stored in **INR (₹)**. Foreign-currency input convert
 ### Hardcoded data
 
 Wallets (`WALLETS`), default expense categories (`DC`), income sources (`DI`), and recurring categories (`RC`) are defined as constants in `App.jsx`. Users can add custom categories/sources; these are stored in Supabase alongside transactions.
+
+### Scripts (`scripts/`)
+
+One-off Python utility scripts used during development. `final_rebuild.py` was used to replace the external `TrendChart` component with the inline `SpendingBreakdown` component. These scripts are not part of the build or test pipeline.
 
 ## Key source conventions
 
