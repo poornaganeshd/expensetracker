@@ -13,7 +13,14 @@ import {
   getRecurringAnchorDate, getRecurringDueDate, isRecurringDueToday,
   recurringDaysOverdue, distributeAmount,
 } from "./financeUtils";
-const APP = "NOMAD", CUR = "₹", uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const APP = "NOMAD", CUR = "₹";
+// Use crypto.randomUUID() when available (all modern browsers + Node 14.17+).
+// Falls back to a longer random suffix than the previous 4 chars to keep
+// collision odds astronomically low even under offline-replay bursts.
+const uid = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+};
 
 // Supabase config — localStorage credentials take priority over build-time env vars
 const _creds = getCredentials();
@@ -786,9 +793,9 @@ export default function Nomad() {
 
   useEffect(() => {
     if (!loaded || !SB_ENABLED) return;
-    const uid = SB_URL.replace("https://", "").split(".")[0];
-    const seenKey = `nomad-last-seen-sent-${uid}`;
-    fetch(`${SB_URL}/rest/v1/report_schedules?user_id=eq.${uid}&select=last_sent_at,email&limit=1`, { headers: sbH })
+    const userKey = SB_URL.replace("https://", "").split(".")[0];
+    const seenKey = `nomad-last-seen-sent-${userKey}`;
+    fetch(`${SB_URL}/rest/v1/report_schedules?user_id=eq.${userKey}&select=last_sent_at,email&limit=1`, { headers: sbH })
       .then(r => r.ok ? r.json() : [])
       .then(d => {
         const row = d[0];
@@ -883,7 +890,10 @@ export default function Nomad() {
           sStl(dbStl || []);
           sSp(dbSp || []);
           sRec(dbRec || []);
-          sEvs(dbEvs || []);
+          // Normalize events: participants is JSONB and could be malformed (null,
+          // object, array of non-strings) from a 3rd-party write or a bad import.
+          // Coerce to a clean string[] so the rest of the app can trust it.
+          sEvs((dbEvs || []).map(e => ({ ...e, participants: Array.isArray(e?.participants) ? e.participants.filter(p => typeof p === "string") : [] })));
           if (dbWsb?.length) { const wb = { upi_lite: 0, bank: 0, cash: 0 }; dbWsb.forEach(r => { wb[r.wallet_id] = r.balance }); sWsb(wb) }
           // Restore local-only preferences (not stored in Supabase)
           try {
@@ -950,6 +960,7 @@ export default function Nomad() {
   const addE = data => {
     const amt = roundMoney(data.amount);
     if (amt <= 0) { showT("Enter a valid amount", "error"); return false }
+    if (typeof data.note === "string" && data.note.length > 500) data = { ...data, note: data.note.slice(0, 500) };
     if (data.paidBy && data.paidBy !== "me") {
       const rec = { id: uid(), type: "expense", ...data, amount: amt, walletId: "__tracked__" };
       sEx(p => [rec, ...p]);
@@ -977,8 +988,8 @@ export default function Nomad() {
     showT(online ? "Expense added" : "Expense saved offline", "success");
     return true;
   };
-  const addI = data => { const amt = roundMoney(data.amount); if (data.walletId === "upi_lite") { showT("UPI Lite is for spending only", "error"); return } if (amt <= 0) { showT("Enter a valid amount", "error"); return } const rec = { id: uid(), type: "income", ...data, amount: amt }; sInc(p => [rec, ...p]); sbUpsert("incomes", [toSB(rec, ["id", "amount", "sourceId", "walletId", "note", "date", "receipt_url"])]); dance(); showT(online ? "Income added" : "Income saved offline", "success") };
-  const addT = data => { const b = roundMoney(wBal[data.fromWallet] || 0), amt = roundMoney(data.amount); if (amt <= 0) { showT("Enter an amount above zero", "error"); return } if (b < amt) { showT(`Insufficient balance`, "error"); return } const rec = { id: uid(), type: "transfer", ...data, amount: amt }; sTr(p => [rec, ...p]); sbUpsert("transfers", [toSB(rec, ["id", "amount", "fromWallet", "toWallet", "note", "date"])]); dance(); showT(online ? "Transfer done" : "Transfer queued offline", "success") };
+  const addI = data => { const amt = roundMoney(data.amount); if (data.walletId === "upi_lite") { showT("UPI Lite is for spending only", "error"); return } if (amt <= 0) { showT("Enter a valid amount", "error"); return } if (typeof data.note === "string" && data.note.length > 500) data = { ...data, note: data.note.slice(0, 500) }; const rec = { id: uid(), type: "income", ...data, amount: amt }; sInc(p => [rec, ...p]); sbUpsert("incomes", [toSB(rec, ["id", "amount", "sourceId", "walletId", "note", "date", "receipt_url"])]); dance(); showT(online ? "Income added" : "Income saved offline", "success") };
+  const addT = data => { const b = roundMoney(wBal[data.fromWallet] || 0), amt = roundMoney(data.amount); if (amt <= 0) { showT("Enter an amount above zero", "error"); return } if (b < amt) { showT(`Insufficient balance`, "error"); return } if (typeof data.note === "string" && data.note.length > 500) data = { ...data, note: data.note.slice(0, 500) }; const rec = { id: uid(), type: "transfer", ...data, amount: amt }; sTr(p => [rec, ...p]); sbUpsert("transfers", [toSB(rec, ["id", "amount", "fromWallet", "toWallet", "note", "date"])]); dance(); showT(online ? "Transfer done" : "Transfer queued offline", "success") };
   const settle = (sid, wid) => {
     const s = sp.find(x => x.id === sid);
     if (!s) return;
@@ -1080,8 +1091,8 @@ export default function Nomad() {
   const expBackup = () => { const data = JSON.stringify({ expenses: ex, incomes: inc, transfers: tr, settlements: stl, categories: cats, incomeSources: isrc, splits: sp, events: evs, recurring: rec, darkMode: dm, walletStartBal: wsb, _v: "nomad-v9", _date: new Date().toISOString() }, null, 2); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type: "application/json" })); a.download = `nomad_backup_${localDateKey()}.json`; a.click(); showT("Backup downloaded", "success") };
   const loadReportSchedule = () => {
     if (!SB_ENABLED) return;
-    const uid = SB_URL.replace("https://", "").split(".")[0];
-    fetch(`${SB_URL}/rest/v1/report_schedules?user_id=eq.${uid}&select=*&limit=1`, { headers: sbH })
+    const userKey = SB_URL.replace("https://", "").split(".")[0];
+    fetch(`${SB_URL}/rest/v1/report_schedules?user_id=eq.${userKey}&select=*&limit=1`, { headers: sbH })
       .then(r => r.ok ? r.json() : [])
       .then(d => {
         if (!d[0]) return;
