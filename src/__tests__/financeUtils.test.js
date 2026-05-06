@@ -151,9 +151,11 @@ describe('getRecurringDueDate — monthly', () => {
 
   it('clamps to last day of month when dayOfMonth exceeds month length', () => {
     const r = { frequency: 'monthly', startDate: '2024-01-31', active: true, dayOfMonth: 31 };
-    // Feb 29 < 31 (desired day), so fullMonthsBetween returns 0 → current period is still Jan 31
-    expect(getRecurringDueDate(r, '2024-02-29')).toBe('2024-01-31');
-    // On Mar 31, fullMonthsBetween(Jan 31, Mar 31) = 2 → withClampedDay(2024, 2, 31) = Mar 31
+    // Feb 29 is the clamped anniversary for a 31-day bill — due today
+    expect(getRecurringDueDate(r, '2024-02-29')).toBe('2024-02-29');
+    // Mar 30: Feb anniversary passed, Mar 31 not yet reached — show Mar 31 (upcoming)
+    expect(getRecurringDueDate(r, '2024-03-30')).toBe('2024-03-31');
+    // On Mar 31: due today
     expect(getRecurringDueDate(r, '2024-03-31')).toBe('2024-03-31');
   });
 

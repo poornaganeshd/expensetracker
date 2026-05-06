@@ -16,7 +16,8 @@ const withClampedDay = (year, monthIndex, desiredDay) =>
 
 export const fullMonthsBetween = (start, end) => {
   let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-  if (end.getDate() < start.getDate()) months -= 1;
+  const daysInEndMonth = new Date(end.getFullYear(), end.getMonth() + 1, 0).getDate();
+  if (end.getDate() < Math.min(start.getDate(), daysInEndMonth)) months -= 1;
   return months;
 };
 
@@ -34,8 +35,12 @@ export const getRecurringDueDate = (record, todayString) => {
   const start = dateOnly(record.startDate);
   if (Number.isNaN(start.getTime()) || start > today) return null;
   if (record.frequency === 'monthly') {
-    const months = Math.max(0, fullMonthsBetween(start, today));
-    return isoDate(withClampedDay(start.getFullYear(), start.getMonth() + months, record.dayOfMonth || start.getDate()));
+    const dom = record.dayOfMonth || start.getDate();
+    let months = Math.max(0, fullMonthsBetween(start, today));
+    let due = withClampedDay(start.getFullYear(), start.getMonth() + months, dom);
+    const daysInDueMonth = new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate();
+    if (dom > daysInDueMonth && due < today) { months += 1; due = withClampedDay(start.getFullYear(), start.getMonth() + months, dom); }
+    return isoDate(due);
   }
   if (record.frequency === 'yearly') {
     const monthIndex = Math.max(0, (record.yearMonth || (start.getMonth() + 1)) - 1);
