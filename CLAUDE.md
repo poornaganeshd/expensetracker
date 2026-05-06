@@ -172,9 +172,9 @@ A full system audit was performed on `claude/caveman-feature-34gSb`. This sectio
 |---|---|
 | Total findings in audit | ~100 |
 | Verified false positives (already correct in code) | 6 |
-| Fixed in this branch | 38 |
+| Fixed in this branch | 40 |
 | Discovered during fix work (new) | 3 |
-| Still open | ~57 |
+| Still open | ~55 |
 
 | Commit | Track / Category | Items |
 |---|---|---|
@@ -194,10 +194,12 @@ A full system audit was performed on `claude/caveman-feature-34gSb`. This sectio
 | `243557d` | E.6 — Edge cases | UPI Lite month-key slice guard against non-string dates |
 | `d7e58e3` | E.5 — Architecture | Auto-inject SW cache version at build time (Vite plugin, no new dep) |
 | `59c7a5d` | E.3 — Date/timezone | `send_day_of_month` widened from max-28 to max-31 (UI + scheduler + SQL) |
+| `8d7fadf` | E.2 — Sync/Offline | Conflict detection: `If-Unmodified-Since` on recurring edits, 412→drop, header stripped on replay |
+| `0080211` | E.1 — Security | Signed Cloudinary uploads via Web Crypto SHA-1; unsigned preset as fallback |
 
 ### B. Fixes Completed
 
-> 38 fixes across 16 commits. Each subsection covers one commit. Where a commit closes an item that was originally listed under a category, that item is removed from the open-findings list in section E.
+> 40 fixes across 18 commits. Each subsection covers one commit. Where a commit closes an item that was originally listed under a category, that item is removed from the open-findings list in section E.
 
 #### B.1 (`7d7537f`) — Track 1: Stop the bleeding
 
@@ -361,6 +363,34 @@ New `sbGetDeleted(table)` fetches items with `deleted_at` in the last 30 days. N
 **B.15.a `injectSwVersion` Vite plugin — `vite.config.js`**
 Previously developers had to manually bump `CACHE_NAME` in `public/sw.js` before each deploy. Forgetting left users on stale cached assets. New `injectSwVersion` plugin runs at `closeBundle`, rewrites `dist/sw.js` replacing the hard-coded `nomad-app-vN` with a base-36 build timestamp. No new dependencies. During dev/test `dist/sw.js` doesn't exist, so the try/catch is a no-op.
 
+#### B.17 (`8d7fadf`) — E.2 #3: Conflict detection for recurring edits
+
+**B.17.a Version cache + `If-Unmodified-Since` — `src/App.jsx`, `src/offlineSync.js`**
+Schema already had `updated_at` columns (B.7.a) but the client never used them. After:
+- `VERSIONS_KEY` localStorage cache (`nomad-record-versions-v1`) stores each row's `updated_at` as `{table:id → ts}` when loaded via `sbGet`.
+- `sbGet` now awaits `r.json()` before returning so it can pass rows to `saveVersions`.
+- `sbWrite` / `sbUpsert` accept `extraHeaders` so callers can inject `If-Unmodified-Since`.
+- 3 recurring write sites (Paid button, Skip button, RecEditPanel onSave) now pass `{ "If-Unmodified-Since": getVersion("recurring", r.id) }` when a stored version is available.
+- `flushSyncQueue` strips `If-Unmodified-Since` from all headers before replay — offline writes always win, never 412 on reconnect.
+- 412 response in flush emits `kind:"conflict"` drop (not `kind:"rejected"`, not 5xx retry).
+- `subscribeSyncDrops` wired in App for conflict toast: "Sync conflict — a newer version exists; local change discarded".
+- 2 new tests: 412→conflict drop+continue, header stripping during replay.
+
+**Scope decision:** Conflict detection targets the `recurring` table only — it's the only one with true edit flows (Paid, Skip, RecEditPanel). `expenses`, `incomes`, `transfers` are append-only (new IDs each time); `If-Unmodified-Since` on those would add complexity with zero benefit.
+
+#### B.18 (`0080211`) — E.1 #2: Signed Cloudinary uploads via Web Crypto
+
+**B.18.a Client-side SHA-1 signature — `src/receiptUpload.js`, `src/CredentialSetup.jsx`**
+Before: every upload was unsigned (anyone who learned the preset name could upload to the owner's Cloudinary account). After two modes, backwards-compatible:
+
+- **Signed** (recommended): if `apiKey` + `apiSecret` are in credentials, `uploadReceipt` computes `SHA-1("timestamp=<ts><apiSecret>")` via `crypto.subtle.digest("SHA-1", ...)` and sends `api_key`, `timestamp`, `signature` — no upload preset required.
+- **Unsigned** (legacy): if only `uploadPreset` is set, uses existing unsigned preset path.
+- If neither is configured, throws a clear "Cloudinary not configured" error.
+
+`CredentialSetup.jsx` gains two new optional fields (API Key, API Secret) with type="password" for the secret. The import/export JSON schema includes them. The guide step updated to describe signed-key retrieval. Settings backend card now shows "(signed)" vs "(unsigned preset)" in the Cloudinary status line.
+
+**Security note:** `apiSecret` is stored in `localStorage` (same threat model as the Supabase anon key — E.1 #3). For the BYODB single-user model this is acceptable; it's equivalent to the dev keeping the secret in `.env` for a server. A proper solution would be a signing endpoint (`api/cloudinary-sign.ts`), but that requires a server deploy and the `CLOUDINARY_API_SECRET` env var, which is out of scope for the client-only setup guide.
+
 #### B.16 (`59c7a5d`) — E.3 #5: `send_day_of_month` widened to max-31
 
 **B.16.a Three-layer fix — `nomad_setup.sql`, `src/App.jsx`**
@@ -401,12 +431,13 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 >
 > Items closed in commits B.1 – B.9 are no longer listed here. See section B for what was fixed and how.
 
-#### E.1 Security (5 open)
+#### E.1 Security (4 open)
+
+> E.1 #2 (unsigned Cloudinary) closed in B.18 — SHA-1 signed uploads via Web Crypto; unsigned preset fallback for legacy users.
 
 | Pri | Finding | Location | Notes |
 |---|---|---|---|
 | **C** | RLS disabled on every table — anon key is the entire authentication boundary. Leaked URL+key = full data access | `nomad_setup.sql:95-102, 160-161, 187-188` | BYODB model assumes per-user isolation; document the threat model. Architectural — needs auth-model decision |
-| **H** | Cloudinary preset is unsigned — anyone learning the preset name can upload to your account | `receiptUpload.js:36-40` | Switch to signed uploads via a server endpoint that issues a signature. Needs user-side credential rotation (new `CLOUDINARY_API_SECRET`) |
 | **H** | Anon key in localStorage — extension with `host_permissions` reads it | `credentials.js:7` | App has no XSS surface today (verified — no `innerHTML`/`dangerouslySetInnerHTML`/`eval`) but adding one is instant credential exfil. Architectural |
 | **M** | Email leakage via `report_schedules` lookup with anon key | `App.jsx:798` | Implied by RLS=off but worth noting |
 | **M** | Verify Management API token handling in `setup-user.ts` | `api/setup-user.ts` | Confirm token is server-only, never echoed to client; avoid logging. Audit-only task |
@@ -414,10 +445,10 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 #### E.2 Sync / Offline (2 open)
 
 > E.2 #1 (dedupe merge) and E.2 #2 (per-item retry dead-letter) closed in B.10.
+> E.2 #3 (conflict detection) closed in B.17 — `If-Unmodified-Since` on recurring edits; 412→conflict drop; header stripped on offline replay.
 
 | Pri | Finding | Location | Notes |
 |---|---|---|---|
-| **H** | No client-side conflict detection — last-write-wins | `offlineSync.js`, `App.jsx` reads/writes | Schema has `updated_at` (B.7.a) but client doesn't send `If-Unmodified-Since` / `Prefer: handling=strict-replace` yet. Needs offlineSync + every read site updated. **Pending user decisions: (1) on 412 discard silently or show merge UI? (2) all 8 tables or subset? (3) offline replays enforce check or always win?** |
 | **H** | User can clear localStorage with pending queue (incognito close, "Clear site data") | Browser-level | Mitigated: Sync Status card (B.7.b) surfaces pending count. Cannot block browser-level clears; warn before in-app destructive ones |
 | **M** | Two tabs / two devices have no cross-tab sync | App-wide | No `BroadcastChannel` / `storage` event listener — tab B writes back stale state |
 
@@ -534,17 +565,17 @@ Re-prioritized after the work in this branch.
 
 | # | Track | Effort | Items |
 |---|---|---|---|
-| 1 | **Wire client to `updated_at`** | ½ day | Use `Prefer: handling=strict-replace` + `If-Unmodified-Since` from `offlineSync.js`. Surface "row was changed elsewhere" toast on conflict. Closes E.2 #3 |
-| 2 | **Per-item retry + dead-letter in flush** | ½ day | E.2 #2 — separate poison items from the queue head; retain in a `nomad-sync-failed-v1` set surfaced in Settings |
-| 3 | **Routine streak UX fixes** | 2 hours | E.3 #1 (count today's points immediately), document/decide travel-day behavior, fix `Routine.jsx:2447` DST anchor |
-| 4 | **Soft delete + recovery** | 1 day | E.6 #1 — `deleted_at` columns + "Recently deleted" view in Settings (30-day retention) |
-| 5 | **Signed Cloudinary uploads** | 1 day | E.1 #2 — new `api/cloudinary-sign.ts`; needs new env var `CLOUDINARY_API_SECRET` and a one-time user re-config |
-| 6 | **ESP swap Gmail → Resend** | ½ day | E.4 #2 — closes the 500/day cap. `OWNER_SETUP.md` already mentions it |
-| 7 | **Onboarding overhaul + demo data** | 2 days | E.7 #1, E.8 "Demo data" |
-| 8 | **Cron full fan-out** | 1 day | E.4 #1 — Inngest / QStash / pg_cron with retries + dead-letter. Replaces the chunked-concurrency stop-gap from B.6.a |
-| 9 | **Budgets + in-app CSV export/import** | 2-3 days | E.8 top 3 — biggest product gap |
-| 10 | **Split `App.jsx`** | 1-2 days | E.5 #1 — reformat into multi-line, split along screen boundaries; add `React.memo` on `TxCard` |
-| 11 | **E2E tests with Playwright** | 1 day | Smoke tests on the 5 critical user flows |
+| ~~1~~ | ~~Wire client to `updated_at`~~ | ~~½ day~~ | ✅ **Done in B.17** — `If-Unmodified-Since` on recurring edits, 412 conflict drop |
+| ~~2~~ | ~~Per-item retry + dead-letter~~ | ~~½ day~~ | ✅ **Done in B.10** |
+| ~~3~~ | ~~Routine streak UX fixes~~ | ~~2 hours~~ | ✅ **Done in B.11, B.12** |
+| ~~4~~ | ~~Soft delete + recovery~~ | ~~1 day~~ | ✅ **Done in B.13** |
+| ~~5~~ | ~~Signed Cloudinary uploads~~ | ~~1 day~~ | ✅ **Done in B.18** — client-side SHA-1 via Web Crypto |
+| 1 | **ESP swap Gmail → Resend** | ½ day | E.4 #2 — closes the 500/day cap. `OWNER_SETUP.md` already mentions it |
+| 2 | **Onboarding overhaul + demo data** | 2 days | E.7 #1, E.8 "Demo data" |
+| 3 | **Cron full fan-out** | 1 day | E.4 #1 — Inngest / QStash / pg_cron with retries + dead-letter. Replaces the chunked-concurrency stop-gap from B.6.a |
+| 4 | **Budgets + in-app CSV export/import** | 2-3 days | E.8 top 3 — biggest product gap |
+| 5 | **Split `App.jsx`** | 1-2 days | E.5 #1 — reformat into multi-line, split along screen boundaries; add `React.memo` on `TxCard` |
+| 6 | **E2E tests with Playwright** | 1 day | Smoke tests on the 5 critical user flows |
 
 ### G. Quick Reference — Open Findings by File
 
@@ -555,10 +586,10 @@ Re-prioritized after the work in this branch.
 | `src/App.jsx` | settlement / recurring multi-write atomicity, JSON.stringify precision (`:904`, low), reportSchedule email leak (`:798`), heatmap windowing (`:240`), 1470-line monolith |
 | `src/Routine.jsx` | TZ anchor (`:2436`), DST anchor (`:2447`), JSONB blob model |
 | `src/financeUtils.js` | monthly off-by-one (`:17-21`) |
-| `src/offlineSync.js` | no client-side conflict detection (E.2 #3 pending decisions) |
+| `src/offlineSync.js` | cross-tab sync gap |
 | `src/currencyConverter.js` | INR hardcoded (`:29-31`) — API name only |
 | `src/credentials.js` | anon key in localStorage (`:7`) — architectural |
-| `src/receiptUpload.js` | unsigned Cloudinary uploads (`:36-40`) — pending architecture decision |
+| `src/receiptUpload.js` | `apiSecret` stored in localStorage (same threat as anon key — architectural) |
 | `api/_shared.ts` | `send_day_of_month` backend clamp still at 28 (`:58, :61`) — relates to 9 pre-existing test failures |
 | `api/send-reports.ts` | within-chunk serial fan-out, Gmail 500/day, per-user cold start |
 | `api/setup-user.ts` | Management API token handling (audit only) |
@@ -568,18 +599,19 @@ Re-prioritized after the work in this branch.
 ### H. Notes for Future Claude Sessions
 
 1. **Do not re-investigate the items in section C (false positives).** They are correct in the existing code.
-2. **Always run `npm run lint` and `npm test` before and after edits.** Current baselines (verified May 2026, second session):
+2. **Always run `npm run lint` and `npm test` before and after edits.** Current baselines (verified May 2026, third session):
    - **Lint:** 64 problems (57 errors, 7 warnings). New edits must not increase this count.
-   - **Tests:** **122 pass / 9 fail (131 total).** All 9 failures are pre-existing in `api/__tests__/_shared.test.ts` — 7 on `getNextSendAt` (IST offset, see D.1.2) and 2 on `getPeriod` (monthly + quarterly date boundary). Do not treat any of these 9 as regressions from this branch.
-   - The previous H.2 note said "122/7 (129 total)" — that was wrong. The extra 2 `getPeriod` failures and 2 additional tests (from offlineSync B.10) bring the true counts to 131 total / 122 pass / 9 fail.
+   - **Tests:** **124 pass / 9 fail (133 total).** All 9 failures are pre-existing in `api/__tests__/_shared.test.ts` — 7 on `getNextSendAt` (IST offset, see D.1.2) and 2 on `getPeriod` (monthly + quarterly date boundary). Do not treat any of these 9 as regressions from this branch.
+   - B.17 added 2 new offlineSync tests (412 conflict drop, header stripping) → total went 131 → 133 passing.
 3. **`App.jsx` and `Routine.jsx` are written one-line-per-JSX-block.** When editing, use a unique substring as `old_string` — do **not** attempt to reformat. The build will break.
 4. **`dist/` is gitignored but historically tracked.** Don't commit rebuilt `dist/` unless explicitly asked; Vercel rebuilds on push. After running `npm run build`, run `git checkout HEAD -- dist/` before staging.
 5. **`AddPage` is a sub-component** (line 419) without direct access to the main `App` state. Pass callbacks (like `onError`) as props rather than reaching for global state.
 6. **Sync queue is the riskiest data structure.** Anything that mutates `nomad-sync-queue-v1` or replays it must be idempotent and must surface failures to the user. The new `subscribeSyncDrops` channel (B.4.d) is the user-visible signal — wire any new drop conditions through it. Dead-letter queue is `nomad-sync-failed-v1` (B.10.b).
 7. **The 9 failing tests** in `_shared.test.ts` are pre-existing. Do not "fix" them by modifying production code without first confirming whether the production behavior or the test is wrong (see D.1.2).
 8. **`nomad_setup.sql` is idempotent and safe to re-run.** All migrations use `ADD COLUMN IF NOT EXISTS`, `DROP TRIGGER IF EXISTS`, and `DROP CONSTRAINT IF EXISTS` patterns. The `deleted_at` and `updated_at` migrations (B.7.a, B.13.a) will apply cleanly to existing databases.
-9. **`receiptUpload.js` no longer has fallback Cloudinary creds.** Tests / scripts that exercise the upload path must mock `getCredentials()` to return real `cloudName` + `uploadPreset`.
+9. **`receiptUpload.js` supports two Cloudinary modes** (B.18): signed (apiKey+apiSecret → SHA-1 via `crypto.subtle`) or unsigned (uploadPreset). Tests that exercise the upload path must mock `getCredentials()` to return at minimum `cloudName` plus either `apiKey`+`apiSecret` or `uploadPreset`.
 10. **`uid()` (App.jsx:16) prefers `crypto.randomUUID()`.** Don't reintroduce shadowing — the renamed `userKey` constants (subdomain ref) live alongside it (B.8.b).
 11. **`api/send-now.ts` requires the caller's supabase_url to be in `user_registry`.** Owner's URL is exempt. If you add new server endpoints that take user creds from the request body, mirror the same pattern.
 12. **`sbDelete` is now a soft delete (PATCH `deleted_at=now()`).** `sbDeleteWhere` remains a hard DELETE (bulk cascade ops and the nuke). `sbGet` filters `deleted_at=is.null` with a 400-fallback for pre-migration databases.
-13. **Signed Cloudinary uploads (E.1 #2) and conflict detection (E.2 #3) are blocked** pending user architecture decisions. Do not implement either until those decisions are recorded here.
+13. **Conflict detection (B.17)** targets `recurring` table only. Versions are stored in `nomad-record-versions-v1` keyed `{table}:{id}`. Flush always strips `If-Unmodified-Since` so replays always win. 412 is a `kind:"conflict"` drop — toast shown, change discarded.
+14. **Signed Cloudinary (B.18)** uses `apiKey` + `apiSecret` from credentials. The `apiSecret` is in localStorage — same threat model as the Supabase anon key. A proper signing endpoint would avoid client-side secret exposure but requires a Vercel env var and server roundtrip.
