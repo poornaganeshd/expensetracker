@@ -1721,6 +1721,18 @@ const sbGetR = async (table, id) => {
 };
 const sbUpsertR = async (table, row, dedupeKey = null) => SB_ENABLED ? sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}`, method: "POST", headers: { ...sbH, "Prefer": "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(row), dedupeKey }) : { ok: false, queued: false, offline: false, response: null };
 const sbDeleteR = async (table, id) => SB_ENABLED ? sendSupabaseRequest({ path: `${SB_URL}/rest/v1/${table}?id=eq.${id}`, method: "DELETE", headers: sbH, dedupeKey: `${table}:delete:${id}` }) : { ok: false, queued: false, offline: false, response: null };
+const sbGetAllDailyLogsR = async () => {
+    if (!SB_ENABLED) return [];
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+        const r = await fetch(`${SB_URL}/rest/v1/routine_daily_logs?select=*`, { headers: sbH, signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!r.ok) return [];
+        return await r.json();
+    } catch { return []; }
+};
+const sbDeleteAllDailyLogsR = () => SB_ENABLED ? sendSupabaseRequest({ path: `${SB_URL}/rest/v1/routine_daily_logs?log_date=neq.null`, method: "DELETE", headers: sbH, dedupeKey: "routine_daily_logs:delete:all" }) : { ok: false };
 
 const BANNERS_KEY = 'form_banners';
 const getBanners = () => { try { return JSON.parse(localStorage.getItem(BANNERS_KEY) || '{}'); } catch { return {}; } };
@@ -2798,7 +2810,7 @@ const RoutineEditor = ({ config, setConfig }) => {
 /* ============================================================
    SETTINGS SCREEN
    ============================================================ */
-const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = () => { }, localModRef, configModRef }) => {
+const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = () => { }, localModRef, configModRef, prevAllDataRef }) => {
     const update = (patch) => setConfig(sanitizeConfig({ ...config, ...patch }));
     const updateRotation = (day, val) => setConfig(sanitizeConfig({ ...config, snackRotation: { ...config.snackRotation, [day]: val } }));
 
@@ -2856,10 +2868,13 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
                 let summary = [];
                 if (restoreMode === 'data' || restoreMode === 'both') {
                     const cleanData = sanitizeRestoredData(parsed.data);
+                    if (prevAllDataRef) prevAllDataRef.current = {};
                     setAllData(cleanData);
                     localStorage.setItem('form_data_modified', String(now));
                     if (localModRef) localModRef.current = now;
-                    sbUpsertR("daily_logs", { id: "all_data", data: cleanData, last_modified_at: String(now) }, "routine:daily_logs");
+                    Object.entries(cleanData).forEach(([day, dayData]) => {
+                        sbUpsertR("routine_daily_logs", { log_date: day, data: dayData, modified_at: now }, `routine:day:${day}`);
+                    });
                     summary.push(`${Object.keys(cleanData).length} days`);
                 }
                 if (restoreMode === 'config' || restoreMode === 'both') {
@@ -2888,8 +2903,10 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
         localStorage.removeItem(BANNERS_KEY);
         localStorage.removeItem('form_data_modified');
         localStorage.removeItem('form_config_modified');
+        sbDeleteAllDailyLogsR();
         sbDeleteR("daily_logs", "all_data");
         sbDeleteR("user_config", "singleton");
+        if (prevAllDataRef) prevAllDataRef.current = {};
         setAllData({});
         setConfig(DEFAULT_CONFIG);
         setNukeStep(0);
@@ -3212,26 +3229,53 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     const configModRef = useRef(parseInt(localStorage.getItem('form_config_modified') || '0', 10));
     const dataDebounceRef = useRef(null);
     const configDebounceRef = useRef(null);
+    const prevAllDataRef = useRef({});
 
     // Load from Supabase on mount, fall back to localStorage. Conflict-aware.
     useEffect(() => {
         const load = async () => {
-            const [dbData, dbConfig] = await Promise.all([
+            const [dailyRows, oldBlob, dbConfig] = await Promise.all([
+                sbGetAllDailyLogsR(),
                 sbGetR("daily_logs", "all_data"),
                 sbGetR("user_config", "singleton"),
             ]);
-            if (dbData?.data) {
-                const remoteMod = parseInt(dbData.last_modified_at || '0', 10);
+            let resolvedData = null;
+            if (dailyRows.length > 0) {
+                // New per-day table has data — use it
+                const remoteMod = dailyRows.reduce((mx, r) => Math.max(mx, parseInt(r.modified_at || '0', 10)), 0);
                 const localMod = localModRef.current;
-                // Use remote if it's newer than local, or local has nothing
                 if (remoteMod >= localMod || localMod === 0) {
-                    const cleanData = sanitizeAllData(dbData.data);
+                    const merged = {};
+                    dailyRows.forEach(row => { merged[row.log_date] = row.data; });
+                    const cleanData = sanitizeAllData(merged);
                     setAllData(cleanData);
+                    prevAllDataRef.current = cleanData;
                     localStorage.setItem('form_data', JSON.stringify(cleanData));
                     localStorage.setItem('form_data_modified', String(remoteMod || Date.now()));
                     localModRef.current = remoteMod || Date.now();
+                    resolvedData = merged;
                 } else {
-                    // Local is newer — keep local, will push on next change
+                    setSyncStatus('conflict');
+                    setTimeout(() => setSyncStatus(''), 4000);
+                }
+            } else if (oldBlob?.data) {
+                // Migrate: old single-blob table has data, new table is empty
+                const remoteMod = parseInt(oldBlob.last_modified_at || '0', 10);
+                const localMod = localModRef.current;
+                if (remoteMod >= localMod || localMod === 0) {
+                    const cleanData = sanitizeAllData(oldBlob.data);
+                    setAllData(cleanData);
+                    prevAllDataRef.current = cleanData;
+                    localStorage.setItem('form_data', JSON.stringify(cleanData));
+                    localStorage.setItem('form_data_modified', String(remoteMod || Date.now()));
+                    localModRef.current = remoteMod || Date.now();
+                    resolvedData = oldBlob.data;
+                    // Migrate each day to new table
+                    const migTs = remoteMod || Date.now();
+                    Object.entries(cleanData).forEach(([day, dayData]) => {
+                        sbUpsertR("routine_daily_logs", { log_date: day, data: dayData, modified_at: migTs }, `routine:day:${day}`);
+                    });
+                } else {
                     setSyncStatus('conflict');
                     setTimeout(() => setSyncStatus(''), 4000);
                 }
@@ -3242,8 +3286,7 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
                     const localMod = configModRef.current;
                     if (remoteMod >= localMod || localMod === 0) {
                         let merged = sanitizeConfig(dbConfig.data);
-                        // Restore any orphaned customDailyItems from data
-                        if (dbData?.data) merged = sanitizeConfigWithData(merged, dbData.data);
+                        if (resolvedData) merged = sanitizeConfigWithData(merged, resolvedData);
                         setConfig(merged);
                         localStorage.setItem('form_config', JSON.stringify(merged));
                         localStorage.setItem('form_config_modified', String(remoteMod || Date.now()));
@@ -3263,9 +3306,15 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
         localStorage.setItem('form_data', JSON.stringify(cleanData));
         localStorage.setItem('form_data_modified', String(now));
         localModRef.current = now;
+        const prevData = prevAllDataRef.current;
+        const changedDays = Object.keys(cleanData).filter(k => JSON.stringify(cleanData[k]) !== JSON.stringify(prevData[k]));
+        prevAllDataRef.current = cleanData;
+        if (changedDays.length === 0) return;
         if (dataDebounceRef.current) clearTimeout(dataDebounceRef.current);
         dataDebounceRef.current = setTimeout(() => {
-            sbUpsertR("daily_logs", { id: "all_data", data: cleanData, last_modified_at: String(now) }, "routine:daily_logs");
+            changedDays.forEach(day => {
+                sbUpsertR("routine_daily_logs", { log_date: day, data: cleanData[day], modified_at: now }, `routine:day:${day}`);
+            });
         }, 1500);
     }, [allData, sbLoaded]);
 
@@ -3340,7 +3389,7 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
                 {activeTab === 'food' && <FoodScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
                 {activeTab === 'skin' && <SkinScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
                 {activeTab === 'log' && <LogScreen allData={allData} config={config} />}
-                {activeTab === 'settings' && <SettingsScreen config={config} setConfig={setConfig} allData={allData} setAllData={setAllData} showToast={showToast} localModRef={localModRef} configModRef={configModRef} />}
+                {activeTab === 'settings' && <SettingsScreen config={config} setConfig={setConfig} allData={allData} setAllData={setAllData} showToast={showToast} localModRef={localModRef} configModRef={configModRef} prevAllDataRef={prevAllDataRef} />}
 
                 {toast && (
                     <div

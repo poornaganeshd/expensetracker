@@ -241,3 +241,13 @@ ALTER TABLE user_config DISABLE ROW LEVEL SECURITY;
 
 ALTER TABLE daily_logs  REPLICA IDENTITY DEFAULT;
 ALTER TABLE user_config REPLICA IDENTITY DEFAULT;
+
+-- Per-day routine logs (replaces single allData blob in daily_logs)
+CREATE TABLE IF NOT EXISTS routine_daily_logs (
+  log_date    TEXT    PRIMARY KEY,
+  data        JSONB   NOT NULL DEFAULT '{}',
+  modified_at BIGINT  NOT NULL DEFAULT 0
+);
+
+ALTER TABLE routine_daily_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE routine_daily_logs REPLICA IDENTITY DEFAULT;
