@@ -20,7 +20,16 @@
       "WebFetch(domain:uicolors.org)",
       "WebFetch(domain:mobbin.com)",
       "WebFetch(domain:coloruxlab.com)",
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(git fetch *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(findstr \"error\")",
+      "Bash(findstr \"_strip\")",
+      "Bash(findstr \"offlineSync.js\")",
+      "Bash(findstr \"test\")",
+      "Bash(npx eslint *)",
+      "Bash(findstr \"57\\\\|58\\\\|59\\\\|60\\\\|61\\\\|62\\\\|63\\\\|64\\\\|65\\\\|66\\\\|67\\\\|68\\\\|69\\\\|70\\\\|71\\\\|72\\\\|73\\\\|74\\\\|75\")"
     ]
   }
 }

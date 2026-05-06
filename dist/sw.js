@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nomad-app-v9';
+const CACHE_NAME = 'nomad-app-motosfsp';
 const APP_SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
