@@ -172,9 +172,9 @@ A full system audit was performed on `claude/caveman-feature-34gSb`. This sectio
 |---|---|
 | Total findings in audit | ~100 |
 | Verified false positives (already correct in code) | 6 |
-| Fixed in this branch | 30 |
+| Fixed in this branch | 38 |
 | Discovered during fix work (new) | 3 |
-| Still open | ~65 |
+| Still open | ~57 |
 
 | Commit | Track / Category | Items |
 |---|---|---|
@@ -187,10 +187,17 @@ A full system audit was performed on `claude/caveman-feature-34gSb`. This sectio
 | `ee63376` | Cat 5 — Architecture | `updated_at` columns + trigger on all core tables, Settings Sync-Status card |
 | `81d0bd4` | Cat 6 — Edge cases | `crypto.randomUUID()`, rename shadowed `uid`→`userKey`, `events.participants` normalize, note 500-char cap, `CredentialSetup` import schema |
 | `1c4a3fe` | Cat 7 — UX | Skip button debounce parity, backdating error specifics, "Download backup first" in nuke |
+| `94535aa` | E.2 — Sync/Offline | Dedupe body merge, per-item 5xx retry + dead-letter queue (`nomad-sync-failed-v1`) |
+| `76ae48d` | E.3 — Date/timezone | Routine streak counts today on first logged action (≥1 point) |
+| `36ca28b` | E.3 — Date/timezone | Yearly recurring UI warns when selected day exceeds month's max |
+| `760b9a4` | E.6 — Edge cases | Soft delete (`deleted_at`) on 5 tables + "Recently deleted" recovery card in Settings |
+| `243557d` | E.6 — Edge cases | UPI Lite month-key slice guard against non-string dates |
+| `d7e58e3` | E.5 — Architecture | Auto-inject SW cache version at build time (Vite plugin, no new dep) |
+| `59c7a5d` | E.3 — Date/timezone | `send_day_of_month` widened from max-28 to max-31 (UI + scheduler + SQL) |
 
 ### B. Fixes Completed
 
-> 30 fixes across 9 commits. Each subsection covers one commit. Where a commit closes an item that was originally listed under a category, that item is removed from the open-findings list in section E.
+> 38 fixes across 16 commits. Each subsection covers one commit. Where a commit closes an item that was originally listed under a category, that item is removed from the open-findings list in section E.
 
 #### B.1 (`7d7537f`) — Track 1: Stop the bleeding
 
@@ -312,6 +319,53 @@ Was: `"Not enough in Bank on 2026-04-12"`. Now: `"Bank only had ₹420 on 2026-0
 **B.9.c "Download backup first" button in nuke confirmation — `src/App.jsx:1418`**
 The `Clear All Data` confirm dialog now offers a one-tap green button to call `expBackup()` before the user types `DELETE`.
 
+#### B.10 (`94535aa`) — E.2: Sync/Offline — dedupe merge + per-item retry dead-letter
+
+**B.10.a Dedupe body merge — `src/offlineSync.js:enqueueRequest`**
+Before: two upserts with the same `dedupeKey` → second replaced first entirely. Fields present in the first write but absent from the second were silently lost on replay. After: `mergeUpsertBodies()` merges JSON bodies when deduplicating. For array payloads (standard upserts), rows are matched by `id` and merged field-by-field — new write wins on conflicts, first write's unique fields are preserved. Falls back to second body if parsing fails.
+
+**B.10.b Per-item 5xx retry + dead-letter — `src/offlineSync.js:flushSyncQueue`**
+Before: one 5xx response aborted the entire flush and left all subsequent items unprocessed. After: each queue item tracks `_retries`; on 5xx the flush continues to the next item. After `MAX_ITEM_RETRIES = 3` failures an item is moved to `nomad-sync-failed-v1` (dead-letter) and removed from the main queue. A single poison item can no longer block the whole queue. New exports: `getDeadLetterCount()`, `clearDeadLetter()` for future Settings wiring. Two new tests added (131 total).
+
+#### B.11 (`76ae48d`) — E.3 #1: Routine streak counts today immediately
+
+**B.11.a Streak today threshold lowered to ≥1 — `src/Routine.jsx:2422, ~3305`**
+Before: both streak `useMemo` loops required `dayLevel >= 2` before counting today, so the first morning action still showed yesterday's streak until a second action was logged. After: if today has any record with `dayLevel >= 1`, the streak is seeded to 1 and the walk-back continues from yesterday. Past days still require `dayLevel >= 2` so historical streaks aren't retroactively inflated.
+
+#### B.12 (`36ca28b`) — E.3 #3: Yearly recurring day-clamp warning
+
+**B.12.a UI warning when yearDay exceeds month — `src/App.jsx:505, 629`**
+`withClampedDay` in `financeUtils.js` silently fires a yearly bill on the last available day when `yearDay > daysInMonth(yearMonth)` (e.g., Feb 31 → Feb 28). Both the add form and `RecEditPanel` now show an inline orange note: `"Day 31 → clamps to 28 in Feb. Bill fires on last available day."` The clamping logic is unchanged; this is purely a UI disclosure.
+
+#### B.13 (`760b9a4`) — E.6 #1: Soft delete + 30-day recovery
+
+**B.13.a `deleted_at` columns — `nomad_setup.sql`**
+Idempotent DO block adds `deleted_at TIMESTAMPTZ DEFAULT NULL` to `expenses`, `incomes`, `transfers`, `recurring`, `events`.
+
+**B.13.b `sbDelete` → soft PATCH — `src/App.jsx:84`**
+Changed from HTTP DELETE to PATCH `{deleted_at: now()}`. `sbDeleteWhere` (bulk/cascade ops and the Clear All nuke) remains a hard DELETE.
+
+**B.13.c `sbGet` filter + fallback — `src/App.jsx:58`**
+Normal reads now include `&deleted_at=is.null`. If the column doesn't exist yet (pre-migration database), the 400 response triggers a fallback to the unfiltered query — backwards-compatible.
+
+**B.13.d `sbGetDeleted` + "Recently deleted" card — `src/App.jsx`**
+New `sbGetDeleted(table)` fetches items with `deleted_at` in the last 30 days. New state `recDelItems` / `recDelLoading`. `loadRecentlyDeleted()` fetches from all 4 tables in parallel; `restoreDeleted(item)` patches `deleted_at=null` and re-adds to in-memory state. "Recently deleted" card in Settings (between Sync Status and Danger Zone) lazy-loads on tap, shows per-item Restore button.
+
+#### B.14 (`243557d`) — E.6 #8: UPI Lite slice guard
+
+**B.14.a Non-string date guard — `src/App.jsx:upiLiteUsage`**
+`e.date.slice(0, 7)` threw `TypeError` when an expense from a malformed sync replay had a non-string `date`. Now uses `String(e.date || "").slice(0, 7)` and pre-computes the month key from the `date` argument, so a single bad row cannot crash the cap check and block all UPI Lite entries.
+
+#### B.15 (`d7e58e3`) — E.5 #7: Auto SW cache version at build time
+
+**B.15.a `injectSwVersion` Vite plugin — `vite.config.js`**
+Previously developers had to manually bump `CACHE_NAME` in `public/sw.js` before each deploy. Forgetting left users on stale cached assets. New `injectSwVersion` plugin runs at `closeBundle`, rewrites `dist/sw.js` replacing the hard-coded `nomad-app-vN` with a base-36 build timestamp. No new dependencies. During dev/test `dist/sw.js` doesn't exist, so the try/catch is a no-op.
+
+#### B.16 (`59c7a5d`) — E.3 #5: `send_day_of_month` widened to max-31
+
+**B.16.a Three-layer fix — `nomad_setup.sql`, `src/App.jsx`**
+Before: `send_day_of_month` was capped at 28 in the SQL constraint, UI input, and the client-side scheduler, so users wanting day 29/30 silently got day 28. After: SQL constraint updated to `1–31` with an idempotent DO block that drops and re-adds the check on existing databases. UI input `max` and onChange clamp updated to 31. Scheduler's `Math.min(dom, 28)` replaced with `Math.min(dom, lastDayOfCurrentMonth)` using `Date.UTC` so the clamp adapts per month (28 in Feb, 30 in Apr, 31 in Jan) rather than always using the Feb worst case.
+
 ### C. False Positives (audit was wrong — do NOT reopen)
 
 These were flagged by the original audit but are correct in the existing code. Recorded here so we don't waste a future session re-investigating.
@@ -357,25 +411,25 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 | **M** | Email leakage via `report_schedules` lookup with anon key | `App.jsx:798` | Implied by RLS=off but worth noting |
 | **M** | Verify Management API token handling in `setup-user.ts` | `api/setup-user.ts` | Confirm token is server-only, never echoed to client; avoid logging. Audit-only task |
 
-#### E.2 Sync / Offline (5 open)
+#### E.2 Sync / Offline (2 open)
+
+> E.2 #1 (dedupe merge) and E.2 #2 (per-item retry dead-letter) closed in B.10.
 
 | Pri | Finding | Location | Notes |
 |---|---|---|---|
-| **H** | Dedupe loses partial-field upserts | `offlineSync.js:46-48` | Two queued upserts with same `dedupeKey` → only the second is kept; if the first carried fields the second omits, those fields are lost on replay. Needs a merge strategy |
-| **H** | `flushSyncQueue` aborts entire batch on first 5xx | `offlineSync.js` | Item 3/100 → items 4-100 stay queued; head retried with backoff (now bounded). Per-item retry with separate dead-letter would be better |
-| **H** | No client-side conflict detection — last-write-wins | `offlineSync.js`, `App.jsx` reads/writes | Schema has `updated_at` (B.7.a) but client doesn't send `If-Unmodified-Since` / `Prefer: handling=strict-replace` yet. Needs offlineSync + every read site updated |
+| **H** | No client-side conflict detection — last-write-wins | `offlineSync.js`, `App.jsx` reads/writes | Schema has `updated_at` (B.7.a) but client doesn't send `If-Unmodified-Since` / `Prefer: handling=strict-replace` yet. Needs offlineSync + every read site updated. **Pending user decisions: (1) on 412 discard silently or show merge UI? (2) all 8 tables or subset? (3) offline replays enforce check or always win?** |
 | **H** | User can clear localStorage with pending queue (incognito close, "Clear site data") | Browser-level | Mitigated: Sync Status card (B.7.b) surfaces pending count. Cannot block browser-level clears; warn before in-app destructive ones |
 | **M** | Two tabs / two devices have no cross-tab sync | App-wide | No `BroadcastChannel` / `storage` event listener — tab B writes back stale state |
 
-#### E.3 Date / Timezone (6 open)
+#### E.3 Date / Timezone (3 open)
+
+> E.3 #1 (streak today), E.3 #3 (yearly clamp warning), E.3 #5 (send_day_of_month 28→31) closed in B.11, B.12, B.16.
+> Note: `_shared.ts:58, 61` still has the old 28-cap in the **backend** cron math — the SQL and UI are fixed but the server-side `getNextSendAt` clamp was not changed (it's in TypeScript; the 7 pre-existing test failures in `_shared.test.ts` relate to this file — investigate before editing).
 
 | Pri | Finding | Location | Notes |
 |---|---|---|---|
-| **H** | Routine streak: today's points don't count until 2+ are logged | `Routine.jsx:3303-3305` | Logging morning water at 6 AM still shows yesterday's streak — users disengage. Decision needed: change threshold to ≥1 or always count today as in-progress |
 | **H** | Timezone-tied date keys, no anchor stored | `Routine.jsx:2436`, `financeUtils.js:3-9` | Travel Mumbai → Tokyo flips a day forward; back trip overwrites. No `tzOffset` stored per record. Architectural — needs decision on per-record vs per-account anchor |
-| **H** | Yearly recurring on the 31st clamps to Feb 28/29 silently | `financeUtils.js:14-15, 38-46` | Document or add a "skip month" toggle in `RecEditPanel` |
 | **M** | `fullMonthsBetween` off-by-one with month-end starts | `financeUtils.js:17-21` | Start = Jan 31, today = Mar 30 → returns 1, not 2. Affects 31st-rent edge cases |
-| **M** | `report_schedules.send_day_of_month` UI capped at 28 | `nomad_setup.sql:122-123`, `_shared.ts:58, 61` | User wanting 30th gets 28th silently |
 | **L** | DST edges in offset-naive math | `Routine.jsx:2447` | `new Date(year, month, i)` lacks the noon anchor used elsewhere in `financeUtils.js` |
 
 #### E.4 Backend / Cron Scale (5 open)
@@ -398,21 +452,22 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 | **H** | Settlements/recurring/splits issue multiple writes without rollback | `App.jsx` recurring & settlement flows | Crash mid-sequence → wallet balance, expense row, split row mutually inconsistent. Server-side `RPC` would close this |
 | **M** | `App.jsx` re-renders on every state change — no `useMemo`/`React.memo` on `TxCard`, no virtualization on history list | App-wide | Janky after 5+ years of data |
 | **M** | Heatmap renders all expenses, no windowing | `App.jsx:240` (`Heatmap`) | Janky after 5+ years |
-| **M** | Service worker cache version is manual | `public/sw.js:1` | Forget to bump → users stuck on old assets. Migrate to `vite-plugin-pwa` for build-time hash |
 | **L** | Receipt upload + transaction insert not coupled | Add-expense flow | Crash between → orphan blob in Cloudinary; retry → second blob. Could nuke unreferenced blobs via a periodic job |
 
-#### E.6 Other Edge Cases (12 open)
+> E.5 #7 (SW manual cache version) closed in B.15 — Vite plugin auto-injects build timestamp.
+
+#### E.6 Other Edge Cases (10 open)
+
+> E.6 #1 (soft delete) closed in B.13. E.6 #8 (UPI Lite slice) closed in B.14.
 
 | Pri | Finding | Location | Notes |
 |---|---|---|---|
-| **H** | No soft delete / "Recently deleted" recovery | All tables | Misclick on a 6-month-old expense → gone forever. Add `deleted_at` + 30-day retention view |
 | **H** | "Clear All Data" non-atomic across tables | `App.jsx:1418` | Mid-network nuke leaves 3/8 tables empty, others not. Mitigated by "Download backup first" nudge (B.9.c). A server-side function would close it fully |
 | **H** | Refund flow doesn't exist | App-wide | Returned purchase becomes "negative expense" or "fake income"; either choice corrupts category analytics |
 | **M** | Skipped-vs-paid recurring not visually distinct | `financeUtils.js:60-66`, history UI | Audit pain |
 | **M** | Deleting a category orphans expenses | App-wide | Future filters list ghost data; bills render as "Uncategorized" with no path back |
 | **M** | Deleting a participant from a group event after a split | App-wide | Settlement math no longer balances; orphan owes nobody |
 | **M** | Custom split with ₹0 participants — input-side validation | `App.jsx:703` | Submit-side guard already drops 0-amount rows; the input could reject earlier with a per-row warning |
-| **M** | UPI Lite cap math is string-comparison brittle | `App.jsx:964-966` | Malformed dates from API replay break cap logic silently |
 | **M** | `getINRRate` hardcodes INR target | `currencyConverter.js:29-31` | Misleading API name if non-INR users ever supported |
 | **L** | `JSON.stringify` loses precision past 2^53 | `App.jsx:904` | Not relevant for INR; flagged for completeness |
 | **L** | `report_schedules` UNIQUE on `user_id` | `nomad_setup.sql:117` | Only one schedule per user; can't have daily + weekly. Drop the UNIQUE if needed |
@@ -497,32 +552,34 @@ Re-prioritized after the work in this branch.
 
 | File | Still-open findings |
 |---|---|
-| `src/App.jsx` | settlement / recurring multi-write atomicity, JSON.stringify precision (`:904`, low), UPI Lite string-compare (`:964-966`), reportSchedule email leak (`:798`), heatmap windowing (`:240`), 1470-line monolith |
-| `src/Routine.jsx` | streak today rule (`:3303-3305`), TZ anchor (`:2436`), DST anchor (`:2447`), JSONB blob model |
-| `src/financeUtils.js` | yearly 31st clamp (`:14-15, :38-46`), monthly off-by-one (`:17-21`) |
-| `src/offlineSync.js` | dedupe partial-field merge (`:46-48`), batch-abort vs per-item retry (`:109-134`), no client-side conflict detection |
+| `src/App.jsx` | settlement / recurring multi-write atomicity, JSON.stringify precision (`:904`, low), reportSchedule email leak (`:798`), heatmap windowing (`:240`), 1470-line monolith |
+| `src/Routine.jsx` | TZ anchor (`:2436`), DST anchor (`:2447`), JSONB blob model |
+| `src/financeUtils.js` | monthly off-by-one (`:17-21`) |
+| `src/offlineSync.js` | no client-side conflict detection (E.2 #3 pending decisions) |
 | `src/currencyConverter.js` | INR hardcoded (`:29-31`) — API name only |
 | `src/credentials.js` | anon key in localStorage (`:7`) — architectural |
-| `src/receiptUpload.js` | unsigned Cloudinary uploads (`:36-40`) |
-| `api/_shared.ts` | `send_day_of_month` clamp (`:58, :61`) |
+| `src/receiptUpload.js` | unsigned Cloudinary uploads (`:36-40`) — pending architecture decision |
+| `api/_shared.ts` | `send_day_of_month` backend clamp still at 28 (`:58, :61`) — relates to 9 pre-existing test failures |
 | `api/send-reports.ts` | within-chunk serial fan-out, Gmail 500/day, per-user cold start |
 | `api/setup-user.ts` | Management API token handling (audit only) |
-| `nomad_setup.sql` | RLS disabled everywhere (`:95-102, :160-161, :187-188`), `wallet_balances` no integrity invariant, schedule UNIQUE on user_id (`:117`), `send_day_of_month` max 28 (`:122-123`), `daily_logs` JSONB blob model (`:175-179`) |
-| `public/sw.js` | manual cache version (`:1`) — migrate to `vite-plugin-pwa` |
-| `api/__tests__/_shared.test.ts` | 7 failing tests on `getNextSendAt` (pre-existing, see D.1.2) |
+| `nomad_setup.sql` | RLS disabled everywhere (`:95-102, :160-161, :187-188`), `wallet_balances` no integrity invariant, schedule UNIQUE on user_id (`:117`), `daily_logs` JSONB blob model (`:175-179`) |
+| `api/__tests__/_shared.test.ts` | 9 failing tests — 7 on `getNextSendAt` (pre-existing IST offset, see D.1.2) + 2 on `getPeriod` (also pre-existing, appeared before this session) |
 
 ### H. Notes for Future Claude Sessions
 
 1. **Do not re-investigate the items in section C (false positives).** They are correct in the existing code.
-2. **Always run `npm run lint` and `npm test` before and after edits.** Current baselines:
-   - **Lint:** 67 errors / 0 warnings (mostly `no-unused-vars` on default exports + `no-empty` from intentional `try { } catch { }` swallowing). New edits must not increase the count.
-   - **Tests:** **122 pass / 7 fail (129 total).** The 7 failures are all in `api/__tests__/_shared.test.ts:getNextSendAt` and pre-date this branch (see D.1.2).
+2. **Always run `npm run lint` and `npm test` before and after edits.** Current baselines (verified May 2026, second session):
+   - **Lint:** 64 problems (57 errors, 7 warnings). New edits must not increase this count.
+   - **Tests:** **122 pass / 9 fail (131 total).** All 9 failures are pre-existing in `api/__tests__/_shared.test.ts` — 7 on `getNextSendAt` (IST offset, see D.1.2) and 2 on `getPeriod` (monthly + quarterly date boundary). Do not treat any of these 9 as regressions from this branch.
+   - The previous H.2 note said "122/7 (129 total)" — that was wrong. The extra 2 `getPeriod` failures and 2 additional tests (from offlineSync B.10) bring the true counts to 131 total / 122 pass / 9 fail.
 3. **`App.jsx` and `Routine.jsx` are written one-line-per-JSX-block.** When editing, use a unique substring as `old_string` — do **not** attempt to reformat. The build will break.
 4. **`dist/` is gitignored but historically tracked.** Don't commit rebuilt `dist/` unless explicitly asked; Vercel rebuilds on push. After running `npm run build`, run `git checkout HEAD -- dist/` before staging.
 5. **`AddPage` is a sub-component** (line 419) without direct access to the main `App` state. Pass callbacks (like `onError`) as props rather than reaching for global state.
-6. **Sync queue is the riskiest data structure.** Anything that mutates `nomad-sync-queue-v1` or replays it must be idempotent and must surface failures to the user. The new `subscribeSyncDrops` channel (B.4.d) is the user-visible signal — wire any new drop conditions through it.
-7. **The 7 failing IST tests** in `_shared.test.ts` are pre-existing. Do not "fix" them by modifying production code without first confirming whether the production behavior or the test is wrong (see D.1.2).
-8. **`nomad_setup.sql` is idempotent and safe to re-run.** The `updated_at` migration (B.7.a) uses `ADD COLUMN IF NOT EXISTS` and `DROP TRIGGER IF EXISTS` so existing user databases will pick it up on next re-run without losing data.
+6. **Sync queue is the riskiest data structure.** Anything that mutates `nomad-sync-queue-v1` or replays it must be idempotent and must surface failures to the user. The new `subscribeSyncDrops` channel (B.4.d) is the user-visible signal — wire any new drop conditions through it. Dead-letter queue is `nomad-sync-failed-v1` (B.10.b).
+7. **The 9 failing tests** in `_shared.test.ts` are pre-existing. Do not "fix" them by modifying production code without first confirming whether the production behavior or the test is wrong (see D.1.2).
+8. **`nomad_setup.sql` is idempotent and safe to re-run.** All migrations use `ADD COLUMN IF NOT EXISTS`, `DROP TRIGGER IF EXISTS`, and `DROP CONSTRAINT IF EXISTS` patterns. The `deleted_at` and `updated_at` migrations (B.7.a, B.13.a) will apply cleanly to existing databases.
 9. **`receiptUpload.js` no longer has fallback Cloudinary creds.** Tests / scripts that exercise the upload path must mock `getCredentials()` to return real `cloudName` + `uploadPreset`.
 10. **`uid()` (App.jsx:16) prefers `crypto.randomUUID()`.** Don't reintroduce shadowing — the renamed `userKey` constants (subdomain ref) live alongside it (B.8.b).
 11. **`api/send-now.ts` requires the caller's supabase_url to be in `user_registry`.** Owner's URL is exempt. If you add new server endpoints that take user creds from the request body, mirror the same pattern.
+12. **`sbDelete` is now a soft delete (PATCH `deleted_at=now()`).** `sbDeleteWhere` remains a hard DELETE (bulk cascade ops and the nuke). `sbGet` filters `deleted_at=is.null` with a 400-fallback for pre-migration databases.
+13. **Signed Cloudinary uploads (E.1 #2) and conflict detection (E.2 #3) are blocked** pending user architecture decisions. Do not implement either until those decisions are recorded here.
