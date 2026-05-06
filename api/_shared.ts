@@ -70,11 +70,19 @@ export function getNextSendAt(s: Schedule, now: Date): Date {
   return n;
 }
 
+// User categories live only in the client (DC constant + custom additions). The
+// server cron has no categories table to join against, so render a best-effort
+// friendly name from the id: snake_case → "Title Case".
+export function prettyCategory(id: string | undefined | null): string {
+  if (!id) return "Uncategorized";
+  return id.split(/[_\-]+/).map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : "").join(" ").trim() || id;
+}
+
 function buildCsv(expenses: Expense[], incomes: Income[], transfers: Transfer[], s: Schedule) {
   const q = (v?: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
   let csv = "Type,Date,Amount,Category/Source/From,To/Wallet,Note\n";
-  if (s.include_incomes)   incomes.forEach(i   => { csv += `Income,${i.date},${i.amount},${q(i.sourceId)},${q(i.walletId)},\n`; });
-  if (s.include_expenses)  expenses.forEach(e  => { csv += `Expense,${e.date},${e.amount},${q(e.categoryId)},${q(e.walletId)},${q(e.note)}\n`; });
+  if (s.include_incomes)   incomes.forEach(i   => { csv += `Income,${i.date},${i.amount},${q(prettyCategory(i.sourceId))},${q(i.walletId)},\n`; });
+  if (s.include_expenses)  expenses.forEach(e  => { csv += `Expense,${e.date},${e.amount},${q(prettyCategory(e.categoryId))},${q(e.walletId)},${q(e.note)}\n`; });
   if (s.include_transfers) transfers.forEach(t => { csv += `Transfer,${t.date},${t.amount},${q(t.fromWallet)},${q(t.toWallet)},${q(t.note)}\n`; });
   return csv;
 }
@@ -145,13 +153,20 @@ export async function processSchedule(
   const pEnd   = format(end,   "yyyy-MM-dd");
   const catFilter = s.selected_categories?.length ? `&categoryId=in.(${s.selected_categories.join(",")})` : "";
 
+  // Cap the "full backup" attachment at the last 365 days. The previous code
+  // fetched all-time history per user per cron tick, producing multi-MB
+  // attachments for long-time users that could bounce on recipient size limits
+  // and made the cron very slow. Most users use the email primarily for the
+  // current period; a 1-year rolling backup is more than enough for the rest.
+  const backupCutoff = format(subDays(now, 365), "yyyy-MM-dd");
+
   const [expenses, incomes, transfers, allExpenses, allIncomes, allTransfers] = await Promise.all([
     s.include_expenses  ? userGet(sbUrl, sbKey, `/expenses?date=gte.${pStart}&date=lte.${pEnd}${catFilter}&select=*`)  : [],
     s.include_incomes   ? userGet(sbUrl, sbKey, `/incomes?date=gte.${pStart}&date=lte.${pEnd}&select=*`)               : [],
     s.include_transfers ? userGet(sbUrl, sbKey, `/transfers?date=gte.${pStart}&date=lte.${pEnd}&select=*`)             : [],
-    userGet(sbUrl, sbKey, `/expenses?select=*&order=date.desc`),
-    userGet(sbUrl, sbKey, `/incomes?select=*&order=date.desc`),
-    userGet(sbUrl, sbKey, `/transfers?select=*&order=date.desc`),
+    userGet(sbUrl, sbKey, `/expenses?date=gte.${backupCutoff}&select=*&order=date.desc`),
+    userGet(sbUrl, sbKey, `/incomes?date=gte.${backupCutoff}&select=*&order=date.desc`),
+    userGet(sbUrl, sbKey, `/transfers?date=gte.${backupCutoff}&select=*&order=date.desc`),
   ]) as [Expense[], Income[], Transfer[], Expense[], Income[], Transfer[]];
 
   const totalSpent     = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
@@ -159,7 +174,7 @@ export async function processSchedule(
   const totalTransfers = transfers.reduce((sum, t) => sum + Number(t.amount), 0);
   const catMap = new Map<string, number>();
   expenses.forEach(e => catMap.set(e.categoryId, (catMap.get(e.categoryId) ?? 0) + Number(e.amount)));
-  const byCategory = Array.from(catMap.entries()).map(([name, amount]) => ({ name, amount }));
+  const byCategory = Array.from(catMap.entries()).map(([id, amount]) => ({ name: prettyCategory(id), amount }));
 
   const lbl    = `${s.frequency}_${format(end, "yyyy-MM-dd")}`;
   const fLabel = s.frequency === "custom" ? `Every ${s.custom_days}d` : s.frequency.charAt(0).toUpperCase() + s.frequency.slice(1);

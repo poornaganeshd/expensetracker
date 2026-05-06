@@ -58,8 +58,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Extract project ref from https://{ref}.supabase.co
-  const match = supabase_url.match(/https:\/\/([a-zA-Z0-9]+)\.supabase\.co/);
-  if (!match) return res.status(400).json({ error: "Invalid Supabase URL — expected https://{ref}.supabase.co" });
+  // Real Supabase project refs are 20 lowercase alphanumeric chars
+  const match = supabase_url.match(/^https:\/\/([a-z0-9]{20})\.supabase\.co\/?$/);
+  if (!match) return res.status(400).json({ error: "Invalid Supabase URL — expected https://{20-char-ref}.supabase.co" });
   const ref = match[1];
 
   const mgmtRes = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {

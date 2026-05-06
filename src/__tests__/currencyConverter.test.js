@@ -4,12 +4,6 @@ import { getINRRate, saveCurrencyMeta, getCurrencyMeta } from '../currencyConver
 const RATE_CACHE_KEY = 'nomad-fx-rates';
 const META_KEY = 'nomad-currency-meta';
 
-// Build today's date key the same way the module does
-function todayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 beforeEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
@@ -30,10 +24,18 @@ describe('getINRRate', () => {
   });
 
   it('returns cached rate when available and fresh', async () => {
-    const cache = { [`USD_${todayKey()}`]: 83.5 };
+    const cache = { USD: { rate: 83.5, fetchedAt: Date.now() } };
     localStorage.setItem(RATE_CACHE_KEY, JSON.stringify(cache));
     const rate = await getINRRate('USD');
     expect(rate).toBe(83.5);
+  });
+
+  it('ignores cached rate older than 24h', async () => {
+    const cache = { USD: { rate: 83.5, fetchedAt: Date.now() - 25 * 60 * 60 * 1000 } };
+    localStorage.setItem(RATE_CACHE_KEY, JSON.stringify(cache));
+    global.fetch = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ usd: { inr: 90 } }) });
+    const rate = await getINRRate('USD');
+    expect(rate).toBe(90);
   });
 
   it('fetches from API and caches when no cached rate', async () => {
@@ -47,9 +49,9 @@ describe('getINRRate', () => {
     expect(rate).toBe(mockRate);
     expect(global.fetch).toHaveBeenCalledOnce();
 
-    // Should now be in cache
     const cached = JSON.parse(localStorage.getItem(RATE_CACHE_KEY));
-    expect(cached[`USD_${todayKey()}`]).toBe(mockRate);
+    expect(cached.USD.rate).toBe(mockRate);
+    expect(typeof cached.USD.fetchedAt).toBe('number');
   });
 
   it('returns null when fetch response is not ok', async () => {
@@ -67,14 +69,23 @@ describe('getINRRate', () => {
     expect(rate).toBeNull();
   });
 
-  it('returns null when fetch throws a network error', async () => {
-    global.fetch = vi.fn().mockRejectedValueOnce(new Error('Network error'));
+  it('returns null when both primary and fallback throw', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
     const rate = await getINRRate('GBP');
     expect(rate).toBeNull();
   });
 
+  it('falls back to secondary CDN when primary fails', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ gbp: { inr: 105 } }) });
+    const rate = await getINRRate('GBP');
+    expect(rate).toBe(105);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
   it('normalises currency to uppercase before lookup', async () => {
-    const cache = { [`USD_${todayKey()}`]: 83.5 };
+    const cache = { USD: { rate: 83.5, fetchedAt: Date.now() } };
     localStorage.setItem(RATE_CACHE_KEY, JSON.stringify(cache));
     expect(await getINRRate('usd')).toBe(83.5);
     expect(await getINRRate(' USD ')).toBe(83.5);
@@ -97,11 +108,18 @@ describe('getINRRate', () => {
 describe('saveCurrencyMeta & getCurrencyMeta', () => {
   it('stores and retrieves meta for a transaction', () => {
     saveCurrencyMeta('tx-001', 'USD', 100, 83.5);
-    expect(getCurrencyMeta('tx-001')).toEqual({
+    expect(getCurrencyMeta('tx-001')).toMatchObject({
       currency: 'USD',
       originalAmount: 100,
       rateUsed: 83.5,
     });
+  });
+
+  it('records fetchedAt timestamp', () => {
+    saveCurrencyMeta('tx-time', 'USD', 100, 83);
+    const meta = getCurrencyMeta('tx-time');
+    expect(typeof meta.fetchedAt).toBe('number');
+    expect(meta.fetchedAt).toBeGreaterThan(0);
   });
 
   it('normalises currency to uppercase', () => {
@@ -116,7 +134,7 @@ describe('saveCurrencyMeta & getCurrencyMeta', () => {
   it('overwrites existing meta for the same transaction', () => {
     saveCurrencyMeta('tx-003', 'USD', 100, 83);
     saveCurrencyMeta('tx-003', 'GBP', 200, 105);
-    expect(getCurrencyMeta('tx-003')).toEqual({
+    expect(getCurrencyMeta('tx-003')).toMatchObject({
       currency: 'GBP',
       originalAmount: 200,
       rateUsed: 105,

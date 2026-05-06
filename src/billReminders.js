@@ -10,16 +10,29 @@ function markShown(todayStr, ids) {
     const s = getTodayShown(todayStr);
     ids.forEach(id => s.add(id));
     localStorage.setItem(SHOWN_KEY_PREFIX + todayStr, JSON.stringify([...s]));
+    // Keep today and the previous local day; purge anything older.
+    // Keeping yesterday avoids re-firing reminders if the tab crosses midnight
+    // and the new local day key is computed before the old one is cleared.
+    const yesterdayStr = addDays(todayStr, -1);
     Object.keys(localStorage)
-      .filter(k => k.startsWith(SHOWN_KEY_PREFIX) && k !== SHOWN_KEY_PREFIX + todayStr)
+      .filter(k => k.startsWith(SHOWN_KEY_PREFIX)
+        && k !== SHOWN_KEY_PREFIX + todayStr
+        && k !== SHOWN_KEY_PREFIX + yesterdayStr)
       .forEach(k => localStorage.removeItem(k));
-  } catch { }
+  } catch { /* quota — non-fatal */ }
 }
 
+// Local-date arithmetic. Both input and output are YYYY-MM-DD in local time.
+// Previous implementation used toISOString() which silently shifted to UTC and
+// produced off-by-one results for timezones east of UTC (e.g., IST).
 function addDays(dateStr, n) {
-  const d = new Date(dateStr + "T00:00:00");
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + n);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }
 
 function isNotHandled(r, dueStr) {

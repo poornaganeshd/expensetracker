@@ -27,9 +27,9 @@ export function compressImage(file) {
 // Compress + upload to Cloudinary, returns secure_url
 export async function uploadReceipt(file) {
   const creds = getCredentials();
-  const cloudName = creds.cloudName || "df1vedbox";
-  const uploadPreset = creds.uploadPreset || "receipt_upload";
-  if (!cloudName) throw new Error("Cloudinary not configured. Add your Cloud Name in Settings → Backend.");
+  const cloudName = creds.cloudName;
+  const uploadPreset = creds.uploadPreset;
+  if (!cloudName || !uploadPreset) throw new Error("Cloudinary not configured. Add your Cloud Name and Upload Preset in Settings → Backend.");
   const blob = await compressImage(file);
   const form = new FormData();
   form.append("file", blob, "receipt.jpg");

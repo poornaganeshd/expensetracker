@@ -110,6 +110,52 @@ ALTER TABLE recurring       REPLICA IDENTITY DEFAULT;
 ALTER TABLE events          REPLICA IDENTITY DEFAULT;
 ALTER TABLE wallet_balances REPLICA IDENTITY DEFAULT;
 
+-- ── 1b. UPDATED_AT COLUMNS + TRIGGER ─────────────────────────
+-- Adds updated_at to every core table so future conflict detection
+-- (last-write-wins guards, incremental sync) has a server-stamped value
+-- to compare against. Idempotent — safe on re-run.
+
+CREATE OR REPLACE FUNCTION nomad_touch_updated_at() RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$
+DECLARE
+  t TEXT;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY[
+    'expenses','incomes','transfers','settlements','splits',
+    'recurring','events','wallet_balances'
+  ]) LOOP
+    EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()', t);
+    EXECUTE format('DROP TRIGGER IF EXISTS %I_touch_updated_at ON %I', t, t);
+    EXECUTE format($q$
+      CREATE TRIGGER %I_touch_updated_at
+        BEFORE INSERT OR UPDATE ON %I
+        FOR EACH ROW EXECUTE FUNCTION nomad_touch_updated_at()
+    $q$, t, t);
+  END LOOP;
+END $$;
+
+-- ── 1c. SOFT-DELETE COLUMN ──────────────────────────────────
+-- Adds deleted_at to core tables so single-item deletes become reversible.
+-- Items with deleted_at IS NOT NULL are hidden from normal reads but
+-- recoverable within 30 days. Idempotent — safe on re-run.
+
+DO $$
+DECLARE
+  t TEXT;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY[
+    'expenses','incomes','transfers','recurring','events'
+  ]) LOOP
+    EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL', t);
+  END LOOP;
+END $$;
+
 -- ── 2. EMAIL REPORT TABLES ───────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS report_schedules (
@@ -120,7 +166,7 @@ CREATE TABLE IF NOT EXISTS report_schedules (
   custom_days         INTEGER,
   send_hour           INTEGER     NOT NULL DEFAULT 6 CHECK (send_hour BETWEEN 0 AND 23),
   send_day_of_week    INTEGER     CHECK (send_day_of_week BETWEEN 0 AND 6),
-  send_day_of_month   INTEGER     CHECK (send_day_of_month BETWEEN 1 AND 28),
+  send_day_of_month   INTEGER     CHECK (send_day_of_month BETWEEN 1 AND 31),
   include_expenses    BOOLEAN     NOT NULL DEFAULT true,
   include_incomes     BOOLEAN     NOT NULL DEFAULT true,
   include_transfers   BOOLEAN     NOT NULL DEFAULT false,
@@ -148,7 +194,13 @@ CREATE INDEX IF NOT EXISTS idx_report_schedules_due
   WHERE is_active = true;
 
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_week  INTEGER CHECK (send_day_of_week BETWEEN 0 AND 6);
-ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_month INTEGER CHECK (send_day_of_month BETWEEN 1 AND 28);
+ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_month INTEGER CHECK (send_day_of_month BETWEEN 1 AND 31);
+
+-- Widen send_day_of_month from 1-28 to 1-31 for existing tables
+DO $$ BEGIN
+  ALTER TABLE report_schedules DROP CONSTRAINT IF EXISTS report_schedules_send_day_of_month_check;
+  ALTER TABLE report_schedules ADD CONSTRAINT report_schedules_send_day_of_month_check CHECK (send_day_of_month BETWEEN 1 AND 31);
+END $$;
 
 -- ── MIGRATIONS: add columns to existing tables ────────────────
 -- Events feature overhaul (group events, split notes, paidBy)

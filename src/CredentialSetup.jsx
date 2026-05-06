@@ -260,8 +260,19 @@ export default function CredentialSetup({ onDone, onCancel }) {
     r.onload = (e) => {
       try {
         const d = JSON.parse(e.target.result);
-        if (!d.sbUrl || !d.sbKey) { setError("Invalid config — missing Supabase credentials."); return; }
-        saveCredentials({ sbUrl: d.sbUrl, sbKey: d.sbKey, cloudName: d.cloudName || "", uploadPreset: d.uploadPreset || "" });
+        const isStr = (v) => typeof v === "string" && v.trim().length > 0;
+        if (!d || typeof d !== "object" || !isStr(d.sbUrl) || !isStr(d.sbKey)) {
+          setError("Invalid config — sbUrl and sbKey must be non-empty strings."); return;
+        }
+        if (!/^https:\/\/[a-z0-9]{20}\.supabase\.co\/?$/.test(d.sbUrl.trim())) {
+          setError("Invalid Supabase URL format. Expected https://{20-char-ref}.supabase.co"); return;
+        }
+        saveCredentials({
+          sbUrl: d.sbUrl.trim(),
+          sbKey: d.sbKey.trim(),
+          cloudName: typeof d.cloudName === "string" ? d.cloudName.trim() : "",
+          uploadPreset: typeof d.uploadPreset === "string" ? d.uploadPreset.trim() : "",
+        });
         onDone();
       } catch { setError("Failed to read config file."); }
     };
