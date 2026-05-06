@@ -1144,11 +1144,11 @@ export default function Nomad() {
       if (diff < 0 || (diff === 0 && nowISTH >= reportSendHour)) diff += 7;
       next.setUTCDate(next.getUTCDate() + diff);
     } else if (reportFreq === "monthly") {
-      const dom = Math.min(reportSendDom, 28);
+      const dom = Math.min(reportSendDom, new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate());
       next.setUTCDate(dom);
       if (now.getUTCDate() > dom || (now.getUTCDate() === dom && nowISTH >= reportSendHour)) next.setUTCMonth(next.getUTCMonth() + 1);
     } else if (reportFreq === "quarterly") {
-      const dom = Math.min(reportSendDom, 28);
+      const dom = Math.min(reportSendDom, new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate());
       next.setUTCDate(dom);
       if (now.getUTCDate() > dom || (now.getUTCDate() === dom && nowISTH >= reportSendHour)) next.setUTCMonth(next.getUTCMonth() + 3);
     } else {
@@ -1364,7 +1364,7 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
               <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--muted)", letterSpacing: "1px", marginBottom: 6, textTransform: "uppercase" }}>Send on Day of Month</label>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "10px 14px", background: "var(--bg)", borderRadius: 10, border: "1px solid var(--border)" }}>
                 <span style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-h)" }}>Day</span>
-                <input type="number" min="1" max="28" value={reportSendDom} onChange={e => sReportSendDom(Math.min(28, Math.max(1, Number(e.target.value))))} style={{ width: 60, padding: "6px 10px", borderRadius: 8, border: "1.5px solid #c9a96e", background: "var(--bg)", color: "#c9a96e", fontSize: 14, fontWeight: 700, fontFamily: "var(--font-h)", textAlign: "center", outline: "none" }} />
+                <input type="number" min="1" max="31" value={reportSendDom} onChange={e => sReportSendDom(Math.min(31, Math.max(1, Number(e.target.value))))} style={{ width: 60, padding: "6px 10px", borderRadius: 8, border: "1.5px solid #c9a96e", background: "var(--bg)", color: "#c9a96e", fontSize: 14, fontWeight: 700, fontFamily: "var(--font-h)", textAlign: "center", outline: "none" }} />
                 <span style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-h)" }}>of each month</span>
               </div>
             </>}

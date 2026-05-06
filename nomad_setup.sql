@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS report_schedules (
   custom_days         INTEGER,
   send_hour           INTEGER     NOT NULL DEFAULT 6 CHECK (send_hour BETWEEN 0 AND 23),
   send_day_of_week    INTEGER     CHECK (send_day_of_week BETWEEN 0 AND 6),
-  send_day_of_month   INTEGER     CHECK (send_day_of_month BETWEEN 1 AND 28),
+  send_day_of_month   INTEGER     CHECK (send_day_of_month BETWEEN 1 AND 31),
   include_expenses    BOOLEAN     NOT NULL DEFAULT true,
   include_incomes     BOOLEAN     NOT NULL DEFAULT true,
   include_transfers   BOOLEAN     NOT NULL DEFAULT false,
@@ -194,7 +194,13 @@ CREATE INDEX IF NOT EXISTS idx_report_schedules_due
   WHERE is_active = true;
 
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_week  INTEGER CHECK (send_day_of_week BETWEEN 0 AND 6);
-ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_month INTEGER CHECK (send_day_of_month BETWEEN 1 AND 28);
+ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_month INTEGER CHECK (send_day_of_month BETWEEN 1 AND 31);
+
+-- Widen send_day_of_month from 1-28 to 1-31 for existing tables
+DO $$ BEGIN
+  ALTER TABLE report_schedules DROP CONSTRAINT IF EXISTS report_schedules_send_day_of_month_check;
+  ALTER TABLE report_schedules ADD CONSTRAINT report_schedules_send_day_of_month_check CHECK (send_day_of_month BETWEEN 1 AND 31);
+END $$;
 
 -- ── MIGRATIONS: add columns to existing tables ────────────────
 -- Events feature overhaul (group events, split notes, paidBy)
