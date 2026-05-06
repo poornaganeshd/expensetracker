@@ -251,6 +251,8 @@ export default function CredentialSetup({ onDone, onCancel }) {
   const [sbKey, setSbKey]               = useState(existing.sbKey || "");
   const [cloudName, setCloudName]       = useState(existing.cloudName || "");
   const [uploadPreset, setUploadPreset] = useState(existing.uploadPreset || "");
+  const [apiKey, setApiKey]             = useState(existing.apiKey || "");
+  const [apiSecret, setApiSecret]       = useState(existing.apiSecret || "");
   const [error, setError]               = useState("");
   const [showGuide, setShowGuide]       = useState(false);
 
@@ -272,6 +274,8 @@ export default function CredentialSetup({ onDone, onCancel }) {
           sbKey: d.sbKey.trim(),
           cloudName: typeof d.cloudName === "string" ? d.cloudName.trim() : "",
           uploadPreset: typeof d.uploadPreset === "string" ? d.uploadPreset.trim() : "",
+          apiKey: typeof d.apiKey === "string" ? d.apiKey.trim() : "",
+          apiSecret: typeof d.apiSecret === "string" ? d.apiSecret.trim() : "",
         });
         onDone();
       } catch { setError("Failed to read config file."); }
@@ -281,7 +285,7 @@ export default function CredentialSetup({ onDone, onCancel }) {
 
   const save = () => {
     if (!sbUrl.trim() || !sbKey.trim()) { setError("Supabase URL and Anon Key are required."); return; }
-    saveCredentials({ sbUrl: sbUrl.trim(), sbKey: sbKey.trim(), cloudName: cloudName.trim(), uploadPreset: uploadPreset.trim() });
+    saveCredentials({ sbUrl: sbUrl.trim(), sbKey: sbKey.trim(), cloudName: cloudName.trim(), uploadPreset: uploadPreset.trim(), apiKey: apiKey.trim(), apiSecret: apiSecret.trim() });
     onDone();
   };
 
@@ -328,7 +332,7 @@ export default function CredentialSetup({ onDone, onCancel }) {
             <span className="ns-card-name">Cloudinary</span>
             <span className="ns-badge ns-badge-opt">Optional</span>
           </div>
-          <span className="ns-hint">Only needed for receipt photo uploads.</span>
+          <span className="ns-hint">Only needed for receipt photo uploads. Use API Key + Secret for signed uploads (recommended).</span>
           <div className="ns-field">
             <label className="ns-label">Cloud Name</label>
             <input className="ns-input" value={cloudName}
@@ -337,7 +341,21 @@ export default function CredentialSetup({ onDone, onCancel }) {
               autoComplete="off" spellCheck={false} />
           </div>
           <div className="ns-field">
-            <label className="ns-label">Upload Preset</label>
+            <label className="ns-label">API Key <span style={{ fontWeight: 400, opacity: 0.7 }}>(signed — recommended)</span></label>
+            <input className="ns-input" value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="123456789012345"
+              autoComplete="off" spellCheck={false} />
+          </div>
+          <div className="ns-field">
+            <label className="ns-label">API Secret <span style={{ fontWeight: 400, opacity: 0.7 }}>(signed — recommended)</span></label>
+            <input className="ns-input" type="password" value={apiSecret}
+              onChange={e => setApiSecret(e.target.value)}
+              placeholder="your-api-secret"
+              autoComplete="off" spellCheck={false} />
+          </div>
+          <div className="ns-field">
+            <label className="ns-label">Upload Preset <span style={{ fontWeight: 400, opacity: 0.7 }}>(unsigned — if no API Secret)</span></label>
             <input className="ns-input" value={uploadPreset}
               onChange={e => setUploadPreset(e.target.value)}
               placeholder="receipt_upload"
@@ -380,7 +398,8 @@ export default function CredentialSetup({ onDone, onCancel }) {
               <strong>Cloudinary (free, optional)</strong><br />
               1. Sign up at cloudinary.com<br />
               2. Dashboard → copy your "Cloud name"<br />
-              3. Settings → Upload → add unsigned preset → copy name
+              3. For signed uploads (recommended): Settings → API Keys → copy API Key &amp; Secret<br />
+              4. For unsigned uploads: Settings → Upload → add unsigned preset → copy name
             </div>
           )}
         </div>
