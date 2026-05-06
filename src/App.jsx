@@ -969,8 +969,9 @@ export default function Nomad() {
 
   // UPI Lite limits (RBI: ₹5000/day, ₹1L/month)
   const upiLiteUsage = (date) => {
+    const mk = String(date || "").slice(0, 7);
     const day = ex.filter(e => e.walletId === "upi_lite" && e.date === date).reduce((s, e) => s + e.amount, 0);
-    const month = ex.filter(e => e.walletId === "upi_lite" && e.date.slice(0, 7) === date.slice(0, 7)).reduce((s, e) => s + e.amount, 0);
+    const month = ex.filter(e => e.walletId === "upi_lite" && String(e.date || "").slice(0, 7) === mk).reduce((s, e) => s + e.amount, 0);
     return { day, month };
   };
 
