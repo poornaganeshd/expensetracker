@@ -314,4 +314,41 @@ describe('flushSyncQueue', () => {
     expect(result.synced).toBe(0);
     expect(result.pending).toBe(2);
   });
+
+  it('drops 412 conflict as kind:conflict and continues', async () => {
+    const { flushSyncQueue, queueSupabaseRequest, subscribeSyncDrops } = await import('../offlineSync.js');
+    queueSupabaseRequest(makeItem({ path: '/conflict' }));
+    queueSupabaseRequest(makeItem({ path: '/ok' }));
+
+    const drops = [];
+    subscribeSyncDrops(info => drops.push(info));
+
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 412 }) // conflict → drop
+      .mockResolvedValueOnce({ ok: true }));              // second succeeds
+
+    const result = await flushSyncQueue();
+    expect(result.synced).toBe(1);
+    expect(result.pending).toBe(0);
+    expect(drops).toHaveLength(1);
+    expect(drops[0].kind).toBe('conflict');
+    expect(drops[0].status).toBe(412);
+  });
+
+  it('strips If-Unmodified-Since from headers during flush replay', async () => {
+    const { flushSyncQueue, queueSupabaseRequest } = await import('../offlineSync.js');
+    queueSupabaseRequest(makeItem({
+      headers: { 'Content-Type': 'application/json', 'If-Unmodified-Since': '2026-05-01T00:00:00Z' },
+    }));
+
+    const captured = [];
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url, opts) => {
+      captured.push(opts.headers);
+      return Promise.resolve({ ok: true });
+    }));
+
+    await flushSyncQueue();
+    expect(captured[0]).not.toHaveProperty('If-Unmodified-Since');
+    expect(captured[0]).toHaveProperty('Content-Type');
+  });
 });

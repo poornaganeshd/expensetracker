@@ -201,7 +201,11 @@ export const flushSyncQueue = async () => {
   for (let index = 0; index < queue.length; index += 1) {
     const item = queue[index];
     try {
-      const response = await performRequest(item);
+      // Offline replays always win — strip optimistic-concurrency header so
+      // queued writes are never rejected by a 412 on replay.
+      const { "If-Unmodified-Since": _strip, ...replayHeaders } = item.headers || {};
+      const replayItem = { ...item, headers: replayHeaders };
+      const response = await performRequest(replayItem);
       if (response.ok) {
         synced += 1;
         progressedDuringFlush = true;
@@ -219,6 +223,14 @@ export const flushSyncQueue = async () => {
         } else {
           remaining.push({ ...item, _retries: retries });
         }
+        continue;
+      }
+
+      // Conflict (412 Precondition Failed): a newer server version exists.
+      // Discard this write and notify the UI — it will never succeed as-is.
+      if (response.status === 412) {
+        progressedDuringFlush = true;
+        notifyDrops({ kind: "conflict", status: 412, item });
         continue;
       }
 

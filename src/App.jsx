@@ -55,11 +55,30 @@ const loadLocalBackup = ({ sEx, sInc, sTr, sStl, sCats, sIsrc, sSp, sRec, sEvs, 
     if (d.recCats?.length) sRecCats(d.recCats);
   } catch { }
 };
+// ── Optimistic-concurrency version cache ─────────────────────────────────────
+// Stores the server-stamped updated_at for each row so edits can send
+// If-Unmodified-Since and get a 412 if another device wrote first.
+const VERSIONS_KEY = "nomad-record-versions-v1";
+const saveVersions = (table, rows) => {
+  try {
+    const store = JSON.parse(localStorage.getItem(VERSIONS_KEY) || "{}");
+    rows.forEach(r => { if (r.id && r.updated_at) store[`${table}:${r.id}`] = r.updated_at; });
+    localStorage.setItem(VERSIONS_KEY, JSON.stringify(store));
+  } catch { /* storage unavailable or quota exceeded — safe to skip */ }
+};
+const getVersion = (table, id) => {
+  try {
+    const store = JSON.parse(localStorage.getItem(VERSIONS_KEY) || "{}");
+    return store[`${table}:${id}`] ?? null;
+  } catch { return null; }
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 const sbGet = async (table) => {
   if (!SB_ENABLED) return null;
   try {
     const r = await fetchWithTimeout(`${SB_URL}/rest/v1/${table}?select=*&deleted_at=is.null`, { headers: sbH });
-    if (r.ok) return r.json();
+    if (r.ok) { const rows = await r.json(); saveVersions(table, rows); return rows; }
     if (r.status === 400) {
       // deleted_at column not yet migrated — fall back to unfiltered
       const r2 = await fetchWithTimeout(`${SB_URL}/rest/v1/${table}?select=*`, { headers: sbH });
@@ -72,19 +91,19 @@ const sbGet = async (table) => {
     return null;
   }
 };
-const sbWrite = async (path, { method = "POST", body, dedupeKey } = {}) => {
+const sbWrite = async (path, { method = "POST", body, dedupeKey, extraHeaders = {} } = {}) => {
   if (!SB_ENABLED) return { ok: false, queued: false, offline: false, response: null };
   const result = await sendSupabaseRequest({
     path,
     method,
-    headers: method === "POST" ? { ...sbH, "Prefer": "resolution=merge-duplicates,return=minimal" } : sbH,
+    headers: method === "POST" ? { ...sbH, "Prefer": "resolution=merge-duplicates,return=minimal", ...extraHeaders } : { ...sbH, ...extraHeaders },
     body: body ? JSON.stringify(body) : null,
     dedupeKey,
   });
   if (!result.ok && !result.queued && result.response) result.response.text().then(t => console.error("sbWrite fail", path, result.response.status, t));
   return result;
 };
-const sbUpsert = async (table, rows, dedupeKey = null) => sbWrite(`${SB_URL}/rest/v1/${table}`, { method: "POST", body: rows, dedupeKey });
+const sbUpsert = async (table, rows, dedupeKey = null, extraHeaders = {}) => sbWrite(`${SB_URL}/rest/v1/${table}`, { method: "POST", body: rows, dedupeKey, extraHeaders });
 const sbDelete = async (table, id) => sbWrite(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "PATCH", body: { deleted_at: new Date().toISOString() }, dedupeKey: `${table}:delete:${id}` });
 const sbGetDeleted = async (table) => {
   if (!SB_ENABLED) return null;
@@ -805,6 +824,7 @@ export default function Nomad() {
 
   useEffect(() => subscribeSyncDrops((info) => {
     if (info.kind === "storage") { showT("Storage full — clear some data or export and reset", "error"); return; }
+    if (info.kind === "conflict") { showT("Sync conflict — a newer version exists; local change discarded", "error"); return; }
     if (info.kind === "rejected") { const code = info.status === 0 ? "blocked" : info.status; showT(`Sync rejected (${code}) — change couldn't be saved`, "error"); }
   }), []);
 
@@ -1306,7 +1326,7 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
       {tab === "dashboard" && <div className="pe">
         {(() => {
           const tod = new Date(), todS = localDateKey(tod), snoozed = (() => { try { return JSON.parse(localStorage.getItem("nomad-rec-snooze") || "{}"); } catch { return {}; } })(), due = rec.filter(r => isRecurringDueToday(r, todS) && !(snoozed[r.id] && snoozed[r.id] >= todS));
-          return due.length > 0 && <div style={{ marginBottom: 14 }}>{due.map(r => { const cat = cats.find(c => c.id === r.categoryId) || { name: r.categoryId }; const wal = WALLETS.find(w => w.id === r.walletId) || { name: r.walletId }; return <div key={r.id} style={{ ...cc, borderLeft: "3px solid #E07A5F", borderRadius: 14, padding: "14px 16px", marginBottom: 8 }}><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><Warning size={16} color="#E07A5F" weight="fill" /><div style={{ flex: 1 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{r.name} due today — {fmt(r.amount)}{(() => { const od = recurringDaysOverdue(r, todS); return od > 0 ? <span style={{ marginLeft: 6, padding: "2px 6px", borderRadius: 4, background: "#D4726A", color: "#fff", fontSize: 10, fontWeight: 600 }}>{od}d overdue</span> : null; })()}</div><div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{wal.name} → {cat.name}</div></div></div><div style={{ display: "flex", gap: 6 }}><button onClick={(ev) => { if (ev.currentTarget.disabled) return; ev.currentTarget.disabled = true; const ok = addE({ amount: r.amount, categoryId: r.categoryId, walletId: r.walletId, date: todS, note: r.name + " (recurring)", recurring: true }); if (ok === false) { ev.currentTarget.disabled = false; return; } const updated = { ...r, lastPaidDate: todS, lastSkippedDate: null }; sRec(p => p.map(x => x.id === r.id ? updated : x)); sbUpsert("recurring", [toSB(updated, ["id", "name", "amount", "categoryId", "categoryName", "walletId", "frequency", "dayOfMonth", "intervalDays", "yearMonth", "yearDay", "startDate", "active", "lastPaidDate", "lastSkippedDate"])]); showT(r.name + " marked paid — " + fmt(r.amount), "success") }} style={{ flex: 1, padding: "8px", border: "none", borderRadius: 8, background: "#6BAA75", color: "#fff", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>✓ Paid</button><button onClick={(ev) => { if (ev.currentTarget.disabled) return; ev.currentTarget.disabled = true; const updated = { ...r, lastSkippedDate: todS }; sRec(p => p.map(x => x.id === r.id ? updated : x)); sbUpsert("recurring", [toSB(updated, ["id", "name", "amount", "categoryId", "categoryName", "walletId", "frequency", "dayOfMonth", "intervalDays", "yearMonth", "yearDay", "startDate", "active", "lastPaidDate", "lastSkippedDate"])]); showT("Skipped for this cycle", "info") }} style={{ flex: 1, padding: "8px", border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--card)", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Skip</button><button onClick={() => { const snoozeUntil = localDateKey(new Date(Date.now() + 864e5)); const snoozed = JSON.parse(localStorage.getItem("nomad-rec-snooze") || "{}"); snoozed[r.id] = snoozeUntil; localStorage.setItem("nomad-rec-snooze", JSON.stringify(snoozed)); sRec(p => [...p]); showT("Snoozed until tomorrow", "info") }} style={{ flex: 1, padding: "8px", border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--card)", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Snooze</button></div></div> })}</div>
+          return due.length > 0 && <div style={{ marginBottom: 14 }}>{due.map(r => { const cat = cats.find(c => c.id === r.categoryId) || { name: r.categoryId }; const wal = WALLETS.find(w => w.id === r.walletId) || { name: r.walletId }; return <div key={r.id} style={{ ...cc, borderLeft: "3px solid #E07A5F", borderRadius: 14, padding: "14px 16px", marginBottom: 8 }}><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><Warning size={16} color="#E07A5F" weight="fill" /><div style={{ flex: 1 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{r.name} due today — {fmt(r.amount)}{(() => { const od = recurringDaysOverdue(r, todS); return od > 0 ? <span style={{ marginLeft: 6, padding: "2px 6px", borderRadius: 4, background: "#D4726A", color: "#fff", fontSize: 10, fontWeight: 600 }}>{od}d overdue</span> : null; })()}</div><div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{wal.name} → {cat.name}</div></div></div><div style={{ display: "flex", gap: 6 }}><button onClick={(ev) => { if (ev.currentTarget.disabled) return; ev.currentTarget.disabled = true; const ok = addE({ amount: r.amount, categoryId: r.categoryId, walletId: r.walletId, date: todS, note: r.name + " (recurring)", recurring: true }); if (ok === false) { ev.currentTarget.disabled = false; return; } const updated = { ...r, lastPaidDate: todS, lastSkippedDate: null }; sRec(p => p.map(x => x.id === r.id ? updated : x)); sbUpsert("recurring", [toSB(updated, ["id", "name", "amount", "categoryId", "categoryName", "walletId", "frequency", "dayOfMonth", "intervalDays", "yearMonth", "yearDay", "startDate", "active", "lastPaidDate", "lastSkippedDate"])], null, getVersion("recurring", r.id) ? { "If-Unmodified-Since": getVersion("recurring", r.id) } : {}); showT(r.name + " marked paid — " + fmt(r.amount), "success") }} style={{ flex: 1, padding: "8px", border: "none", borderRadius: 8, background: "#6BAA75", color: "#fff", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>✓ Paid</button><button onClick={(ev) => { if (ev.currentTarget.disabled) return; ev.currentTarget.disabled = true; const updated = { ...r, lastSkippedDate: todS }; sRec(p => p.map(x => x.id === r.id ? updated : x)); sbUpsert("recurring", [toSB(updated, ["id", "name", "amount", "categoryId", "categoryName", "walletId", "frequency", "dayOfMonth", "intervalDays", "yearMonth", "yearDay", "startDate", "active", "lastPaidDate", "lastSkippedDate"])], null, getVersion("recurring", r.id) ? { "If-Unmodified-Since": getVersion("recurring", r.id) } : {}); showT("Skipped for this cycle", "info") }} style={{ flex: 1, padding: "8px", border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--card)", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Skip</button><button onClick={() => { const snoozeUntil = localDateKey(new Date(Date.now() + 864e5)); const snoozed = JSON.parse(localStorage.getItem("nomad-rec-snooze") || "{}"); snoozed[r.id] = snoozeUntil; localStorage.setItem("nomad-rec-snooze", JSON.stringify(snoozed)); sRec(p => [...p]); showT("Snoozed until tomorrow", "info") }} style={{ flex: 1, padding: "8px", border: "1.5px solid var(--border)", borderRadius: 8, background: "var(--card)", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Snooze</button></div></div> })}</div>
         })()}
         <div style={{ ...cc, padding: "28px 24px", marginBottom: 16, textAlign: "center" }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, color: "var(--muted)", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 500 }}>Total Money</div><div style={{ fontSize: 36, fontWeight: 700, fontFamily: "var(--font-h)", color: mBal >= 0 ? "#6BAA75" : "#E07A5F", marginTop: 8, lineHeight: 1.2 }}>{fmt(mBal)}</div><div style={{ display: "flex", justifyContent: "space-around", marginTop: 22 }}><div><div style={{ fontFamily: "var(--font-h)", fontSize: 10, color: "var(--muted)", letterSpacing: "1px", fontWeight: 500 }}>INCOME</div><div style={{ fontFamily: "var(--font-h)", fontSize: 16, color: "#6BAA75", marginTop: 4, fontWeight: 600 }}>{fmt(tI)}</div></div><div style={{ width: 1, background: "var(--border)" }} /><div><div style={{ fontFamily: "var(--font-h)", fontSize: 10, color: "var(--muted)", letterSpacing: "1px", fontWeight: 500 }}>NET SPENT</div><div style={{ fontFamily: "var(--font-h)", fontSize: 16, color: "#E07A5F", marginTop: 4, fontWeight: 600 }}>{fmt(tE)}</div></div></div></div>
 
@@ -1464,7 +1484,7 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
     {recEditId && (() => {
       const r = rec.find(x => x.id === recEditId);
       if (!r) return null;
-      return <RecEditPanel r={r} recCats={recCats} onSave={patch => { const updated = rec.map(x => x.id === r.id ? { ...x, ...patch } : x); sRec(updated); sbUpsert("recurring", [toSB(updated.find(x => x.id === r.id), ["id", "name", "amount", "categoryId", "categoryName", "walletId", "frequency", "dayOfMonth", "intervalDays", "yearMonth", "yearDay", "startDate", "active", "lastPaidDate", "lastSkippedDate"])]); sRecEditId(null); showT((patch.name || r.name) + " updated", "success"); }} onClose={() => sRecEditId(null)} />;
+      return <RecEditPanel r={r} recCats={recCats} onSave={patch => { const updated = rec.map(x => x.id === r.id ? { ...x, ...patch } : x); sRec(updated); sbUpsert("recurring", [toSB(updated.find(x => x.id === r.id), ["id", "name", "amount", "categoryId", "categoryName", "walletId", "frequency", "dayOfMonth", "intervalDays", "yearMonth", "yearDay", "startDate", "active", "lastPaidDate", "lastSkippedDate"])], null, getVersion("recurring", r.id) ? { "If-Unmodified-Since": getVersion("recurring", r.id) } : {}); sRecEditId(null); showT((patch.name || r.name) + " updated", "success"); }} onClose={() => sRecEditId(null)} />;
     })()}
 
     {dbSetupModal && (
