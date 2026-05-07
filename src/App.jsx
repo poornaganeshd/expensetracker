@@ -465,9 +465,6 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
   const receiptPickerRef = useRef(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitKey, setSubmitKey] = useState(0);
-  const flagBlobsRef = useRef({});
-  const [flagSrcs, setFlagSrcs] = useState({});
-  useEffect(() => { CURRENCIES.forEach(async c => { if (flagBlobsRef.current[c]) return; try { const r = await fetch(`https://flagcdn.com/32x24/${c.slice(0, 2).toLowerCase()}.png`); const blob = await r.blob(); const url = URL.createObjectURL(blob); flagBlobsRef.current[c] = url; setFlagSrcs(p => ({ ...p, [c]: url })); } catch { /* ignore flag fetch errors */ } }); }, []);
   useEffect(() => { const c = fxCur.trim().toUpperCase(); if (c.length !== 3 || c === "INR") { setFxRate(null); return; } setFxFetching(true); getExchangeRate(c).then(r => { setFxRate(r); setFxFetching(false); }).catch(() => { setFxRate(null); setFxFetching(false); }); }, [fxCur]);
   useEffect(() => { try { sessionStorage.setItem("nomad-add-draft", JSON.stringify({ type, amt, catId, wid, date, note })); } catch { /* ignore storage errors */ } }, [type, amt, catId, wid, date, note]);
   const ts = useRef(null), tc = type === "expense" ? "#E07A5F" : type === "income" ? "#6BAA75" : type === "transfer" ? "#7B8CDE" : "#A78BFA";
@@ -518,7 +515,7 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
       {/* Merged amount + currency box */}
       <div style={{ position: "relative", display: "flex", alignItems: "center", background: "var(--card)", border: `1.5px solid ${tc}`, borderRadius: 10, overflow: "hidden" }}>
         {/* ₹ prefix — always shows INR symbol regardless of selected currency */}
-        {type !== "transfer" && <img src={flagSrcs[fxCur] || `https://flagcdn.com/32x24/${fxCur.slice(0, 2).toLowerCase()}.png`} alt={fxCur} style={{ marginLeft: 16, height: 22, flexShrink: 0, userSelect: "none", objectFit: "contain", borderRadius: 2 }} />}
+        {type !== "transfer" && <span style={{ marginLeft: 16, fontSize: 22, lineHeight: 1, flexShrink: 0, userSelect: "none" }}>{getCurrencyFlag(fxCur)}</span>}
         <input type="number" value={amt === "0" ? "" : amt} onChange={e => sAmt(e.target.value || "0")} placeholder="0" autoFocus style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 32, fontWeight: 600, fontFamily: "var(--font-h)", textAlign: "center", padding: "18px 8px", color: tc, minWidth: 0 }} />
         {/* Currency badge — tappable, opens the picker */}
         {type !== "transfer" && !fxExpanded && <button onClick={() => setFxExpanded(true)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", margin: "0 8px", borderRadius: 20, border: `1.5px solid ${fxCur !== "INR" ? tc : "var(--border)"}`, background: fxCur !== "INR" ? tc + "14" : "var(--bg)", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 12, color: fxCur !== "INR" ? tc : "var(--muted)", letterSpacing: 0.5, flexShrink: 0, whiteSpace: "nowrap" }}><span style={{ fontSize: 13, lineHeight: 1 }}>{getCurrencyFlag(fxCur)}</span>{fxCur}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}><polyline points="9 18 15 12 9 6" /></svg></button>}
@@ -842,6 +839,8 @@ export default function Nomad() {
     if (info.kind === "rejected") { const code = info.status === 0 ? "blocked" : info.status; showT(`Sync rejected (${code}) — change couldn't be saved`, "error"); }
   }), []);
 
+  useEffect(() => { window.scrollTo(0, 0); }, [tab]);
+
   useEffect(() => {
     if (!loaded || !SB_ENABLED) return;
     const userKey = SB_URL.replace("https://", "").split(".")[0];
@@ -992,7 +991,7 @@ export default function Nomad() {
     if (hDateFrom) items = items.filter(it => it.date >= hDateFrom);
     if (hDateTo) items = items.filter(it => it.date <= hDateTo);
     if (hType !== "all") items = items.filter(it => it.type === hType);
-    return items.sort((a, b) => { const dd = new Date(b.date) - new Date(a.date); if (dd !== 0) return dd; return parseInt(b.id, 36) - parseInt(a.id, 36); });
+    return items.sort((a, b) => { const dd = new Date(b.date) - new Date(a.date); if (dd !== 0) return dd; return 0; });
   }, [flt, ex, inc, tr, stl, fm, hSearch, hMinAmt, hMaxAmt, hDateFrom, hDateTo, hType, cats, isrc]);
 
   const budgetStatus = useMemo(() => { const cm = localDateKey().slice(0, 7); const mEx = ex.filter(e => mk(e.date) === cm); return Object.entries(budgets).filter(entry => entry[1] > 0).map(([cid, lim]) => { const spent = mEx.filter(e => e.categoryId === cid).reduce((s, e) => s + e.amount, 0); const cat = cats.find(c => c.id === cid) || { id: cid, name: cid, color: "#999", neon: "#999" }; const pct = Math.min(100, Math.round(spent / lim * 100)); return { cid, cat, spent, lim, pct }; }); }, [budgets, ex, cats]);
