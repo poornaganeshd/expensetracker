@@ -64,10 +64,16 @@ export function getNextSendAt(s: Schedule, now: Date): Date {
     }
   } else if (s.frequency === "monthly") {
     n.setUTCMonth(n.getUTCMonth() + 1);
-    if (s.send_day_of_month != null) n.setUTCDate(Math.min(s.send_day_of_month, 28));
+    if (s.send_day_of_month != null) {
+      const lastDay = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 0)).getUTCDate();
+      n.setUTCDate(Math.min(s.send_day_of_month, lastDay));
+    }
   } else if (s.frequency === "quarterly") {
     n.setUTCMonth(n.getUTCMonth() + 3);
-    if (s.send_day_of_month != null) n.setUTCDate(Math.min(s.send_day_of_month, 28));
+    if (s.send_day_of_month != null) {
+      const lastDay = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 0)).getUTCDate();
+      n.setUTCDate(Math.min(s.send_day_of_month, lastDay));
+    }
   } else {
     n.setUTCDate(n.getUTCDate() + (s.custom_days ?? 7));
   }

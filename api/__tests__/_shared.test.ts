@@ -123,10 +123,15 @@ describe('getNextSendAt', () => {
     expect(next.getUTCMinutes()).toBe(30);
   });
 
-  it('monthly with send_day_of_month clamps to 28', () => {
+  it('monthly with send_day_of_month clamps to last day of target month', () => {
+    // now = April 15 → +1 month = May (31 days). dom=31 fits, no clamp.
     const s = makeSchedule({ frequency: 'monthly', send_day_of_month: 31 });
     const next = getNextSendAt(s, now);
-    expect(next.getUTCDate()).toBe(28);
+    expect(next.getUTCDate()).toBe(31); // May has 31 days
+    // Use January → February to verify clamp: Jan 15 + 1 month = Feb (29 in 2024 leap year)
+    const nowJan = new Date('2024-01-15T08:00:00Z');
+    const nextFeb = getNextSendAt(s, nowJan);
+    expect(nextFeb.getUTCDate()).toBe(29); // Feb 2024 has 29 days (leap year)
   });
 
   it('quarterly: adds 3 months', () => {
