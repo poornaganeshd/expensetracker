@@ -40,6 +40,8 @@ ALTER TABLE report_delivery_log DISABLE ROW LEVEL SECURITY;
 
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS custom_days         INTEGER;
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_hour           INTEGER NOT NULL DEFAULT 6;
+ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_week    INTEGER CHECK (send_day_of_week BETWEEN 0 AND 6);
+ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS send_day_of_month   INTEGER CHECK (send_day_of_month BETWEEN 1 AND 31);
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS include_expenses    BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS include_incomes     BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS include_transfers   BOOLEAN NOT NULL DEFAULT false;
