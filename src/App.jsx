@@ -8,6 +8,7 @@ import { getExchangeRate, saveCurrencyMeta, getCurrencyMeta } from "./currencyCo
 import ReceiptPicker from "./ReceiptPicker";
 import CredentialSetup from "./CredentialSetup";
 import { getCredentials } from "./credentials";
+import { isLocalReceipt } from "./receiptUpload";
 import {
   roundMoney, localDateKey, fullMonthsBetween, fullYearsBetween,
   getRecurringAnchorDate, getRecurringDueDate, isRecurringDueToday,
@@ -482,6 +483,7 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
       if (type !== "transfer" && receiptPickerRef.current?.count > 0) {
         const urls = await receiptPickerRef.current.upload();
         rUrl = urls.length === 1 ? urls[0] : urls.length > 1 ? JSON.stringify(urls) : null;
+        if (rUrl && (isLocalReceipt(rUrl) || (urls.length > 1 && urls.some(isLocalReceipt)))) showT("Receipt saved locally — add Cloudinary in Settings to sync receipts to the cloud", "info");
       }
       const isFX = fxCur.trim().toUpperCase() !== "INR" && fxRate > 0;
       const inrAmt = isFX ? roundMoney(a * fxRate) : a;

@@ -31,6 +31,12 @@ async function sha1Hex(str) {
   return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Returns true when a receipt URL is a locally-stored data URL (no Cloudinary).
+// Use this in UI to show a "stored locally" badge or suppress broken-link warnings.
+export function isLocalReceipt(url) {
+  return typeof url === "string" && url.startsWith("data:");
+}
+
 // Compress + upload to Cloudinary.
 //
 // Two modes (backwards-compatible):
@@ -39,14 +45,30 @@ async function sha1Hex(str) {
 //              be stored client-side by the owner, analogous to the anon Supabase key)
 //   Unsigned — uploadPreset present, no apiSecret required
 //
-// Returns the secure_url of the uploaded image.
+// Local fallback — when Cloudinary is not configured at all (no cloudName), the image
+//   is compressed and returned as a base64 data URL so the user can still attach
+//   receipts without setting up Cloudinary. The data URL is stored directly in the
+//   expense's receipt_url column (Postgres TEXT — no size limit). Callers should
+//   check isLocalReceipt(url) to surface a "stored locally" notice.
+//
+// Returns the secure_url (remote) or a data: URL (local fallback).
 export async function uploadReceipt(file) {
   const creds = getCredentials();
   const { cloudName, apiKey, apiSecret, uploadPreset } = creds;
 
-  if (!cloudName) throw new Error("Cloudinary not configured. Add your Cloud Name in Settings → Credentials.");
-
   const blob = await compressImage(file);
+
+  // ── Local fallback: no Cloudinary configured ──────────────────────────────
+  if (!cloudName) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Failed to read image"));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  // ── Cloudinary upload ─────────────────────────────────────────────────────
   const form = new FormData();
   form.append("file", blob, "receipt.jpg");
 
