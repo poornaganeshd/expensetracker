@@ -466,6 +466,11 @@ Parses CSV text from HDFC/ICICI/SBI/generic bank statements. Auto-detects column
 **B.22.c Import Bank CSV UI — Backup & Restore card — `src/App.jsx`**
 Gold "📂 Import Bank CSV" label opens file picker for `.csv` files. On parse success, inline preview shows first 4 rows (amount, description, date) with Confirm/Cancel buttons. Closes E.8 H: CSV import.
 
+#### B.23 (`401af76`) — E.8 H: Default categories/sources deletable
+
+**B.23.a Remove default-guard in Manage section — `src/App.jsx`**
+The `✕` button's `if (defs.find(d => d.id === c.id)) return` guard and `opacity: 0.15` for defaults removed. Users can now delete built-in `DC`/`DI` entries. Orphan-count toast already fires when N transactions would become "Unknown". `nomad-v5` localStorage auto-persists the change. Rename of defaults still not supported (requires inline-edit UI — future work).
+
 ### C. False Positives (audit was wrong — do NOT reopen)
 
 These were flagged by the original audit but are correct in the existing code. Recorded here so we don't waste a future session re-investigating.
@@ -604,7 +609,7 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 | **H** | CSV / PDF in-app export | ✅ Already existed (false positive — `expCSV` + Export card in Settings). PDF still via emailed report only |
 | **H** | CSV import (bank statements) | ✅ Done (B.22) — auto-detects HDFC/ICICI/SBI/generic formats; preview before import; recategorize after |
 | **H** | Transaction full-text search across years | History tab filter only covers current visible window |
-| **H** | UI to manage hardcoded wallets/categories/sources | `WALLETS`, `DC`, `DI`, `RC` are constants in `App.jsx`. Custom-add exists but defaults can't be deleted/renamed |
+| **H** | UI to manage hardcoded wallets/categories/sources | ✅ Default categories/sources can now be deleted (B.23). Rename not yet supported. WALLETS are still hardcoded |
 | **H** | "Demo data" mode for new users | Lets them explore without committing |
 | **H** | Multi-account / family sharing | Splits exist as personal IOUs, not a shared ledger |
 
