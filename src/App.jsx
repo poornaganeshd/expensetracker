@@ -966,15 +966,18 @@ export default function Nomad() {
   const flt = useMemo(() => fm === "all" ? { expenses: ex, incomes: inc, settlements: stl } : { expenses: ex.filter(e => mk(e.date) === fm), incomes: inc.filter(i => mk(i.date) === fm), settlements: stl.filter(s => mk(s.date) === fm) }, [ex, inc, stl, fm]);
   const tI = flt.incomes.reduce((s, i) => s + i.amount, 0), tE = Math.max(0, flt.expenses.reduce((s, e) => s + e.amount, 0) + flt.settlements.filter(s => s.direction === "owe").reduce((s, x) => s + x.amount, 0) - flt.settlements.filter(s => s.direction === "owed").reduce((s, x) => s + x.amount, 0));
   const historyItems = useMemo(() => {
-    let items = [...flt.expenses.map(e => ({ ...e, type: "expense" })), ...flt.incomes.map(i => ({ ...i, type: "income" })), ...(fm === "all" ? tr : tr.filter(t => mk(t.date) === fm)).map(t => ({ ...t, type: "transfer" })), ...(fm === "all" ? stl : stl.filter(s => mk(s.date) === fm)).map(s => ({ ...s, type: "settlement" }))];
-    if (hSearch.trim()) { const q = hSearch.toLowerCase().trim(); items = items.filter(it => (it.note || "").toLowerCase().includes(q) || (cats.find(c => c.id === it.categoryId)?.name || "").toLowerCase().includes(q) || (isrc.find(s => s.id === it.sourceId)?.name || "").toLowerCase().includes(q) || (it.splitName || "").toLowerCase().includes(q)); }
+    const searching = hSearch.trim() !== "";
+    let items = searching
+      ? [...ex.map(e => ({ ...e, type: "expense" })), ...inc.map(i => ({ ...i, type: "income" })), ...tr.map(t => ({ ...t, type: "transfer" })), ...stl.map(s => ({ ...s, type: "settlement" }))]
+      : [...flt.expenses.map(e => ({ ...e, type: "expense" })), ...flt.incomes.map(i => ({ ...i, type: "income" })), ...(fm === "all" ? tr : tr.filter(t => mk(t.date) === fm)).map(t => ({ ...t, type: "transfer" })), ...(fm === "all" ? stl : stl.filter(s => mk(s.date) === fm)).map(s => ({ ...s, type: "settlement" }))];
+    if (searching) { const q = hSearch.toLowerCase().trim(); items = items.filter(it => (it.note || "").toLowerCase().includes(q) || (cats.find(c => c.id === it.categoryId)?.name || "").toLowerCase().includes(q) || (isrc.find(s => s.id === it.sourceId)?.name || "").toLowerCase().includes(q) || (it.splitName || "").toLowerCase().includes(q)); }
     if (hMinAmt !== "") items = items.filter(it => it.amount >= parseFloat(hMinAmt));
     if (hMaxAmt !== "") items = items.filter(it => it.amount <= parseFloat(hMaxAmt));
     if (hDateFrom) items = items.filter(it => it.date >= hDateFrom);
     if (hDateTo) items = items.filter(it => it.date <= hDateTo);
     if (hType !== "all") items = items.filter(it => it.type === hType);
     return items.sort((a, b) => { const dd = new Date(b.date) - new Date(a.date); if (dd !== 0) return dd; return parseInt(b.id, 36) - parseInt(a.id, 36); });
-  }, [flt, tr, stl, fm, hSearch, hMinAmt, hMaxAmt, hDateFrom, hDateTo, hType, cats, isrc]);
+  }, [flt, ex, inc, tr, stl, fm, hSearch, hMinAmt, hMaxAmt, hDateFrom, hDateTo, hType, cats, isrc]);
 
   const wBal = useMemo(() => { const b = { upi_lite: wsb.upi_lite || 0, bank: wsb.bank || 0, cash: wsb.cash || 0 }; inc.forEach(i => { const w = i.walletId || "bank"; if (b[w] !== undefined) b[w] += i.amount }); ex.forEach(e => { const w = e.walletId || "upi_lite"; if (b[w] !== undefined) b[w] -= e.amount }); tr.forEach(t => { if (b[t.fromWallet] !== undefined) b[t.fromWallet] -= t.amount; if (b[t.toWallet] !== undefined) b[t.toWallet] += t.amount }); stl.forEach(s => { if (b[s.walletId] !== undefined) { if (s.direction === "owed") b[s.walletId] += s.amount; else b[s.walletId] -= s.amount } }); return b }, [ex, inc, tr, stl, wsb]);
   const mBal = Object.values(wBal).reduce((s, v) => s + v, 0);
