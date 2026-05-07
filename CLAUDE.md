@@ -396,6 +396,32 @@ Before: every upload was unsigned (anyone who learned the preset name could uplo
 **B.16.a Three-layer fix — `nomad_setup.sql`, `src/App.jsx`**
 Before: `send_day_of_month` was capped at 28 in the SQL constraint, UI input, and the client-side scheduler, so users wanting day 29/30 silently got day 28. After: SQL constraint updated to `1–31` with an idempotent DO block that drops and re-adds the check on existing databases. UI input `max` and onChange clamp updated to 31. Scheduler's `Math.min(dom, 28)` replaced with `Math.min(dom, lastDayOfCurrentMonth)` using `Date.UTC` so the clamp adapts per month (28 in Feb, 30 in Apr, 31 in Jan) rather than always using the Feb worst case.
 
+#### B.19 (session 3+) — Cross-month full-text search, backend UTC fix, stale test fix, UX polish
+
+**B.19.a Cross-month search — `src/App.jsx`**
+`historyItems` useMemo now builds from full `ex`/`inc`/`tr`/`stl` arrays when `hSearch` is non-empty, enabling search across all months. Month filter still applies when no search text is entered.
+
+**B.19.b UTC-safe `getPeriod` — `api/_shared.ts`**
+`getPeriod` replaced `date-fns` local-time `startOfMonth`/`endOfMonth` with `Date.UTC()` arithmetic. In IST (UTC+5:30), the old code returned Feb 29 instead of Mar 1 as monthly-report start. Now timezone-independent.
+
+**B.19.c Stale `getNextSendAt` tests updated — `api/__tests__/_shared.test.ts`**
+7 tests written before IST→UTC conversion was added. Updated assertions to expect IST-adjusted UTC hours (send_hour=8 IST → UTC hours=2, minutes=30, etc). All 133 tests now pass; 0 failing.
+
+**B.19.d Recurring status badges — `src/App.jsx`**
+Recurring list rows now show "✓ Paid" (green) or "Skipped" (amber) badge when the current cycle has been acted on.
+
+**B.19.e History empty states — `src/App.jsx`**
+History tab: empty state with "No transactions yet" message + "Add First Transaction" CTA button when no data exists. Also shows "No results match your filters." when filters eliminate all results. Dashboard: welcome card shown on first open before any transactions.
+
+**B.19.f Orphan-category warning + usage count — `src/App.jsx`**
+Delete handler in Manage section shows `"⚠ N transactions now show as Unknown"` toast. Category/source rows show a transaction-count badge so users know the impact before deleting.
+
+**B.19.g Wallet descriptions — `src/App.jsx`**
+`WALLETS` constant gained `desc` field per wallet; `WB` selector component shows the subtitle under each wallet name.
+
+**B.19.h Splits model explainer — `src/App.jsx`**
+Splits section header and expanded state now show brief text explaining personal-IOUs vs Events.
+
 ### C. False Positives (audit was wrong — do NOT reopen)
 
 These were flagged by the original audit but are correct in the existing code. Recorded here so we don't waste a future session re-investigating.
@@ -417,9 +443,9 @@ These were flagged by the original audit but are correct in the existing code. R
 
 Fix: caller's `supabase_url` is now validated against the owner's `user_registry` (using `SUPABASE_SERVICE_ROLE_KEY`) before processing. Owner's own URL is allowed; everyone else must be registered. See B.3.a.
 
-#### D.1.2 7 vitest failures in `_shared.ts:getNextSendAt` — STILL OPEN
+#### D.1.2 7 vitest failures in `_shared.ts:getNextSendAt` — ✅ FIXED
 
-7 tests in `api/__tests__/_shared.test.ts` fail with messages like `expected 30 to be +0` for `next.getUTCMinutes()`. The IST conversion correctly produces UTC times offset by 30 minutes (because IST = UTC+5:30), so for whole-hour `send_hour` inputs, UTC minutes will be `30`, not `0`. Either the tests are stale (pre-IST) or the conversion is silently shifting send times by 30 minutes for everyone. **Pre-existing — these failures predate this branch.** Worth a 30-minute investigation in a future session. Do not "fix" by editing production code without first confirming whether the test or the production behavior is wrong.
+7 `getNextSendAt` tests were stale (written before IST→UTC conversion was added). Updated all assertions to expect IST-adjusted UTC hours/minutes (send_hour=8 IST → UTC hours=2, minutes=30, etc). 2 `getPeriod` tests also fixed by replacing `date-fns` local-time `startOfMonth`/`endOfMonth` with `Date.UTC()` arithmetic in `_shared.ts`. All 133 tests now pass.
 
 #### D.1.3 `billReminders.addDays` had a TZ off-by-one — ✅ FIXED in `f2a60f4`
 
@@ -489,17 +515,16 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 
 #### E.6 Other Edge Cases (10 open)
 
-> E.6 #1 (soft delete) closed in B.13. E.6 #8 (UPI Lite slice) closed in B.14.
+> E.6 #1 (soft delete) closed in B.13. E.6 #8 (UPI Lite slice) closed in B.14. E.6 M (skipped-vs-paid badges) and E.6 M (orphan-category warning) closed in B.19.
 
 | Pri | Finding | Location | Notes |
 |---|---|---|---|
 | **H** | "Clear All Data" non-atomic across tables | `App.jsx:1418` | Mid-network nuke leaves 3/8 tables empty, others not. Mitigated by "Download backup first" nudge (B.9.c). A server-side function would close it fully |
 | **H** | Refund flow doesn't exist | App-wide | Returned purchase becomes "negative expense" or "fake income"; either choice corrupts category analytics |
-| **M** | Skipped-vs-paid recurring not visually distinct | `financeUtils.js:60-66`, history UI | Audit pain |
-| **M** | Deleting a category orphans expenses | App-wide | Future filters list ghost data; bills render as "Uncategorized" with no path back |
+| **M** | Deleting a category orphans expenses | App-wide | ✅ Warning toast added (B.19.f) — shows orphan count. Ghost data still exists but user is warned |
 | **M** | Deleting a participant from a group event after a split | App-wide | Settlement math no longer balances; orphan owes nobody |
 | **M** | Custom split with ₹0 participants — input-side validation | `App.jsx:703` | Submit-side guard already drops 0-amount rows; the input could reject earlier with a per-row warning |
-| **M** | `getINRRate` hardcodes INR target | `currencyConverter.js:29-31` | Misleading API name if non-INR users ever supported |
+| **M** | `getExchangeRate` hardcodes INR target | `currencyConverter.js:29-31` | ✅ Renamed from `getINRRate` → `getExchangeRate` (B.19) to reduce misleading name; INR target still hardcoded |
 | **L** | `JSON.stringify` loses precision past 2^53 | `App.jsx:904` | Not relevant for INR; flagged for completeness |
 | **L** | `report_schedules` UNIQUE on `user_id` | `nomad_setup.sql:117` | Only one schedule per user; can't have daily + weekly. Drop the UNIQUE if needed |
 | **L** | Streak gaming: edit `allData` JSON directly in Supabase | `Routine.jsx` data model | If you care about streak integrity, lock past days after midnight |
@@ -514,12 +539,12 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 | **H** | No quick-entry / templates for repeat transactions | App-wide | Daily ₹120 metro fare = 5 taps every day forever. Suggest last-N |
 | **H** | Long expense entry form (5+ fields) | `App.jsx` AddPage | Compare Splitwise's two-tap flow |
 | **M** | Receipt upload gated on Cloudinary setup — skip Cloudinary → no receipts ever | `App.jsx`, `receiptUpload.js` | Fall back to local-blob persistence with quota warning |
-| **M** | "Wallet" terminology — `upi_lite`, `bank`, `cash` — unexplained | `App.jsx:86` | New user has no idea what "UPI Lite" is or why its cap is special-cased |
-| **M** | Splits vs Settlements vs Events overlap conceptually | App-wide | No in-app explanation of the model |
-| **M** | No empty-state guidance | App-wide | First open with no data shows blank pages |
+| **M** | "Wallet" terminology — `upi_lite`, `bank`, `cash` — unexplained | `App.jsx:86` | ✅ Added `desc` subtitle to each wallet in selector (B.19.g) |
+| **M** | Splits vs Settlements vs Events overlap conceptually | App-wide | ✅ Added explainer text to Splits section (B.19.h) |
+| **M** | No empty-state guidance | App-wide | ✅ History tab: empty state + CTA; Dashboard: welcome card (B.19.e) |
 | **M** | No tutorial / sample data toggle | App-wide | New users can't understand "Splits" without committing real data |
-| **M** | Unsaved form state lost on tab switch | App-wide | Half-typed expense + notification → text gone |
-| **L** | No undo on destructive actions | App-wide | Long-press delete → gone. Toast lacks "Undo" |
+| **M** | Unsaved form state lost on tab switch | App-wide | ✅ sessionStorage draft save already implemented (add form autosaves on every keystroke) |
+| **L** | No undo on destructive actions | App-wide | ✅ Already implemented: `undoDelete`/`showUndoToast`/`undoBuffersRef` — UNDO button appears on delete toast |
 
 #### E.8 Product Gaps (~25 open) — features, not bugs
 
@@ -594,20 +619,20 @@ Re-prioritized after the work in this branch.
 | `api/send-reports.ts` | within-chunk serial fan-out, Gmail 500/day, per-user cold start |
 | `api/setup-user.ts` | Management API token handling (audit only) |
 | `nomad_setup.sql` | RLS disabled everywhere (`:95-102, :160-161, :187-188`), `wallet_balances` no integrity invariant, schedule UNIQUE on user_id (`:117`), `daily_logs` JSONB blob model (`:175-179`) |
-| `api/__tests__/_shared.test.ts` | 9 failing tests — 7 on `getNextSendAt` (pre-existing IST offset, see D.1.2) + 2 on `getPeriod` (also pre-existing, appeared before this session) |
+| `api/__tests__/_shared.test.ts` | ✅ All 9 failures fixed (D.1.2) — 0 failing |
 
 ### H. Notes for Future Claude Sessions
 
 1. **Do not re-investigate the items in section C (false positives).** They are correct in the existing code.
 2. **Always run `npm run lint` and `npm test` before and after edits.** Current baselines (verified May 2026, third session):
    - **Lint:** 64 problems (57 errors, 7 warnings). New edits must not increase this count.
-   - **Tests:** **124 pass / 9 fail (133 total).** All 9 failures are pre-existing in `api/__tests__/_shared.test.ts` — 7 on `getNextSendAt` (IST offset, see D.1.2) and 2 on `getPeriod` (monthly + quarterly date boundary). Do not treat any of these 9 as regressions from this branch.
+   - **Tests:** **133 pass / 0 fail (133 total).** All 9 previously-failing tests in `api/__tests__/_shared.test.ts` are now fixed: 2 `getPeriod` failures (UTC-safe month arithmetic) and 7 `getNextSendAt` failures (stale tests updated to reflect IST→UTC conversion).
    - B.17 added 2 new offlineSync tests (412 conflict drop, header stripping) → total went 131 → 133 passing.
 3. **`App.jsx` and `Routine.jsx` are written one-line-per-JSX-block.** When editing, use a unique substring as `old_string` — do **not** attempt to reformat. The build will break.
 4. **`dist/` is gitignored but historically tracked.** Don't commit rebuilt `dist/` unless explicitly asked; Vercel rebuilds on push. After running `npm run build`, run `git checkout HEAD -- dist/` before staging.
 5. **`AddPage` is a sub-component** (line 419) without direct access to the main `App` state. Pass callbacks (like `onError`) as props rather than reaching for global state.
 6. **Sync queue is the riskiest data structure.** Anything that mutates `nomad-sync-queue-v1` or replays it must be idempotent and must surface failures to the user. The new `subscribeSyncDrops` channel (B.4.d) is the user-visible signal — wire any new drop conditions through it. Dead-letter queue is `nomad-sync-failed-v1` (B.10.b).
-7. **The 9 failing tests** in `_shared.test.ts` are pre-existing. Do not "fix" them by modifying production code without first confirming whether the production behavior or the test is wrong (see D.1.2).
+7. **All 133 tests now pass.** The previously-failing `_shared.test.ts` tests are fixed (see D.1.2). Test baseline is 133/133.
 8. **`nomad_setup.sql` is idempotent and safe to re-run.** All migrations use `ADD COLUMN IF NOT EXISTS`, `DROP TRIGGER IF EXISTS`, and `DROP CONSTRAINT IF EXISTS` patterns. The `deleted_at` and `updated_at` migrations (B.7.a, B.13.a) will apply cleanly to existing databases.
 9. **`receiptUpload.js` supports two Cloudinary modes** (B.18): signed (apiKey+apiSecret → SHA-1 via `crypto.subtle`) or unsigned (uploadPreset). Tests that exercise the upload path must mock `getCredentials()` to return at minimum `cloudName` plus either `apiKey`+`apiSecret` or `uploadPreset`.
 10. **`uid()` (App.jsx:16) prefers `crypto.randomUUID()`.** Don't reintroduce shadowing — the renamed `userKey` constants (subdomain ref) live alongside it (B.8.b).
