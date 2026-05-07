@@ -440,6 +440,17 @@ Added `send_day_of_week` and `send_day_of_month` `ALTER TABLE IF NOT EXISTS` sta
 **B.19.n Heatmap aggregation memoized — `src/App.jsx`**
 Heatmap `dt` object now wrapped in `useMemo([ex, pfx])` so the O(n) scan only runs when the expense list or viewed month changes. Also guards against non-string dates. Partially addresses E.5 M heatmap perf.
 
+#### B.20 (`2e83fb2`) — E.7 M: Local-blob receipt fallback
+
+**B.20.a `uploadReceipt` local fallback — `src/receiptUpload.js`**
+When `cloudName` is not set in credentials, `uploadReceipt()` now compresses the image and returns a base64 data URL (via `FileReader.readAsDataURL`) instead of throwing. The data URL is stored directly in the expense's `receipt_url` column (Postgres TEXT — no size limit). Existing Cloudinary paths (signed + unsigned) are unchanged.
+
+**B.20.b `isLocalReceipt(url)` helper — `src/receiptUpload.js`**
+Exported helper that returns `true` when a receipt URL is a local data URL (`url.startsWith("data:")`). Use in UI code to show "stored locally" badges or suppress broken-link warnings in future.
+
+**B.20.c Local-upload info toast — `src/App.jsx`**
+After uploading receipts, if any returned URL is a data URL, shows: "Receipt saved locally — add Cloudinary in Settings to sync receipts to the cloud". Quota warning surfaces the limitation without blocking the workflow.
+
 ### C. False Positives (audit was wrong — do NOT reopen)
 
 These were flagged by the original audit but are correct in the existing code. Recorded here so we don't waste a future session re-investigating.
@@ -556,7 +567,7 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 | **H** | Routine Day-1 streak confusion (see E.3) | `Routine.jsx:3303-3305` | First action of the day shows yesterday's streak — feels broken |
 | **H** | No quick-entry / templates for repeat transactions | App-wide | Daily ₹120 metro fare = 5 taps every day forever. Suggest last-N |
 | **H** | Long expense entry form (5+ fields) | `App.jsx` AddPage | Compare Splitwise's two-tap flow |
-| **M** | Receipt upload gated on Cloudinary setup — skip Cloudinary → no receipts ever | `App.jsx`, `receiptUpload.js` | Fall back to local-blob persistence with quota warning |
+| **M** | Receipt upload gated on Cloudinary setup — skip Cloudinary → no receipts ever | `App.jsx`, `receiptUpload.js` | ✅ Local-blob fallback added (B.20) — compresses and stores as data URL; info toast warns user to add Cloudinary |
 | **M** | "Wallet" terminology — `upi_lite`, `bank`, `cash` — unexplained | `App.jsx:86` | ✅ Added `desc` subtitle to each wallet in selector (B.19.g) |
 | **M** | Splits vs Settlements vs Events overlap conceptually | App-wide | ✅ Added explainer text to Splits section (B.19.h) |
 | **M** | No empty-state guidance | App-wide | ✅ History tab: empty state + CTA; Dashboard: welcome card (B.19.e) |
@@ -632,7 +643,7 @@ Re-prioritized after the work in this branch.
 | `src/offlineSync.js` | cross-tab sync gap |
 | `src/currencyConverter.js` | INR hardcoded (`:29-31`) — API name only |
 | `src/credentials.js` | anon key in localStorage (`:7`) — architectural |
-| `src/receiptUpload.js` | `apiSecret` stored in localStorage (same threat as anon key — architectural) |
+| `src/receiptUpload.js` | `apiSecret` stored in localStorage (same threat as anon key — architectural). `isLocalReceipt()` exported (B.20) |
 | `api/_shared.ts` | ✅ `send_day_of_month` backend clamp fixed (B.19.m); all tests pass |
 | `api/send-reports.ts` | within-chunk serial fan-out, Gmail 500/day, per-user cold start |
 | `api/setup-user.ts` | Management API token handling (audit only) |
@@ -643,7 +654,7 @@ Re-prioritized after the work in this branch.
 
 1. **Do not re-investigate the items in section C (false positives).** They are correct in the existing code.
 2. **Always run `npm run lint` and `npm test` before and after edits.** Current baselines (verified May 2026, third session):
-   - **Lint:** 64 problems (57 errors, 7 warnings). New edits must not increase this count.
+   - **Lint:** 61 problems (53 errors, 8 warnings). New edits must not increase this count.
    - **Tests:** **133 pass / 0 fail (133 total).** All 9 previously-failing tests in `api/__tests__/_shared.test.ts` are now fixed: 2 `getPeriod` failures (UTC-safe month arithmetic) and 7 `getNextSendAt` failures (stale tests updated to reflect IST→UTC conversion).
    - B.17 added 2 new offlineSync tests (412 conflict drop, header stripping) → total went 131 → 133 passing.
 3. **`App.jsx` and `Routine.jsx` are written one-line-per-JSX-block.** When editing, use a unique substring as `old_string` — do **not** attempt to reformat. The build will break.
@@ -652,7 +663,7 @@ Re-prioritized after the work in this branch.
 6. **Sync queue is the riskiest data structure.** Anything that mutates `nomad-sync-queue-v1` or replays it must be idempotent and must surface failures to the user. The new `subscribeSyncDrops` channel (B.4.d) is the user-visible signal — wire any new drop conditions through it. Dead-letter queue is `nomad-sync-failed-v1` (B.10.b).
 7. **All 133 tests now pass.** The previously-failing `_shared.test.ts` tests are fixed (see D.1.2). Test baseline is 133/133.
 8. **`nomad_setup.sql` is idempotent and safe to re-run.** All migrations use `ADD COLUMN IF NOT EXISTS`, `DROP TRIGGER IF EXISTS`, and `DROP CONSTRAINT IF EXISTS` patterns. The `deleted_at` and `updated_at` migrations (B.7.a, B.13.a) will apply cleanly to existing databases.
-9. **`receiptUpload.js` supports two Cloudinary modes** (B.18): signed (apiKey+apiSecret → SHA-1 via `crypto.subtle`) or unsigned (uploadPreset). Tests that exercise the upload path must mock `getCredentials()` to return at minimum `cloudName` plus either `apiKey`+`apiSecret` or `uploadPreset`.
+9. **`receiptUpload.js` supports three modes** (B.18, B.20): (1) Signed — `cloudName`+`apiKey`+`apiSecret` → SHA-1 via `crypto.subtle`; (2) Unsigned — `cloudName`+`uploadPreset`; (3) Local fallback — no `cloudName` → compress + return data URL. Tests that exercise the upload path must mock `getCredentials()` appropriately for the mode under test. `isLocalReceipt(url)` detects locally-stored receipts (`url.startsWith("data:")`). App.jsx shows an info toast when a local receipt is saved.
 10. **`uid()` (App.jsx:16) prefers `crypto.randomUUID()`.** Don't reintroduce shadowing — the renamed `userKey` constants (subdomain ref) live alongside it (B.8.b).
 11. **`api/send-now.ts` requires the caller's supabase_url to be in `user_registry`.** Owner's URL is exempt. If you add new server endpoints that take user creds from the request body, mirror the same pattern.
 12. **`sbDelete` is now a soft delete (PATCH `deleted_at=now()`).** `sbDeleteWhere` remains a hard DELETE (bulk cascade ops and the nuke). `sbGet` filters `deleted_at=is.null` with a 400-fallback for pre-migration databases.
