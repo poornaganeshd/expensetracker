@@ -453,11 +453,18 @@ After uploading receipts, if any returned URL is a data URL, shows: "Receipt sav
 
 #### B.21 (`b2d7f96`) — E.8 H: In-app CSV export
 
-**B.21.a `expCsv()` — `src/App.jsx`**
-New function builds a UTF-8 CSV with columns `Type, Date, Amount, Category/Source/From, To/Wallet, Note` covering all expenses, incomes, and transfers. Category IDs resolved to display names via `cats` array; income source IDs via `isrc`; wallet IDs via `WALLETS`. Triggers a browser download `nomad_export_<date>.csv`. Shows toast with row count on success.
+**B.21 NOTE:** The export feature (`expCSV`) already existed in App.jsx (line 1148) in a separate "Export" card in Settings. The E.8 H "CSV in-app export" finding was a false positive — export was already there. B.21 commit added a duplicate `expCsv` which was subsequently removed in B.22 cleanup; only the CSV import feature (the genuinely missing piece) was kept.
 
-**B.21.b "Export CSV" button in Backup & Restore card — `src/App.jsx`**
-Gold-styled full-width button added below Backup/Restore row. Shows live transaction count. Closes E.8 H: CSV in-app export.
+#### B.22 (`d1a1064`) — E.8 H: Bank CSV import with auto-detection
+
+**B.22.a `parseBankCsv(text)` — `src/App.jsx`**
+Parses CSV text from HDFC/ICICI/SBI/generic bank statements. Auto-detects columns by header keywords: date (date/txn date/transaction date/value date), debit (debit/withdrawal/dr), credit (credit/deposit/cr), description (narration/description/particulars/details/remarks). Handles quoted fields, DD/MM/YY and DD/MM/YYYY date formats, comma-separated amounts. Returns `[{date, amount, note, type}]` — debit → "expense", credit → "income", generic amount column → "expense".
+
+**B.22.b `impCsv(file)` + `confirmCsvImport()` — `src/App.jsx`**
+`impCsv` reads the file and calls `parseBankCsv`, storing result in `csvPreview` state. `confirmCsvImport` calls `addE`/`addI` for each row (expenses to Food/Bank, incomes to Allowance/Bank) and shows row count in success toast with note to recategorize.
+
+**B.22.c Import Bank CSV UI — Backup & Restore card — `src/App.jsx`**
+Gold "📂 Import Bank CSV" label opens file picker for `.csv` files. On parse success, inline preview shows first 4 rows (amount, description, date) with Confirm/Cancel buttons. Closes E.8 H: CSV import.
 
 ### C. False Positives (audit was wrong — do NOT reopen)
 
@@ -594,8 +601,8 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 | Pri | Feature | Notes |
 |---|---|---|
 | **H** | Budgets / per-category caps with progress + alerts | The #1 feature of every expense tracker; blocking adoption |
-| **H** | CSV / PDF in-app export | ✅ CSV done (B.21) — "Export CSV" button in Settings → Backup & Restore. PDF still via emailed report only |
-| **H** | CSV import (bank statements) | #1 reason expense apps die: hand-keying. Map HDFC/ICICI/SBI export formats |
+| **H** | CSV / PDF in-app export | ✅ Already existed (false positive — `expCSV` + Export card in Settings). PDF still via emailed report only |
+| **H** | CSV import (bank statements) | ✅ Done (B.22) — auto-detects HDFC/ICICI/SBI/generic formats; preview before import; recategorize after |
 | **H** | Transaction full-text search across years | History tab filter only covers current visible window |
 | **H** | UI to manage hardcoded wallets/categories/sources | `WALLETS`, `DC`, `DI`, `RC` are constants in `App.jsx`. Custom-add exists but defaults can't be deleted/renamed |
 | **H** | "Demo data" mode for new users | Lets them explore without committing |
