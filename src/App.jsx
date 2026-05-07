@@ -814,6 +814,7 @@ export default function Nomad() {
   const [pendingSync, sPendingSync] = useState(getPendingSyncCount());
   const [deadLetterCount, sDeadLetterCount] = useState(getDeadLetterCount());
   const [online, sOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  const [staleData, sStaleData] = useState(false);
   const [manageXp, sManageXp] = useState(false);
   const [recDelConfirm, sRecDelConfirm] = useState(null);
   const [recEditId, sRecEditId] = useState(null);
@@ -875,11 +876,14 @@ export default function Nomad() {
   useEffect(() => {
     const handleOnline = () => { sOnline(true); flushSyncQueue().catch(() => { }); };
     const handleOffline = () => sOnline(false);
+    const handleStorage = (e) => { if (e.key === "nomad-v5" && e.newValue !== e.oldValue) sStaleData(true); };
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    window.addEventListener("storage", handleStorage);
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 
@@ -1312,6 +1316,7 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
 `}</style>
 
     {(!online || pendingSync > 0) && <div style={{ position: "sticky", top: 0, zIndex: 120, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: online ? "#FFF3D6" : "#FDE7E4", border: `1px solid ${online ? "#F1C96B" : "#E7A39B"}`, color: online ? "#7A5600" : "#9F3E33", fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, letterSpacing: "0.01em", textAlign: "center" }}>{!online ? "Offline. Changes sync later." : `Syncing ${pendingSync} change${pendingSync === 1 ? "" : "s"}.`}</div>}
+    {staleData && <div style={{ position: "sticky", top: 0, zIndex: 120, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: "#EDE9FE", border: "1px solid #A78BFA50", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}><span style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, color: "#4C1D95" }}>Another tab updated data.</span><div style={{ display: "flex", gap: 6, flexShrink: 0 }}><button onClick={() => window.location.reload()} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 700, background: "#7C3AED", border: "none", color: "#fff", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Reload</button><button onClick={() => sStaleData(false)} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, background: "none", border: "none", color: "#4C1D95", cursor: "pointer", opacity: 0.6 }}>✕</button></div></div>}
 
 
     {(() => {
