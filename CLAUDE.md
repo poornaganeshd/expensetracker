@@ -451,6 +451,14 @@ Exported helper that returns `true` when a receipt URL is a local data URL (`url
 **B.20.c Local-upload info toast — `src/App.jsx`**
 After uploading receipts, if any returned URL is a data URL, shows: "Receipt saved locally — add Cloudinary in Settings to sync receipts to the cloud". Quota warning surfaces the limitation without blocking the workflow.
 
+#### B.21 (`b2d7f96`) — E.8 H: In-app CSV export
+
+**B.21.a `expCsv()` — `src/App.jsx`**
+New function builds a UTF-8 CSV with columns `Type, Date, Amount, Category/Source/From, To/Wallet, Note` covering all expenses, incomes, and transfers. Category IDs resolved to display names via `cats` array; income source IDs via `isrc`; wallet IDs via `WALLETS`. Triggers a browser download `nomad_export_<date>.csv`. Shows toast with row count on success.
+
+**B.21.b "Export CSV" button in Backup & Restore card — `src/App.jsx`**
+Gold-styled full-width button added below Backup/Restore row. Shows live transaction count. Closes E.8 H: CSV in-app export.
+
 ### C. False Positives (audit was wrong — do NOT reopen)
 
 These were flagged by the original audit but are correct in the existing code. Recorded here so we don't waste a future session re-investigating.
@@ -463,6 +471,8 @@ These were flagged by the original audit but are correct in the existing code. R
 | C.4 | Backdated balance check uses current balance | Already uses `balanceOnDate()` for backdated entries | `App.jsx:957-959` |
 | C.5 | `parseFloat` NaN amounts silently dropped | `roundMoney(NaN) = 0` (because `NaN \|\| 0 → 0`); the `amt <= 0` guard catches and toasts "Enter a valid amount" | `App.jsx:946-947` |
 | C.6 | `_shared.ts` IST→UTC offset is inverted | Math is correct: `istMin = send_hour*60 - 330` correctly converts IST→UTC. Variable name is misleading but the result is right (verified by hand: 6 AM IST → 00:30 UTC ✓) | `api/_shared.ts:65-69` |
+| C.7 | `fullMonthsBetween(Jan31, Mar30)` should return 2 | Returns 1 — correct. Mar 31 (the 2-month anniversary) hasn't been reached. `getRecurringDueDate` handles this via its "+1 month when overdue" correction; test at `financeUtils.test.js:157` already verifies correct due-date behavior | `financeUtils.js:17-21` |
+| C.8 | Custom split with ₹0 participants — no per-row input warning | Already implemented on line 759: `{bsMode === "custom" && p.name.trim() && !(parseFloat(p.amount) > 0) && <span>₹0!</span>}`. Submit also blocked by `canSub` requiring `custOT > 0` | `App.jsx:759, 750` |
 
 ### D. Discovered During Fix Work (new findings, not in original audit)
 
@@ -515,7 +525,7 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 | Pri | Finding | Location | Notes |
 |---|---|---|---|
 | **H** | Timezone-tied date keys, no anchor stored | `Routine.jsx:2436`, `financeUtils.js:3-9` | Travel Mumbai → Tokyo flips a day forward; back trip overwrites. No `tzOffset` stored per record. Architectural — needs decision on per-record vs per-account anchor |
-| **M** | `fullMonthsBetween` off-by-one with month-end starts | `financeUtils.js:17-21` | Start = Jan 31, today = Mar 30 → returns 1, not 2. Affects 31st-rent edge cases |
+| **M** | `fullMonthsBetween` off-by-one with month-end starts | `financeUtils.js:17-21` | ✅ False positive (C.7) — returns 1 for Jan31→Mar30, which is correct; `getRecurringDueDate` handles it via +1-month advancement |
 | **L** | DST edges in offset-naive math | `Routine.jsx:2447` | `new Date(year, month, i)` lacks the noon anchor used elsewhere in `financeUtils.js` |
 
 #### E.4 Backend / Cron Scale (5 open)
@@ -552,7 +562,7 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 | **H** | Refund flow doesn't exist | App-wide | Returned purchase becomes "negative expense" or "fake income"; either choice corrupts category analytics |
 | **M** | Deleting a category orphans expenses | App-wide | ✅ Warning toast added (B.19.f) — shows orphan count. Ghost data still exists but user is warned |
 | **M** | Deleting a participant from a group event after a split | App-wide | Settlement math no longer balances; orphan owes nobody |
-| **M** | Custom split with ₹0 participants — input-side validation | `App.jsx:703` | Submit-side guard already drops 0-amount rows; the input could reject earlier with a per-row warning |
+| **M** | Custom split with ₹0 participants — input-side validation | `App.jsx:703` | ✅ False positive (C.8) — per-row `₹0!` warning already on line 759; `canSub` blocks submission |
 | **M** | `getExchangeRate` hardcodes INR target | `currencyConverter.js:29-31` | ✅ Renamed from `getINRRate` → `getExchangeRate` (B.19) to reduce misleading name; INR target still hardcoded |
 | **L** | `JSON.stringify` loses precision past 2^53 | `App.jsx:904` | Not relevant for INR; flagged for completeness |
 | **L** | `report_schedules` UNIQUE on `user_id` | `nomad_setup.sql:117` | Only one schedule per user; can't have daily + weekly. Drop the UNIQUE if needed |
@@ -584,7 +594,7 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 | Pri | Feature | Notes |
 |---|---|---|
 | **H** | Budgets / per-category caps with progress + alerts | The #1 feature of every expense tracker; blocking adoption |
-| **H** | CSV / PDF in-app export | Currently only via emailed report |
+| **H** | CSV / PDF in-app export | ✅ CSV done (B.21) — "Export CSV" button in Settings → Backup & Restore. PDF still via emailed report only |
 | **H** | CSV import (bank statements) | #1 reason expense apps die: hand-keying. Map HDFC/ICICI/SBI export formats |
 | **H** | Transaction full-text search across years | History tab filter only covers current visible window |
 | **H** | UI to manage hardcoded wallets/categories/sources | `WALLETS`, `DC`, `DI`, `RC` are constants in `App.jsx`. Custom-add exists but defaults can't be deleted/renamed |
