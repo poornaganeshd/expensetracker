@@ -477,6 +477,36 @@ Three `new Date(year, month, i)` calls (in `completionPct`, `avgWater`, and `cel
 **B.24.c Refund flow — `src/App.jsx:602, 617, 1194, 1464`**
 Expense `TxCard` now shows a small green ↩ button for expense items (only when `onRefund` prop is present). Clicking it calls `refundItem(expense)` which creates an income entry via `addI()` with same amount + wallet, `sourceId = isrc[0].id`, `note = "Refund: " + original note` (capped 500 chars), today's date. The income follows the normal `addI` path (balance check, sync queue, toast). Historyitems.map passes `onRefund={refundItem}`. Closes E.6 H (refund flow).
 
+#### B.25 (session 5) — E.8 product features, splits note, group event fixes, startup speed
+
+**B.25.a Finance streak badge — `src/App.jsx`**
+`finStreak` useMemo walks back from today counting consecutive days with any transaction (`ex` ∪ `inc`). Renders a 🔥 amber-bordered badge in the dashboard when streak ≥ 2: "{N}-day logging streak!". Closes E.8 M (finance-side streak).
+
+**B.25.b Subscription detection — `src/App.jsx`**
+`subSuggestions` useMemo finds expense notes appearing ≥2× in the last 90 days that aren't already in `rec`. Returns top-5 by count with avg amount. Rendered as a dashed-purple card in Settings → Recurring section: "💡 Possible recurring patterns" with a "Promote ›" button per suggestion that calls `addRec({name, categoryId, walletId, amount, freq: "monthly"})`. Closes E.8 M (subscription detection).
+
+**B.25.c Category drilldowns with MoM% — `src/App.jsx`**
+Dashboard category-breakdown IIFE replaced with version that computes `curM` / `prevM` / `prevT` for each category. Each category row shows a MoM badge: "+12% MoM" (red) or "−8% MoM" (green). Tapping a row toggles `drillCat` state — expands an inline panel showing the top-5 notes by amount for that category. Closes E.8 M (inline category drilldowns), E.8 M (month-over-month comparison).
+
+**B.25.d Autocategorize rules — `src/App.jsx`**
+`autoRules` state: `[{keyword, categoryId}]` persisted to `nomad-auto-rules` localStorage. Cleared by the "Clear All Data" sweep. New "⚡ Autocategorize Rules" card in Settings (green border `#6BAA75`, collapsible): list of rules with ✕ delete; add-form with keyword input + category select + Add button. `AddPage` gains `autoRules` prop — note `onChange` checks rules and auto-selects matching category. Closes E.8 M (autocategorize rules).
+
+**B.25.e Bulk delete in history — `src/App.jsx`**
+`bulkMode` boolean + `bulkSel` Set state. "Select" button added next to Filter button in history tab. When `bulkMode` active, each TxCard gets a checkbox; selecting shows a sticky top banner "N selected · Delete · Cancel". Delete calls `sbDelete` + removes from state for each selected ID. Closes E.8 M (bulk operations).
+
+**B.25.f Splits note field (home tab) — `src/App.jsx`**
+`Splits` sub-component gains `snote` state. Add form: name/amount/+ on row 1, note input (full-width) on row 2. Note stored in split object as optional `note` field. Displayed in splits list: "You owe · note text" (muted). `nomad_setup.sql` already had `note TEXT` on splits table (migration added in B.19/B.22 session).
+
+**B.25.g Group event logic overhaul — `src/App.jsx`**
+Three interconnected fixes for BHIM-style group tracking:
+- **Exact shares**: `grpShareMap` computed via `distributeAmount(grpTotal, allParts.length)` (not `roundMoney(total/n)`). Eliminates ₹0.01 rounding residue — 3-way ₹100 split now distributes [33.34, 33.33, 33.33] exactly summing to ₹100.
+- **Settlement precision**: Both the per-person balance row and the greedy min-cash-flow IIFE use `grpShareMap[p] ?? grpShare` instead of `grpShare`. Balances now sum to exactly 0; settlement loop terminates cleanly.
+- **paidBy display**: Each expense row in the GROUP EVENTS EXPENSES section shows "paid by {name}" in purple (`#7B8CDE`) when `e.paidBy !== "me"`.
+- **paidBy in Supabase upsert**: `"paidBy"` added to `toSB` column list in `addE` — was previously missing, causing group summaries to break after reload.
+
+**B.25.h Startup stale-while-revalidate — `src/App.jsx`**
+`load()` rewritten to eliminate startup delay. Old: offline check → await all 8 `sbGet` in series → `sL(true)` → render. New: `loadLocalBackup()` → `sL(true)` immediately (zero network wait) → if `SB_ENABLED && online`, fire async Supabase refresh that updates state when it arrives. App renders instantly from localStorage on every open. Migration column lists in the first-connect path updated to include `paidBy` (expenses), `note` (splits), `type`+`participants` (events).
+
 #### B.23 (`401af76`) — E.8 H: Default categories/sources deletable
 
 **B.23.a Remove default-guard in Manage section — `src/App.jsx`**
@@ -616,43 +646,56 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 | **M** | Unsaved form state | ✅ N/A — sessionStorage draft already implemented |
 | **L** | No undo | ✅ N/A — already implemented (undoDelete/showUndoToast) |
 
-#### E.8 Product Gaps (~25 open) — features, not bugs
+#### E.8 Product Gaps — features, not bugs
 
-> Competing apps ship these; this app doesn't. None addressed in this branch.
+> Competing apps ship these; this app doesn't.
 
 ##### Table-stakes (HIGH)
 
 | Pri | Feature | Notes |
 |---|---|---|
-| **H** | Budgets / per-category caps with progress + alerts | The #1 feature of every expense tracker; blocking adoption |
+| **H** | Budgets / per-category caps with progress + alerts | ✅ Done (`3cd6374`) — progress bars + alerts per category per month |
 | **H** | CSV / PDF in-app export | ✅ Already existed (false positive — `expCSV` + Export card in Settings). PDF still via emailed report only |
 | **H** | CSV import (bank statements) | ✅ Done (B.22) — auto-detects HDFC/ICICI/SBI/generic formats; preview before import; recategorize after |
-| **H** | Transaction full-text search across years | History tab filter only covers current visible window |
-| **H** | UI to manage hardcoded wallets/categories/sources | ✅ Default categories/sources can now be deleted (B.23). Rename not yet supported. WALLETS are still hardcoded |
-| **H** | "Demo data" mode for new users | Lets them explore without committing |
-| **H** | Multi-account / family sharing | Splits exist as personal IOUs, not a shared ledger |
+| **H** | Transaction full-text search across years | ✅ Done (B.19.a) — cross-month search when `hSearch` non-empty |
+| **H** | UI to manage hardcoded wallets/categories/sources | ✅ Default categories/sources can now be deleted (B.23). Rename not yet supported. **WALLETS are still hardcoded** — open |
+| **H** | "Demo data" mode for new users | ✅ Done (B.24.a) — landing screen + demo mode with 3 months data |
+| **H** | Multi-account / family sharing | N/A — splits exist as personal IOUs, not a shared ledger |
 
 ##### Power user (MEDIUM)
 
 | Pri | Feature | Notes |
 |---|---|---|
-| **M** | Rules / autocategorize from merchant text | Splitwise, Walnut do this |
-| **M** | Tags (orthogonal to categories) | "Groceries for trip" vs "groceries normal" |
-| **M** | PDF/non-image attachments | Statements, bills |
-| **M** | Multi-currency display (drop INR hardcode) | Show original + INR |
-| **M** | Subscription detection (auto-find recurring from history) | One-tap promote-to-recurring |
-| **M** | Month-over-month / merchant frequency / spending projections | Beyond `TrendChart` + heatmap |
-| **M** | Undo affordance on toasts | Critical for delete actions |
-| **M** | Bulk operations (multi-select delete/edit) | History tab |
+| **M** | Rules / autocategorize from merchant text | ✅ Done (B.25.d) — keyword→category rules, stored in `nomad-auto-rules` |
+| **M** | Tags (orthogonal to categories) | Open — "Groceries for trip" vs "groceries normal" |
+| **M** | PDF/non-image attachments | Open — only images today |
+| **M** | Multi-currency display (drop INR hardcode) | Open — show original + ₹ side by side |
+| **M** | Subscription detection (auto-find recurring from history) | ✅ Done (B.25.b) — `subSuggestions` in Settings → Recurring |
+| **M** | Month-over-month / merchant frequency / spending projections | ✅ Done (B.25.c) — MoM% badge + category drilldown in dashboard |
+| **M** | Undo affordance on toasts | ✅ N/A — already implemented (`undoDelete`/`showUndoToast`) |
+| **M** | Bulk operations (multi-select delete/edit) | ✅ Done (B.25.e) — bulk delete in history tab |
 
 ##### Retention (MEDIUM)
 
 | Pri | Feature | Notes |
 |---|---|---|
-| **M** | "You haven't logged in 3 days" reminder | Push or email |
-| **M** | Streak for the finance side | Routine has one; expenses don't |
-| **M** | In-app insights (push) summary | Cheaper and faster than email |
-| **M** | Inline category drilldowns | "Tap a category to see top merchants" |
+| **M** | "You haven't logged in 3 days" reminder | Open — push or email nudge |
+| **M** | Streak for the finance side | ✅ Done (B.25.a) — 🔥 N-day badge in dashboard |
+| **M** | In-app insights (push) summary | Open — cheaper and faster than email |
+| **M** | Inline category drilldowns | ✅ Done (B.25.c) — top-5 notes per category on tap |
+
+##### Remaining open (summary)
+
+| Pri | Feature |
+|---|---|
+| **H** | Custom wallets — add/rename/reorder (`WALLETS` still hardcoded constant) |
+| **H** | Rename categories/sources (delete works; inline-edit UI missing) |
+| **M** | Tags orthogonal to categories |
+| **M** | Multi-currency display (original currency + ₹) |
+| **M** | PDF/non-image attachments |
+| **M** | "No log in 3 days" reminder nudge |
+| **M** | In-app push summary |
+| **L** | E2E Playwright smoke tests (5 critical flows) |
 
 ### F. Recommended Sequence (next sessions)
 
@@ -668,9 +711,12 @@ Re-prioritized after the work in this branch.
 | ~~1~~ | ~~ESP swap Gmail → Resend~~ | ~~½ day~~ | ✅ **N/A** — personal app, skipped per user instruction |
 | ~~2~~ | ~~Onboarding overhaul + demo data~~ | ~~2 days~~ | ✅ **Done in B.24.a** — landing screen, demo mode, DEMO_DATA |
 | ~~3~~ | ~~Cron full fan-out~~ | ~~1 day~~ | ✅ **N/A** — personal app, single user |
-| 1 | **Budgets / per-category caps** | 2-3 days | E.8 top gap — progress bars + alerts per category per month |
-| 2 | **E2E tests with Playwright** | 1 day | Smoke tests on 5 critical flows |
-| 3 | **Remaining E.8 product gaps** | ongoing | Rules/autocategorize, bulk ops, subscription detection |
+| ~~4~~ | ~~Budgets / per-category caps~~ | ~~2-3 days~~ | ✅ **Done (`3cd6374`)** — progress bars + alerts per category per month |
+| ~~5~~ | ~~E.8 product gaps (batch 1)~~ | ~~2 days~~ | ✅ **Done in B.25** — finance streak, subscription detection, MoM%, autocategorize rules, bulk delete, splits note, group event precision, startup speed |
+| 1 | **Custom wallets** | 1 day | `WALLETS` hardcoded; users can't add GPay/credit card/cash without editing source |
+| 2 | **Rename categories/sources** | ½ day | Delete works (B.23); inline-edit UI missing |
+| 3 | **E2E tests with Playwright** | 1 day | Smoke tests on 5 critical flows |
+| 4 | **Remaining E.8 gaps** | ongoing | Tags, multi-currency display, PDF attachments, reminder nudge |
 
 ### G. Quick Reference — Open Findings by File
 
@@ -694,9 +740,9 @@ Re-prioritized after the work in this branch.
 ### H. Notes for Future Claude Sessions
 
 1. **Do not re-investigate the items in section C (false positives).** They are correct in the existing code. C.9 = TxCard memo already done. C.10 = quickPatterns already done.
-2. **Always run `npm run lint` and `npm test` before and after edits.** Current baselines (verified May 2026, session 4 — B.24):
+2. **Always run `npm run lint` and `npm test` before and after edits.** Current baselines (verified May 2026, session 5 — B.25):
    - **Lint:** 122 problems (106 errors, 16 warnings). New edits must not increase this count.
-   - **Tests:** **266 pass / 0 fail (266 total).** Significant jump from 133 → 266 reflects additional test files added in prior sessions.
+   - **Tests:** **266 pass / 0 fail (266 total).**
    - Do not be alarmed by the lint count difference from prior sessions — it reflects a different codebase state.
 3. **`App.jsx` and `Routine.jsx` are written one-line-per-JSX-block.** When editing, use a unique substring as `old_string` — do **not** attempt to reformat. The build will break.
 4. **`dist/` is gitignored but historically tracked.** Don't commit rebuilt `dist/` unless explicitly asked; Vercel rebuilds on push. After running `npm run build`, run `git checkout HEAD -- dist/` before staging.
@@ -712,4 +758,8 @@ Re-prioritized after the work in this branch.
 14. **Signed Cloudinary (B.18)** uses `apiKey` + `apiSecret` from credentials. The `apiSecret` is in localStorage — same threat model as the Supabase anon key. A proper signing endpoint would avoid client-side secret exposure but requires a Vercel env var and server roundtrip.
 15. **Demo mode (B.24.a)**: `isDemoMode = !_creds.sbUrl && localStorage.getItem("nomad-demo-mode")==="true"` (module-level). `sbGet` returns `[]`, `sbWrite` returns `{ok:true}` — no network calls. `DEMO_DATA` constant seeded with March–May 2026 data. `CredentialSetup` shows landing screen (`step="landing"`) only when `!onCancel` (first-time flow). "Connect Backend" from the demo banner: `localStorage.removeItem("nomad-demo-mode"); setShowSetup(true)` — CredentialSetup shows form (not landing) because `onCancel` is defined.
 16. **Refund flow (B.24.c)**: `TxCard` has `onRefund: oRef` prop. Small ↩ button (green, opacity 0.5) appears on expense cards. `refundItem(expense)` calls `addI()` with same amount/wallet, `sourceId=isrc[0].id`, note prefixed "Refund: ". Wired at line `historyItems.map(it => <TxCard ... onRefund={refundItem} ... />)`.
-17. **E.1–E.7 are fully closed.** All open items are either: fixed in B.1–B.24, confirmed false positives (C.1–C.10), or acknowledged as N/A for a personal single-user BYODB app. Only E.8 product gaps remain as future work.
+17. **E.1–E.7 are fully closed.** All open items are either: fixed in B.1–B.25, confirmed false positives (C.1–C.10), or acknowledged as N/A for a personal single-user BYODB app. Only E.8 product gaps remain as future work.
+18. **Startup is stale-while-revalidate (B.25.h).** `load()` calls `loadLocalBackup()` + `sL(true)` immediately before any network call. Never reintroduce `await sbGet(...)` before `sL(true)` — that was the source of the startup delay.
+19. **`autoRules` in `nomad-auto-rules` localStorage.** Cleared by the "Clear All Data" sweep (already covered by the `nomad-*` wildcard). `AddPage` receives `autoRules` prop and auto-selects category on note input. Do not move this to Supabase — it's a local UX preference, not transactional data.
+20. **`grpShareMap` for exact group shares (B.25.g).** Group event summary uses `distributeAmount(grpTotal, n)` → `grpShareMap` rather than `roundMoney(total/n)`. Both the per-person balance display and the settlement IIFE use `grpShareMap[p] ?? grpShare`. Do not revert to the `grpShare` scalar — it produces ₹0.01 residue in 3-way splits.
+21. **`paidBy` in `addE` Supabase upsert column list.** The `toSB` call in `addE` must include `"paidBy"` — omitting it breaks group summaries after page reload (field would be `null` in Supabase while in-memory state has the correct value).
