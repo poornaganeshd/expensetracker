@@ -991,7 +991,7 @@ export default function Nomad() {
     if (hDateFrom) items = items.filter(it => it.date >= hDateFrom);
     if (hDateTo) items = items.filter(it => it.date <= hDateTo);
     if (hType !== "all") items = items.filter(it => it.type === hType);
-    return items.sort((a, b) => { const dd = new Date(b.date) - new Date(a.date); if (dd !== 0) return dd; return 0; });
+    return items.sort((a, b) => { const dd = new Date(b.date) - new Date(a.date); if (dd !== 0) return dd; return new Date(b.created_at || 0) - new Date(a.created_at || 0); });
   }, [flt, ex, inc, tr, stl, fm, hSearch, hMinAmt, hMaxAmt, hDateFrom, hDateTo, hType, cats, isrc]);
 
   const budgetStatus = useMemo(() => { const cm = localDateKey().slice(0, 7); const mEx = ex.filter(e => mk(e.date) === cm); return Object.entries(budgets).filter(entry => entry[1] > 0).map(([cid, lim]) => { const spent = mEx.filter(e => e.categoryId === cid).reduce((s, e) => s + e.amount, 0); const cat = cats.find(c => c.id === cid) || { id: cid, name: cid, color: "#999", neon: "#999" }; const pct = Math.min(100, Math.round(spent / lim * 100)); return { cid, cat, spent, lim, pct }; }); }, [budgets, ex, cats]);
@@ -1025,7 +1025,7 @@ export default function Nomad() {
     if (amt <= 0) { showT("Enter a valid amount", "error"); return false }
     if (typeof data.note === "string" && data.note.length > 500) data = { ...data, note: data.note.slice(0, 500) };
     if (data.paidBy && data.paidBy !== "me") {
-      const rec = { id: uid(), type: "expense", ...data, amount: amt, walletId: "__tracked__" };
+      const rec = { id: uid(), type: "expense", ...data, amount: amt, walletId: "__tracked__", created_at: new Date().toISOString() };
       sEx(p => [rec, ...p]);
       sbUpsert("expenses", [toSB(rec, ["id", "amount", "categoryId", "walletId", "note", "date", "eventId", "groupId"])]);
       showT(online ? "Expense tracked" : "Expense saved offline", "success");
@@ -1044,7 +1044,7 @@ export default function Nomad() {
       if (u.month + amt > 100000) { showT(`UPI Lite monthly cap ₹1L exceeded`, "error"); return false }
       if (u.day + amt > 4500) { showT(`Heads up: UPI Lite at ₹${roundMoney(u.day + amt)} today (cap ₹5000)`, "info") }
     }
-    const rec = { id: uid(), type: "expense", ...data, amount: amt };
+    const rec = { id: uid(), type: "expense", ...data, amount: amt, created_at: new Date().toISOString() };
     sEx(p => [rec, ...p]);
     sbUpsert("expenses", [toSB(rec, ["id", "amount", "categoryId", "walletId", "note", "date", "eventId", "groupId", "receipt_url", "paidBy"])]);
     dance();
@@ -1052,8 +1052,8 @@ export default function Nomad() {
     showT(online ? "Expense added" : "Expense saved offline", "success");
     return true;
   };
-  const addI = data => { const amt = roundMoney(data.amount); if (data.walletId === "upi_lite") { showT("UPI Lite is for spending only", "error"); return } if (amt <= 0) { showT("Enter a valid amount", "error"); return } if (typeof data.note === "string" && data.note.length > 500) data = { ...data, note: data.note.slice(0, 500) }; const rec = { id: uid(), type: "income", ...data, amount: amt }; sInc(p => [rec, ...p]); sbUpsert("incomes", [toSB(rec, ["id", "amount", "sourceId", "walletId", "note", "date", "receipt_url"])]); dance(); showT(online ? "Income added" : "Income saved offline", "success") };
-  const addT = data => { const b = roundMoney(wBal[data.fromWallet] || 0), amt = roundMoney(data.amount); if (amt <= 0) { showT("Enter an amount above zero", "error"); return } if (b < amt) { showT(`Insufficient balance`, "error"); return } if (typeof data.note === "string" && data.note.length > 500) data = { ...data, note: data.note.slice(0, 500) }; const rec = { id: uid(), type: "transfer", ...data, amount: amt }; sTr(p => [rec, ...p]); sbUpsert("transfers", [toSB(rec, ["id", "amount", "fromWallet", "toWallet", "note", "date"])]); dance(); showT(online ? "Transfer done" : "Transfer queued offline", "success") };
+  const addI = data => { const amt = roundMoney(data.amount); if (data.walletId === "upi_lite") { showT("UPI Lite is for spending only", "error"); return } if (amt <= 0) { showT("Enter a valid amount", "error"); return } if (typeof data.note === "string" && data.note.length > 500) data = { ...data, note: data.note.slice(0, 500) }; const rec = { id: uid(), type: "income", ...data, amount: amt, created_at: new Date().toISOString() }; sInc(p => [rec, ...p]); sbUpsert("incomes", [toSB(rec, ["id", "amount", "sourceId", "walletId", "note", "date", "receipt_url"])]); dance(); showT(online ? "Income added" : "Income saved offline", "success") };
+  const addT = data => { const b = roundMoney(wBal[data.fromWallet] || 0), amt = roundMoney(data.amount); if (amt <= 0) { showT("Enter an amount above zero", "error"); return } if (b < amt) { showT(`Insufficient balance`, "error"); return } if (typeof data.note === "string" && data.note.length > 500) data = { ...data, note: data.note.slice(0, 500) }; const rec = { id: uid(), type: "transfer", ...data, amount: amt, created_at: new Date().toISOString() }; sTr(p => [rec, ...p]); sbUpsert("transfers", [toSB(rec, ["id", "amount", "fromWallet", "toWallet", "note", "date"])]); dance(); showT(online ? "Transfer done" : "Transfer queued offline", "success") };
   const settle = (sid, wid) => {
     const s = sp.find(x => x.id === sid);
     if (!s) return;
