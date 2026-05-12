@@ -667,7 +667,7 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 | Pri | Feature | Notes |
 |---|---|---|
 | **M** | Rules / autocategorize from merchant text | ✅ Done (B.25.d) — keyword→category rules, stored in `nomad-auto-rules` |
-| **M** | Tags (orthogonal to categories) | ✅ Done (B.26) — `tags TEXT[]` in expenses/incomes; chip input in AddPage (max 5, Enter to add); `#tag` display on TxCard; tag filter in history |
+| **M** | Tags (orthogonal to categories) | ~~Done (B.26)~~ **Removed (B.27)** — redundant with Events tab; fully stripped from AddPage, TxCard, history filter, addE/addI Supabase writes |
 | **M** | PDF/non-image attachments | ✅ Done (B.26) — ReceiptPicker "PDF / File" option; `uploadReceipt` uses raw/PDF endpoint for Cloudinary; 📄 icon on TxCard |
 | **M** | Multi-currency display (drop INR hardcode) | ✅ Already done (B.5.b) — `fxMeta` row shown on TxCard since B.5.b |
 | **M** | Subscription detection (auto-find recurring from history) | ✅ Done (B.25.b) — `subSuggestions` in Settings → Recurring |
@@ -681,7 +681,7 @@ Discovered while implementing reminder UTC anchoring: the original `addDays` par
 |---|---|---|
 | **M** | "You haven't logged in 3 days" reminder | ✅ Done (B.26) — `useEffect` on `loaded`; checks last transaction date; shows toast once/day via `nomad-last-log-nudge` localStorage key |
 | **M** | Streak for the finance side | ✅ Done (B.25.a) — 🔥 N-day badge in dashboard |
-| **M** | In-app insights (push) summary | ✅ Done (B.26) — weekly digest card on dashboard: spent, earned, top category over last 7 days |
+| **M** | In-app insights (push) summary | ~~Done (B.26)~~ **Removed (B.27)** — weekly digest card removed; not needed by user |
 | **M** | Inline category drilldowns | ✅ Done (B.25.c) — top-5 notes per category on tap |
 
 ##### Remaining open (summary)
@@ -736,8 +736,8 @@ Re-prioritized after the work in this branch.
 **B.26.b Rename categories/sources — `src/App.jsx`**
 Name span in Manage section (expense/income rows) now conditionally renders an `<input>` when `editingCat?.id === c.id`. Click on name → `sEditingCat({id, name})`; blur/Enter saves via `sCats`/`sIsrc`; Escape cancels. Recurring cats excluded (RC default-lock still in place).
 
-**B.26.c Tags — `src/App.jsx`, `nomad_setup.sql`**
-SQL: `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'` + same for `incomes`. `addE`/`addI` include `tags` in `toSB` column list. `AddPage` has `tagInput`/`tags` state; chip input below ReceiptPicker (Enter/Space/comma adds tag, max 5, strips non-word chars); chips display with remove ✕. `TxCard` renders `#tag` chips in indigo when `it.tags?.length > 0`. History: `hTag` filter state; filter panel has Tag input field; `historyItems` filters `it.tags.includes(hTag)`; `clearAll` clears `hTag`; `activeCount` includes `hTag`.
+**B.26.c Tags — REMOVED in B.27**
+Tags were added in B.26 but removed in B.27 as redundant with the Events tab. The `tags TEXT[]` SQL columns remain in the DB (harmless) but are no longer written or read by the app. Do not re-add tags.
 
 **B.26.d PDF/non-image attachments — `src/ReceiptPicker.jsx`, `src/receiptUpload.js`**
 ReceiptPicker menu gains "PDF / File" option (`accept="image/*,application/pdf"`). File items get `isPdf` boolean; thumbnail shows 📄 emoji instead of `<img>`. `uploadReceipt` skips canvas compression for PDFs; uploads to `/raw/upload` endpoint on Cloudinary (not `/image/upload`). TxCard receipt row shows 📄 label for `.pdf` and `data:application/pdf` URLs.
@@ -745,11 +745,34 @@ ReceiptPicker menu gains "PDF / File" option (`accept="image/*,application/pdf"`
 **B.26.e No-log-in-3-days reminder — `src/App.jsx`**
 `useEffect([loaded])`: checks latest date across `ex`+`inc`; if diff ≥ 3 days and today not already nudged (`nomad-last-log-nudge` key), shows toast "💤 No transactions logged in N days — stay on track!". Fires once per day per device.
 
-**B.26.f Weekly digest card — `src/App.jsx`**
-`weeklyDigest` useMemo: filters last 7 days of `ex`+`inc`, computes `spent`, `earned`, `topCat`. Dashboard shows green card with 3-column layout when any transactions exist in the window. Placed below the 🔥 streak badge.
+**B.26.f Weekly digest card — REMOVED in B.27**
+Weekly digest card and `Report` component removed from dashboard at user request. `<Report>` component definition still exists in source but is no longer rendered.
 
 **B.26.g E2E Playwright smoke tests — `e2e/`**
 5 spec files: demo mode, add expense/income, history search, settings (dark mode + wallets), delete/undo. `playwright.config.js` targets `localhost:5173` (mobile viewport 390×844). `npm run test:e2e`. Vitest `exclude: ['e2e/**']` prevents test runner conflict. `npm run test` (Vitest unit) still 266/266 passing.
+
+#### B.27 (session 7) — Bug fixes, removals, filter improvements
+
+**B.27.a `refundItem` undefined → history tab blank screen — `src/App.jsx`**
+`onRefund={refundItem}` was wired in historyItems.map but `refundItem` was never defined. Added definition before `settle()`: calls `addI()` with same amount/wallet, `sourceId=isrc[0].id`, note prefixed "Refund: " (capped 500 chars), today's date.
+
+**B.27.b Bulk delete arg order fixed — `src/App.jsx`**
+Bulk delete called `delItem(it.type, id)` but signature is `delItem(id, type)`. Fixed to `delItem(id, it.type)`.
+
+**B.27.c `sbGet` 400 errors on splits/settlements/wallet_balances — `src/App.jsx`**
+`sbGet` was appending `&deleted_at=is.null` to every table, causing 400s on tables without that column. Added `SOFT_DELETE_TABLES` Set (`expenses`, `incomes`, `transfers`, `recurring`, `events`); only those get the filter. No more fallback retries on every load for the other tables.
+
+**B.27.d Tags removed — `src/App.jsx`**
+Tags were redundant with Events tab. Removed: `tagInput`/`tags` state from AddPage, chip UI, `#tag` display from TxCard, `hTag` filter state, Tag filter panel input, `historyItems` filter, `addE`/`addI` toSB key. SQL columns remain in DB (harmless).
+
+**B.27.e Weekly digest card + Report component removed — `src/App.jsx`**
+`<Report expenses={ex} />` call removed from dashboard render. `Report` function definition still in source but unreachable.
+
+**B.27.f Event name in history search — `src/App.jsx`**
+`historyItems` search now also matches `evs.find(e => e.id === it.eventId)?.name` — typing an event name in the search bar finds all linked expenses.
+
+**B.27.g Recurring filter in history — `src/App.jsx`**
+Added "Recurring" button to history type-filter row. Filters to `type === "expense" && isFix(it)` — shows only fixed/recurring-tagged expenses. `evs` added to `historyItems` dep array.
 
 ### H. Notes for Future Claude Sessions
 
@@ -778,6 +801,10 @@ ReceiptPicker menu gains "PDF / File" option (`accept="image/*,application/pdf"`
 20. **`grpShareMap` for exact group shares (B.25.g).** Group event summary uses `distributeAmount(grpTotal, n)` → `grpShareMap` rather than `roundMoney(total/n)`. Both the per-person balance display and the settlement IIFE use `grpShareMap[p] ?? grpShare`. Do not revert to the `grpShare` scalar — it produces ₹0.01 residue in 3-way splits.
 21. **`paidBy` in `addE` Supabase upsert column list.** The `toSB` call in `addE` must include `"paidBy"` — omitting it breaks group summaries after page reload (field would be `null` in Supabase while in-memory state has the correct value).
 22. **`wallets` state (B.26.a)** is the live source of truth for all wallet rendering. `WALLETS` constant is the default seed only. `wBal` iterates `wallets.forEach` — never revert to hardcoded `{ upi_lite, bank, cash }`. `wsb` initial state is `{}`. Custom wallets get ids like `w_gpay_<base36>`. `editingCat` state is shared between category rename and wallet rename (wallet rename uses `wallet_${w.id}` as the id key).
-23. **Tags (B.26.c):** `tags TEXT[]` column exists on `expenses` and `incomes` (run `nomad_setup.sql` to add). `tags` is an optional `string[]` on expense/income objects. Max 5 tags per transaction. `toSB` must include `"tags"` for expenses and incomes. History filter uses `hTag` state (single tag search). Tags are stripped of non-word chars and lowercased.
+23. **Tags removed (B.27.d).** Do NOT re-add tags — redundant with Events tab. The `tags TEXT[]` SQL columns exist in DB but are never written or read by the app.
 24. **E2E tests (B.26.g)** live in `e2e/` and use `@playwright/test`. Run with `npm run test:e2e`. They depend on the dev server (`npm run dev`). Unit tests (`npm test`) exclude `e2e/**` via `vite.config.js` `test.exclude`. The two test runners must never be confused — Playwright tests have a `page` fixture that Vitest doesn't know about.
-25. **All E.8 product gaps are fully closed as of B.26.** No open items remain in CLAUDE.md. The app is feature-complete relative to the audit. Future work should be greenfield improvements, not fixes.
+25. **All E.8 product gaps are fully closed as of B.26/B.27.** No open items remain. Future work is greenfield improvements only.
+26. **History search includes event name (B.27.f).** `historyItems` matches `evs.find(e => e.id === it.eventId)?.name` — `evs` is in the dep array.
+27. **History type filter includes "Recurring" (B.27.g).** Maps to `type === "expense" && isFix(it)`. Not a separate transaction type — just a view filter over expenses.
+28. **`SOFT_DELETE_TABLES` (B.27.c)** = `Set(["expenses","incomes","transfers","recurring","events"])`. Only these get `&deleted_at=is.null` in `sbGet`. `splits`, `settlements`, `wallet_balances` do not have that column and must not get the filter.
+29. **`refundItem` (B.27.a)** defined in App.jsx before `settle()`. Creates income via `addI()`. `TxCard` receives `onRefund={refundItem}` prop — do not remove it.

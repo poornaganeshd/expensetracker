@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { sendSupabaseRequest } from './offlineSync';
 import { getCredentials as _getCreds } from './credentials';
+import { analyzeFood, foodResultToText, foodResultToMacroString } from './foodVision';
 
 /* ============================================================
    FORM — Daily food & skincare ritual tracker  v6
@@ -1925,7 +1926,7 @@ const EodCard = ({ day, config }) => {
 /* ============================================================
    FOOD SCREEN
    ============================================================ */
-const FoodScreen = ({ day, update, config, onComplete, streak }) => {
+const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () => {} }) => {
     const suggested = config.snackRotation[dayOfWeek()] || 'Banana';
     const waterPts = Array.from({ length: Math.round(config.waterTarget / 0.5) }, (_, i) => (i + 1) * 0.5);
     const mwL = effectiveMorningWater(day);
@@ -1943,18 +1944,41 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
     const [logTag, setLogTag] = useState('breakfast');
     const LOG_TAGS = ['breakfast', 'lunch', 'dinner', 'snack', 'other'];
 
+    // AI photo analysis state
+    const [analyzing, setAnalyzing] = useState(false);
+    const [aiMacros, setAiMacros] = useState(null); // { calories, protein_g, carbs_g, fat_g, confidence }
+    const cameraInputRef = useRef(null);
+
+    const analyzePhoto = async (file) => {
+        setAnalyzing(true);
+        setAiMacros(null);
+        try {
+            const result = await analyzeFood(file);
+            setLogInput(foodResultToText(result));
+            setAiMacros({ calories: result.calories, protein_g: result.protein_g, carbs_g: result.carbs_g, fat_g: result.fat_g, confidence: result.confidence, aiAnalyzed: true });
+        } catch (e) {
+            showToast(e.message || 'Photo analysis failed — enter manually', 'error');
+        } finally {
+            setAnalyzing(false);
+        }
+    };
+
     const addEntry = () => {
         const t = logInput.trim();
         if (!t) return;
         haptic();
-        update({ freeFoodLog: [...foodLog, { text: t, tag: logTag }] });
+        const entry = aiMacros ? { text: t, tag: logTag, ...aiMacros } : { text: t, tag: logTag };
+        update({ freeFoodLog: [...foodLog, entry] });
         setLogInput('');
+        setAiMacros(null);
     };
 
     const removeEntry = (i) => {
         haptic(4);
         update({ freeFoodLog: foodLog.filter((_, idx) => idx !== i) });
     };
+
+    const dailyCals = useMemo(() => foodLog.reduce((s, e) => s + (e.calories || 0), 0), [foodLog]);
 
     const totalWater = mwL + day.water;
 
@@ -2164,25 +2188,44 @@ const FoodScreen = ({ day, update, config, onComplete, streak }) => {
                             </div>
                         ))}
                     </div>
+                    {/* Hidden camera file input */}
+                    <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) analyzePhoto(f); e.target.value = ''; }} />
                     <div style={{ display: 'flex', gap: 8 }}>
                         <input
                             className="inp"
                             placeholder="What did you eat?"
                             value={logInput}
-                            onChange={(e) => setLogInput(e.target.value)}
+                            onChange={(e) => { setLogInput(e.target.value); if (!e.target.value) setAiMacros(null); }}
                             onKeyDown={(e) => { if (e.key === 'Enter') addEntry(); }}
                             style={{ flex: 1 }}
                         />
+                        <button
+                            style={{ width: 38, height: 38, marginTop: 0, borderRadius: 10, border: '1.5px solid var(--bd)', background: analyzing ? 'var(--sf)' : 'var(--bg)', cursor: analyzing ? 'default' : 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                            onClick={() => { if (!analyzing) cameraInputRef.current?.click(); }}
+                            title="Analyse food photo"
+                        >{analyzing ? '⏳' : '📷'}</button>
                         <button className="btn green" style={{ width: 'auto', marginTop: 0, padding: '0 16px', fontSize: 13 }} onClick={addEntry}>Add</button>
                     </div>
+                    {/* AI macro preview — shown after photo analysis, before user taps Add */}
+                    {aiMacros && (
+                        <div style={{ marginTop: 8, padding: '7px 10px', borderRadius: 8, background: 'var(--green-sf)', border: '1px solid var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <span style={{ fontSize: 11, color: 'var(--green-deep)', fontWeight: 600 }}>🤖 {foodResultToMacroString(aiMacros)}</span>
+                            <span style={{ fontSize: 10, color: aiMacros.confidence === 'low' ? '#e07800' : 'var(--green-deep)', background: aiMacros.confidence === 'low' ? '#fff3e0' : 'rgba(255,255,255,0.55)', borderRadius: 6, padding: '2px 6px', fontWeight: 700 }}>{aiMacros.confidence}</span>
+                        </div>
+                    )}
                     {foodLog.length > 0 && (
                         <div className="free-list" style={{ marginTop: 12 }}>
                             {foodLog.map((entry, i) => (
                                 <div key={i} className="food-chip">
                                     <span className="food-chip-tag">{entry.tag}</span>
-                                    <span className="food-chip-txt">{entry.text} <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#c5c0b8', padding: 0, marginLeft: 2 }} onClick={() => removeEntry(i)}>×</button></span>
+                                    <span className="food-chip-txt">
+                                        {entry.text}
+                                        {entry.calories > 0 && <span style={{ marginLeft: 5, fontSize: 10, color: 'var(--txm)', fontWeight: 600, background: 'var(--sf)', borderRadius: 5, padding: '1px 5px' }}>{entry.calories} cal</span>}
+                                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#c5c0b8', padding: 0, marginLeft: 4 }} onClick={() => removeEntry(i)}>×</button>
+                                    </span>
                                 </div>
                             ))}
+                            {dailyCals > 0 && <div style={{ marginTop: 8, fontSize: 11, color: 'var(--txm)', textAlign: 'right', fontWeight: 600 }}>~{dailyCals} cal logged today</div>}
                         </div>
                     )}
                 </div>
@@ -3386,7 +3429,7 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     return (
         <div id="nomad-routine">
             <div className="app" data-tab={activeTab}>
-                {activeTab === 'food' && <FoodScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
+                {activeTab === 'food' && <FoodScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} showToast={showToast} />}
                 {activeTab === 'skin' && <SkinScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
                 {activeTab === 'log' && <LogScreen allData={allData} config={config} />}
                 {activeTab === 'settings' && <SettingsScreen config={config} setConfig={setConfig} allData={allData} setAllData={setAllData} showToast={showToast} localModRef={localModRef} configModRef={configModRef} prevAllDataRef={prevAllDataRef} />}
