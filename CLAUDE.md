@@ -751,6 +751,32 @@ Weekly digest card and `Report` component removed from dashboard at user request
 **B.26.g E2E Playwright smoke tests — `e2e/`**
 5 spec files: demo mode, add expense/income, history search, settings (dark mode + wallets), delete/undo. `playwright.config.js` targets `localhost:5173` (mobile viewport 390×844). `npm run test:e2e`. Vitest `exclude: ['e2e/**']` prevents test runner conflict. `npm run test` (Vitest unit) still 266/266 passing.
 
+#### B.28 (session 8) — AI module bug fixes
+
+**B.28.a `redactor.js` stale regex `lastIndex` — `src/redactor.js`**
+Module-level `/g` regex objects maintain `lastIndex` between `.replace()` calls across different strings, causing intermittent misses on repeated calls (e.g. second call to `redactText` on a new string could skip matches). Fixed: renamed `PATTERNS` → `PATTERN_DEFS` storing raw source strings + flags; `redactText` now calls `new RegExp(src, flags)` fresh each invocation. Zero performance impact (sub-ms per call).
+
+**B.28.b `redactor.js` incomplete name redaction — `src/redactor.js`**
+Name tag function used `m.replace(name, "[NAME]")` (`String.replace`) which only replaces the first occurrence of the captured name within the match string. Changed to `m.replaceAll(name, "[NAME]")`.
+
+**B.28.c `foodVision.js` zero-dimension image crash — `src/foodVision.js`**
+Corrupt or zero-dimension images produced `Math.min(1, 800/0) = Infinity` → 0×0 canvas → empty base64. Added guard in `img.onload`: `if (!img.width || !img.height) { reject(new Error("Image has zero dimensions...")); return; }`.
+
+**B.28.d `foodVision.js` silent null on 200 — `src/foodVision.js`**
+`res.json().catch(() => null)` silently returned `null` when a 200 response body was unparseable (CDN error page, proxy HTML, etc.). The `!res.ok` guard passed (200 is ok), function returned `null` to caller with no error thrown. Added `if (!data) throw new Error("Food analysis returned an unreadable response. Try again.")` after the JSON parse.
+
+**B.28.e `food-vision.ts` `provider` field never populated — `api/food-vision.ts`, `api/_ai-provider.ts`**
+`FoodResult.provider` was in the interface and JSDoc but the response object never set it. Added `callVisionWithProvider()` export to `_ai-provider.ts` that returns `{content: string, provider: string}`. `food-vision.ts` now uses it and sets `provider` in the final result object.
+
+**B.28.f `financeScore.js` `daysInMonth` not a Date method — `src/financeScore.js`**
+`new Date(month + "-01T00:00:00").daysInMonth?.()` — `daysInMonth` is not a native Date method, always returned `undefined`, optional chaining fell back to `?? 30` (coincidentally correct). Variable was also computed but never used in the actual calculation (`TARGET = 20` hardcoded per docstring). Removed the dead variable entirely.
+
+**B.28.g `_ai-provider.ts` `max_tokens: 512` too small — `api/_ai-provider.ts`**
+512 tokens is insufficient for `ai-insights.ts` which generates 3–5 detailed insight objects (easily 600–900 tokens). Bumped `max_tokens` to `1024` in both `textBody` and `visionBody`.
+
+**B.28.h `_ai-provider.ts` `extractJSON` too narrow — `api/_ai-provider.ts`**
+Only stripped leading/trailing ` ```json ` fences. Models often return preamble text before the JSON block ("Sure! Here is the JSON:"). Added fallback: if cleaned text doesn't start with `{` or `[`, extract the first `{...}` or `[...]` block via regex.
+
 #### B.27 (session 7) — Bug fixes, removals, filter improvements
 
 **B.27.a `refundItem` undefined → history tab blank screen — `src/App.jsx`**
@@ -777,8 +803,8 @@ Added "Recurring" button to history type-filter row. Filters to `type === "expen
 ### H. Notes for Future Claude Sessions
 
 1. **Do not re-investigate the items in section C (false positives).** They are correct in the existing code. C.9 = TxCard memo already done. C.10 = quickPatterns already done.
-2. **Always run `npm run lint` and `npm test` before and after edits.** Current baselines (verified May 2026, session 5 — B.25):
-   - **Lint:** 122 problems (106 errors, 16 warnings). New edits must not increase this count.
+2. **Always run `npm run lint` and `npm test` before and after edits.** Current baselines (verified May 2026, session 8 — B.28):
+   - **Lint:** 126 problems (109 errors, 17 warnings). New edits must not increase this count.
    - **Tests:** **266 pass / 0 fail (266 total).**
    - Do not be alarmed by the lint count difference from prior sessions — it reflects a different codebase state.
 3. **`App.jsx` and `Routine.jsx` are written one-line-per-JSX-block.** When editing, use a unique substring as `old_string` — do **not** attempt to reformat. The build will break.
@@ -808,3 +834,7 @@ Added "Recurring" button to history type-filter row. Filters to `type === "expen
 27. **History type filter includes "Recurring" (B.27.g).** Maps to `type === "expense" && isFix(it)`. Not a separate transaction type — just a view filter over expenses.
 28. **`SOFT_DELETE_TABLES` (B.27.c)** = `Set(["expenses","incomes","transfers","recurring","events"])`. Only these get `&deleted_at=is.null` in `sbGet`. `splits`, `settlements`, `wallet_balances` do not have that column and must not get the filter.
 29. **`refundItem` (B.27.a)** defined in App.jsx before `settle()`. Creates income via `addI()`. `TxCard` receives `onRefund={refundItem}` prop — do not remove it.
+30. **`redactor.js` (B.28.a)** builds fresh `RegExp` objects per call — never revert to module-level `/g` regex objects. `PATTERN_DEFS` stores `{src, flags, tag}` tuples.
+31. **`callVisionWithProvider` (B.28.e)** is the correct import for `food-vision.ts` — returns `{content, provider}`. Plain `callVision` still exists for callers that don't need the provider name (`ai-insights`, `ai-categorize`, `ai-chat` all use `callText` anyway).
+32. **`extractJSON` (B.28.h)** now handles JSON embedded mid-text. Falls back to regex extraction of first `{...}`/`[...]` block when cleaned text doesn't start with `{` or `[`.
+33. **AI modules baseline (B.28):** `api/_ai-provider.ts`, `api/food-vision.ts`, `api/ai-insights.ts`, `api/ai-categorize.ts`, `api/ai-chat.ts`, `src/redactor.js`, `src/foodVision.js`, `src/financeScore.js` — all bugs fixed. Unit tests for these modules are still covered by the existing 266-test suite via indirect imports. Direct unit tests for AI modules would require mocking fetch + env vars — future work if needed.
