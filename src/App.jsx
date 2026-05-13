@@ -130,7 +130,7 @@ const isFix = e => !!(e.recurring === true || (e.note && e.note.endsWith(" (recu
 
 const WALLETS = [{ id: "upi_lite", name: "UPI Lite", desc: "online · ₹5000 cap", color: "#00D4FF", neon: "#00E5FF" }, { id: "bank", name: "Bank", desc: "main account", color: "#34D399", neon: "#6EE7B7" }, { id: "cash", name: "Cash", desc: "physical money", color: "#FBBF24", neon: "#FDE68A" }];
 const IW = WALLETS.filter(w => w.id !== "upi_lite");
-const DC = [{ id: "food", name: "Food & Drinks", color: "#FF6B35", neon: "#FF9F1C" }, { id: "transport", name: "Transport", color: "#00D4FF", neon: "#00E5FF" }, { id: "rent", name: "Rent & Bills", color: "#A78BFA", neon: "#C4B5FD" }, { id: "entertainment", name: "Entertainment", color: "#F472B6", neon: "#FF8ED4" }, { id: "health", name: "Health", color: "#34D399", neon: "#6EE7B7" }, { id: "coffee", name: "Coffee / Snacks", color: "#FBBF24", neon: "#FDE68A" }, { id: "personal", name: "Personal Care", color: "#E879F9", neon: "#F0ABFC" }];
+const DC = [{ id: "food", name: "Food & Drinks", color: "#FF6B35", neon: "#FF9F1C" }, { id: "transport", name: "Transport", color: "#00D4FF", neon: "#00E5FF" }, { id: "rent", name: "Rent & Bills", color: "#A78BFA", neon: "#C4B5FD" }, { id: "entertainment", name: "Entertainment", color: "#F472B6", neon: "#FF8ED4" }, { id: "health", name: "Health", color: "#34D399", neon: "#6EE7B7" }, { id: "coffee", name: "Coffee / Snacks", color: "#FBBF24", neon: "#FDE68A" }, { id: "personal", name: "Personal Care", color: "#E879F9", neon: "#F0ABFC" }, { id: "other", name: "Other", color: "#8A8A9A", neon: "#A0A0B0" }];
 const DI = [{ id: "allowance", name: "Allowance", color: "#34D399", neon: "#6EE7B7" }, { id: "gifts", name: "Gifts", color: "#FF6B35", neon: "#FF9F1C" }, { id: "investments", name: "Investments", color: "#00D4FF", neon: "#00E5FF" }];
 const RC = [{ id: "rent", name: "Rent / PG", color: "#A78BFA", neon: "#C4B5FD" }, { id: "emi", name: "EMI", color: "#F472B6", neon: "#FF8ED4" }, { id: "sip", name: "SIP / MF", color: "#34D399", neon: "#6EE7B7" }, { id: "insurance", name: "Insurance", color: "#00D4FF", neon: "#00E5FF" }, { id: "recharge", name: "Phone Recharge", color: "#FBBF24", neon: "#FDE68A" }, { id: "ott", name: "OTT / Subscriptions", color: "#E879F9", neon: "#F0ABFC" }, { id: "utilities", name: "Electricity / Bills", color: "#FF6B35", neon: "#FF9F1C" }, { id: "other_rec", name: "Other", color: "#8A8A9A", neon: "#A0A0B0" }];
 
@@ -573,6 +573,7 @@ const TxCard = memo(function TxCard({ item: it, categories: cats, incomeSources:
     if (rcMatch) cat = rcMatch;
     else if (it.categoryId === "other_rec") cat = { id: "other_rec", name: "Other", color: "#8A8A9A", neon: "#A0A0B0" };
   }
+  if (isE && !cat && it.categoryId) cat = { id: it.categoryId, name: it.categoryId.split("_")[0].replace(/^\w/, l => l.toUpperCase()), color: "#8A8A9A", neon: "#A0A0B0" };
   const w = wl.find(x => x.id === it.walletId), fW = wl.find(x => x.id === it.fromWallet), tW = wl.find(x => x.id === it.toWallet);
   const ev = it.eventId ? evs?.find(e => e.id === it.eventId) : null, evT = ev ? `● ${ev.name}` : null;
   const fxMeta = (isE || isI) ? getCurrencyMeta(it.id) : null;
