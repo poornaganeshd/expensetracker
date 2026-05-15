@@ -54,3 +54,14 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const focused = clients.find(c => c.focused) || clients[0];
+      if (focused) return focused.focus();
+      return self.clients.openWindow('/');
+    })
+  );
+});
