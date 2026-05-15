@@ -854,6 +854,7 @@ export default function Nomad() {
   const [recDelItems, sRecDelItems] = useState(null);
   const [recDelLoading, sRecDelLoading] = useState(false);
   const [csvPreview, sCsvPreview] = useState(null);
+  const [smsPasteText, sSmsPasteText] = useState("");
   const [budgets, sBudgets] = useState({});
   const [budgetSettingsOpen, sBudgetSettingsOpen] = useState(false);
   const [hSearch, sHSearch] = useState(""), [hMinAmt, sHMinAmt] = useState(""), [hMaxAmt, sHMaxAmt] = useState(""), [hDateFrom, sHDateFrom] = useState(""), [hDateTo, sHDateTo] = useState(""), [hType, sHType] = useState("all"), [hShowFilters, sHShowFilters] = useState(false);
@@ -942,6 +943,15 @@ export default function Nomad() {
     const last = allDates[allDates.length - 1];
     const diff = Math.floor((new Date(today) - new Date(last)) / 86400000);
     if (diff >= 3) { showT(`💤 No transactions logged in ${diff} days — stay on track!`, "info"); localStorage.setItem(lastKey, today); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const shared = params.get("share_text") || params.get("share_title") || "";
+    if (!shared.trim()) return;
+    window.history.replaceState({}, "", "/");
+    saveSmsAsDraft(shared);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
 
@@ -1280,6 +1290,44 @@ export default function Nomad() {
   const expBackup = () => { const data = JSON.stringify({ expenses: ex, incomes: inc, transfers: tr, settlements: stl, categories: cats, incomeSources: isrc, splits: sp, events: evs, recurring: rec, darkMode: dm, walletStartBal: wsb, _v: "nomad-v9", _date: new Date().toISOString() }, null, 2); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type: "application/json" })); a.download = `nomad_backup_${localDateKey()}.json`; a.click(); showT("Backup downloaded", "success") };
   // Parse CSV text into array of {date, amount, note, type} rows.
   // Handles HDFC/ICICI/SBI/generic bank statement formats.
+  const parseSmsText = (text) => {
+    const t = (text || "").trim();
+    const amtMatch = t.match(/(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)/i);
+    if (!amtMatch) return null;
+    const amount = parseFloat(amtMatch[1].replace(/,/g, ""));
+    if (!amount || isNaN(amount) || amount <= 0) return null;
+    const isDebit = /\b(debit|debited|withdrawn|spent|paid|purchase)\b/i.test(t);
+    const isCredit = /\b(credit|credited|received|deposit|deposited|refund|cashback)\b/i.test(t);
+    if (!isDebit && !isCredit) return null;
+    const type = isDebit ? "expense" : "income";
+    let date = localDateKey();
+    const dm = t.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if (dm) { const [, dd, mm, yy] = dm; const yyyy = yy.length === 2 ? "20" + yy : yy; const d = new Date(`${yyyy}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}T12:00:00`); if (!isNaN(d.getTime())) date = `${yyyy}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}`; }
+    const vpaMatch = t.match(/\b([\w.+-]+@[a-zA-Z0-9]+)\b/);
+    const vpa = vpaMatch ? vpaMatch[1] : null;
+    const isPersonPayment = !!vpa && (/^\d{10}@/.test(vpa) || /^[a-z0-9]+@(paytm|ybl|okhdfcbank|okicici|oksbi|axisbank|upi|ibl|jiomoney|airtelpaymentsbank)$/i.test(vpa));
+    let merchant = null;
+    const upiSlash = t.match(/UPI[\/\-]([\w\s.&\-]+?)(?:\/|\.|\s{2,}|$)/i);
+    if (upiSlash) merchant = upiSlash[1].trim().slice(0, 60) || null;
+    if (!merchant) { const infoM = t.match(/Info[:\s]+([\w\s.&\-@]+?)(?:\.|Avl|Bal|$)/i); if (infoM) merchant = infoM[1].trim().slice(0, 60) || null; }
+    if (!merchant && vpa) merchant = vpa;
+    const matchedRule = autoRules.find(r => t.toLowerCase().includes(r.keyword));
+    const suggested_category_id = matchedRule ? matchedRule.categoryId : null;
+    return { amount, type, date, merchant, vpa, is_person_payment: isPersonPayment, suggested_category_id };
+  };
+
+  const saveSmsAsDraft = (smsText) => {
+    const parsed = parseSmsText(smsText);
+    if (!parsed) { showT("Couldn't parse amount from SMS — try pasting a bank SMS", "error"); return; }
+    const existingKey = `${parsed.date}:${parsed.amount}`;
+    if (ex.some(e => `${e.date}:${e.amount}` === existingKey) || drafts.some(d => `${d.date}:${d.amount}` === existingKey)) { showT("This transaction already exists or is in drafts", "info"); return; }
+    const draft = { id: uid(), source: "sms", raw_text: smsText.slice(0, 500), date: parsed.date, amount: parsed.amount, type: parsed.type, merchant: parsed.merchant, vpa: parsed.vpa || null, suggested_category_id: parsed.suggested_category_id || (parsed.type === "expense" ? cats[0]?.id || "food" : null), suggested_wallet_id: "bank", is_person_payment: parsed.is_person_payment, status: "pending", created_at: new Date().toISOString() };
+    sDrafts(p => [...p, draft]);
+    if (SB_ENABLED) sbUpsert("drafts", [toSB(draft, ["id", "source", "raw_text", "date", "amount", "type", "merchant", "vpa", "suggested_category_id", "suggested_wallet_id", "is_person_payment", "status"])]);
+    sDraftReviewOpen(true);
+    showT(`Draft saved — ${parsed.type === "income" ? "+" : "−"}₹${parsed.amount} · review on Dashboard`, "success");
+  };
+
   // Debit columns → expense, Credit columns → income.
   const parseBankCsv = (text) => {
     const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -1631,6 +1679,7 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
         <div onClick={() => sStgDt(v=>!v)} style={{ marginBottom: 6, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", borderRadius: 12, background: "var(--bg)", border: "1px solid var(--border)" }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: "1px", textTransform: "uppercase" }}>DATA</div><span style={{ fontSize: 11, color: "var(--muted)" }}>{stgDt ? "▲" : "▼"}</span></div>
         {stgDt && <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Export</div><button onClick={expCSV} style={{ width: "100%", padding: "13px", border: "none", borderRadius: 10, background: "#E07A5F", color: "#fff", fontFamily: "var(--font-h)", fontSize: 14, cursor: "pointer", fontWeight: 600 }}>Download CSV</button><p style={{ fontSize: 12, color: "var(--muted)", marginTop: 10, lineHeight: 1.6, fontStyle: "italic" }}>Upload to ChatGPT or Claude for analysis.</p></div>}
         {stgDt && <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: "0.5px", fontWeight: 600 }}>Backup & Restore</div><div style={{ display: "flex", gap: 8, marginBottom: 8 }}><button onClick={expBackup} style={{ flex: 1, padding: "13px", border: "none", borderRadius: 10, background: "#6BAA75", color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>📥 Backup</button><label style={{ flex: 1, padding: "13px", border: "1.5px solid #7B8CDE", borderRadius: 10, background: "#7B8CDE12", color: "#7B8CDE", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600, textAlign: "center" }}>📤 Restore<input type="file" accept=".json" onChange={e => { if (e.target.files[0]) impBackup(e.target.files[0]); e.target.value = "" }} style={{ display: "none" }} /></label></div><label style={{ display: "block", width: "100%", padding: "11px", border: "1.5px solid #c9a96e", borderRadius: 10, background: "#c9a96e12", color: "#c9a96e", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer", fontWeight: 600, textAlign: "center", marginBottom: 8, boxSizing: "border-box" }}>📂 Import Bank CSV<input type="file" accept=".csv" onChange={e => { if (e.target.files[0]) impCsv(e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>{csvPreview && <div style={{ background: "var(--bg)", borderRadius: 10, padding: "12px 14px", marginBottom: 8, border: "1px solid #c9a96e40" }}><div style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 700, color: "#c9a96e", marginBottom: 8 }}>PREVIEW — {csvPreview.length} ROWS</div>{csvPreview.slice(0, 4).map((r, i) => <div key={i} style={{ fontSize: 11, color: "var(--ts)", marginBottom: 4, display: "flex", gap: 8, justifyContent: "space-between" }}><span style={{ color: r.type === "income" ? "#6BAA75" : "#E07A5F", fontWeight: 700, flexShrink: 0 }}>{r.type === "income" ? "+" : "−"}₹{r.amount}</span><span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.note || "—"}</span><span style={{ flexShrink: 0 }}>{r.date}</span></div>)}{csvPreview.length > 4 && <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 4 }}>…and {csvPreview.length - 4} more</div>}<div style={{ fontSize: 10, color: "var(--muted)", marginTop: 6, marginBottom: 8 }}>Expenses → Food category, Bank wallet. Income → Allowance source. Recategorize after import.</div><div style={{ display: "flex", gap: 8 }}><button onClick={confirmCsvImport} style={{ flex: 2, padding: "10px", border: "none", borderRadius: 8, background: "#6BAA75", color: "#fff", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Import {csvPreview.length} transactions</button><button onClick={() => sCsvPreview(null)} style={{ flex: 1, padding: "10px", border: "1.5px solid var(--border)", borderRadius: 8, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, cursor: "pointer" }}>Cancel</button></div></div>}<p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6, fontStyle: "italic" }}>Backup saves all data as JSON. Restore replaces current data. Import CSV adds bank statement transactions.</p></div>}
+        {stgDt && <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "#A78BFA", marginBottom: 6, letterSpacing: "0.5px", fontWeight: 700 }}>📲 Paste Bank SMS</div><p style={{ fontSize: 11, color: "var(--muted)", marginBottom: 10, lineHeight: 1.6 }}>Copy a bank debit/credit SMS and paste it below — or share directly via Android share sheet if NOMAD is installed as a PWA.</p><textarea value={smsPasteText} onChange={e => sSmsPasteText(e.target.value)} placeholder={"e.g. Rs 500.00 debited from A/C XX1234 on 15-05-26; UPI-Zomato/ZOMA0001"} rows={3} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, fontFamily: "var(--font-b)", resize: "vertical", boxSizing: "border-box", marginBottom: 8 }} /><button disabled={!smsPasteText.trim()} onClick={() => { saveSmsAsDraft(smsPasteText); sSmsPasteText(""); sTab("dashboard"); }} style={{ width: "100%", padding: "11px", border: "none", borderRadius: 10, background: smsPasteText.trim() ? "#A78BFA" : "var(--border)", color: smsPasteText.trim() ? "#fff" : "var(--muted)", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, cursor: smsPasteText.trim() ? "pointer" : "not-allowed" }}>Save as Draft →</button></div>}
         {stgDt && <div style={{ ...cc, padding: 20, marginBottom: 14 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 12, color: "var(--muted)", marginBottom: 12, letterSpacing: "0.5px", fontWeight: 600 }}>Recently Deleted</div>{recDelItems === null ? <button onClick={loadRecentlyDeleted} disabled={recDelLoading} style={{ width: "100%", padding: "10px", border: "1.5px solid var(--border)", borderRadius: 10, background: "var(--card)", color: recDelLoading ? "var(--muted)" : "var(--text)", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, cursor: recDelLoading ? "not-allowed" : "pointer", opacity: recDelLoading ? 0.6 : 1 }}>{recDelLoading ? "Loading…" : "Load deleted items (last 30 days)"}</button> : recDelItems.length === 0 ? <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", padding: "8px 0" }}>No items deleted in the last 30 days</div> : recDelItems.map(item => <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--border)" }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item._tbl === "recurring" ? item.name : (fmt(item.amount) + (item.note ? " · " + item.note : "") + " · " + (item.date || ""))}</div><div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{item._tbl} · deleted {new Date(item.deleted_at).toLocaleDateString()}</div></div><button onClick={() => restoreDeleted(item)} style={{ padding: "5px 10px", border: "1.5px solid #6BAA75", borderRadius: 7, background: "#6BAA7512", color: "#6BAA75", fontFamily: "var(--font-h)", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>Restore</button></div>)}</div>}
         <div onClick={() => sStgIn(v=>!v)} style={{ marginBottom: 6, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", borderRadius: 12, background: "var(--bg)", border: "1px solid var(--border)" }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: "1px", textTransform: "uppercase" }}>INTEGRATIONS</div><span style={{ fontSize: 11, color: "var(--muted)" }}>{stgIn ? "▲" : "▼"}</span></div>
         {stgIn && <div style={{ ...cc, padding: "14px 20px", marginBottom: 14, borderLeft: "3px solid #c9a96e", background: reportOpen ? (dm ? "#c9a96e0a" : "#c9a96e08") : "var(--card)" }}>
