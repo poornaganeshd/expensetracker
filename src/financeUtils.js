@@ -48,6 +48,7 @@ export const getRecurringDueDate = (record, todayString) => {
     let due = withClampedDay(start.getFullYear(), start.getMonth() + months, dom);
     const daysInDueMonth = new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate();
     if (dom > daysInDueMonth && due < today) { months += 1; due = withClampedDay(start.getFullYear(), start.getMonth() + months, dom); }
+    if (due < start) { months += 1; due = withClampedDay(start.getFullYear(), start.getMonth() + months, dom); }
     return isoDate(due);
   }
   if (record.frequency === 'yearly') {
