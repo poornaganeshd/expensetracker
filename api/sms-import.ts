@@ -76,9 +76,10 @@ function makeId(): string {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  // Auth: Bearer <CRON_SECRET>
+  // Auth: Bearer header OR ?secret= query param (for MacroDroid / no-header clients)
   const auth = req.headers["authorization"] || "";
-  if (!CRON_SECRET || auth !== `Bearer ${CRON_SECRET}`) {
+  const querySecret = (req.query?.secret as string) || "";
+  if (!CRON_SECRET || (auth !== `Bearer ${CRON_SECRET}` && querySecret !== CRON_SECRET)) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
