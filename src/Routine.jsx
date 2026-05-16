@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { sendSupabaseRequest } from './offlineSync';
 import { getCredentials as _getCreds } from './credentials';
 import { analyzeFood, foodResultToText, foodResultToMacroString } from './foodVision';
+import { IconFlameFilled, IconDropletFilled, IconCalendarMonth, IconCircleCheckFilled, IconEggFilled } from '@tabler/icons-react';
 
 /* ============================================================
    FORM — Daily food & skincare ritual tracker  v6
@@ -2027,7 +2028,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
                         </div>
                         {streak > 0 && (
                             <div className={`streak-card${streak >= 7 ? ' streak-on-fire' : ''}`}>
-                                <div style={{ fontSize: 15, lineHeight: 1, marginBottom: 1 }}>🔥</div>
+                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 2 }}><IconFlameFilled size={18} color="#EF9F27" /></div>
                                 <div className="s-num">{streak}</div>
                                 <div className="s-lbl">day{streak !== 1 ? 's' : ''}</div>
                             </div>
@@ -2050,7 +2051,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
                 <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: '#2a4f12', boxShadow: '0px 6px 16px rgba(0,0,0,0.20)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div className="hc-icon ic-done" style={{ flexShrink: 0, background: 'rgba(255,255,255,0.15)' }}>
-                            <PhosphorIcon name="egg" size={22} color={day.eggs >= config.eggsTarget ? '#B7E778' : '#B7E778'} opacity={0.7} />
+                            <IconEggFilled size={24} color="#B7E778" />
                         </div>
                         <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 14, fontWeight: 800, color: '#FFFFFF' }}>Eggs</div>
@@ -2728,9 +2729,9 @@ const LogScreen = ({ allData, config }) => {
             <div className="body-pad">
 
                 <div style={{ display: 'flex', gap: 10, marginBottom: 14, overflowX: 'auto', paddingBottom: 4 }}>
-                    {[{ icon: '🔥', val: streak, label: `day${streak !== 1 ? 's' : ''}`, color: 'var(--amber)' }, { icon: '📅', val: daysTrackedThisMonth, label: 'this month', color: 'var(--teal)' }, { icon: '✓', val: `${completionPct}%`, label: 'completion', color: 'var(--green)' }, { icon: '💧', val: `${avgWater}${avgWater !== '—' ? 'L' : ''}`, label: 'avg water', color: 'var(--teal)' }].map(({ icon, val, label, color }) => (
+                    {[{ IC: IconFlameFilled, ic: 'var(--amber)', val: streak, label: `day${streak !== 1 ? 's' : ''}`, color: 'var(--amber)' }, { IC: IconCalendarMonth, ic: 'var(--teal)', val: daysTrackedThisMonth, label: 'this month', color: 'var(--teal)' }, { IC: IconCircleCheckFilled, ic: 'var(--green)', val: `${completionPct}%`, label: 'completion', color: 'var(--green)' }, { IC: IconDropletFilled, ic: 'var(--teal)', val: `${avgWater}${avgWater !== '—' ? 'L' : ''}`, label: 'avg water', color: 'var(--teal)' }].map(({ IC, ic, val, label, color }) => (
                         <div key={label} style={{ background: 'var(--sf)', borderRadius: 18, padding: '12px 16px', minWidth: 86, flexShrink: 0, textAlign: 'center', boxShadow: 'var(--card-shadow)' }}>
-                            <div style={{ fontSize: 18, lineHeight: 1, marginBottom: 4 }}>{icon}</div>
+                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}><IC size={20} color={ic} /></div>
                             <div style={{ fontSize: 22, fontWeight: 800, color, fontFamily: 'var(--mono)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{val}</div>
                             <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--txm)', marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
                         </div>
