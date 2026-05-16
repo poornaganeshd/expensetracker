@@ -112,7 +112,7 @@ const sbWrite = async (path, { method = "POST", body, dedupeKey, extraHeaders = 
   return result;
 };
 const sbUpsert = async (table, rows, dedupeKey = null, extraHeaders = {}) => sbWrite(`${SB_URL}/rest/v1/${table}`, { method: "POST", body: rows, dedupeKey, extraHeaders });
-const sbDelete = async (table, id) => sbWrite(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "PATCH", body: { deleted_at: new Date().toISOString() }, dedupeKey: `${table}:delete:${id}` });
+const sbDelete = async (table, id) => { const r = await sbWrite(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "PATCH", body: { deleted_at: new Date().toISOString() }, dedupeKey: `${table}:delete:${id}` }); if (!r.ok && !r.queued && r.response?.status === 400) return sbDeleteWhere(table, `id=eq.${id}`); return r; };
 const sbGetDeleted = async (table) => {
   if (!SB_ENABLED) return null;
   try {
@@ -867,6 +867,7 @@ export default function Nomad() {
   const [dlBanner, sDlBanner] = useState(() => getDeadLetterCount() > 0);
   const [online, sOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   const [staleData, sStaleData] = useState(false);
+  const [swUpdate, sSwUpdate] = useState(false);
   const [manageXp, sManageXp] = useState(false);
   const [recDelConfirm, sRecDelConfirm] = useState(null);
   const [recEditId, sRecEditId] = useState(null);
@@ -1007,6 +1008,7 @@ export default function Nomad() {
     const handleOnline = () => { sOnline(true); flushSyncQueue().catch(() => { }); };
     const handleOffline = () => sOnline(false);
     const handleStorage = (e) => { if (e.key === "nomad-v5" && e.newValue !== e.oldValue) sStaleData(true); };
+    if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("controllerchange", () => sSwUpdate(true));
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     window.addEventListener("storage", handleStorage);
@@ -1497,6 +1499,7 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
 
     {(!online || pendingSync > 0) && <div style={{ position: "sticky", top: 0, zIndex: 120, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: online ? "#FFF3D6" : "#FDE7E4", border: `1px solid ${online ? "#F1C96B" : "#E7A39B"}`, color: online ? "#7A5600" : "#9F3E33", fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, letterSpacing: "0.01em", textAlign: "center" }}>{!online ? "Offline. Changes sync later." : `Syncing ${pendingSync} change${pendingSync === 1 ? "" : "s"}.`}</div>}
     {staleData && <div style={{ position: "sticky", top: 0, zIndex: 120, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: "#EDE9FE", border: "1px solid #A78BFA50", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}><span style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, color: "#4C1D95" }}>Another tab updated data.</span><div style={{ display: "flex", gap: 6, flexShrink: 0 }}><button onClick={() => window.location.reload()} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 700, background: "#7C3AED", border: "none", color: "#fff", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Reload</button><button onClick={() => sStaleData(false)} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, background: "none", border: "none", color: "#4C1D95", cursor: "pointer", opacity: 0.6 }}>✕</button></div></div>}
+    {swUpdate && <div style={{ position: "sticky", top: 0, zIndex: 121, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: "#ECFDF5", border: "1px solid #6BAA7550", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}><span style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, color: "#065F46" }}>🎉 App updated — reload to see changes.</span><div style={{ display: "flex", gap: 6, flexShrink: 0 }}><button onClick={() => window.location.reload()} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 700, background: "#6BAA75", border: "none", color: "#fff", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Reload</button><button onClick={() => sSwUpdate(false)} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, background: "none", border: "none", color: "#065F46", cursor: "pointer", opacity: 0.6 }}>✕</button></div></div>}
 
 
     {(() => {

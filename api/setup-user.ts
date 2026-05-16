@@ -46,6 +46,13 @@ ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS include_expenses    BOOLEA
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS include_incomes     BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS include_transfers   BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE report_schedules ADD COLUMN IF NOT EXISTS selected_categories JSONB;
+
+DO $$ BEGIN ALTER TABLE expenses  ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE incomes   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE transfers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE splits    ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE recurring ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE events    ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 `;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
