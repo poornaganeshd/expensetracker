@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { sendSupabaseRequest } from './offlineSync';
 import { getCredentials as _getCreds } from './credentials';
 import { analyzeFood, foodResultToText, foodResultToMacroString } from './foodVision';
-import { IconFlameFilled, IconDropletFilled, IconCalendarMonth, IconCircleCheckFilled, IconEggFilled } from '@tabler/icons-react';
+import { IconFlameFilled, IconDropletFilled, IconCalendarMonth, IconCircleCheckFilled, IconEggFilled, IconMoodHappyFilled, IconMoodNeutralFilled, IconMoodSadFilled, IconMoodAngryFilled, IconBedFilled, IconMoonFilled, IconCameraFilled, IconCalendarWeek } from '@tabler/icons-react';
 
 /* ============================================================
    FORM — Daily food & skincare ritual tracker  v6
@@ -1530,6 +1530,32 @@ const parseMorningWater = (s) => {
 const effectiveMorningWater = (day) =>
     day && day.morningWater ? parseMorningWater(day.morningWaterAmount) : 0;
 
+const calcSleepDuration = (sleepTime, wakeTime) => {
+    if (!sleepTime || !wakeTime) return null;
+    const [sh, sm] = sleepTime.split(':').map(Number);
+    const [wh, wm] = wakeTime.split(':').map(Number);
+    let mins = (wh * 60 + wm) - (sh * 60 + sm);
+    if (mins < 0) mins += 1440;
+    return mins / 60;
+};
+const fmtSleep = (h) => h == null ? '—' : `${Math.floor(h)}h${Math.round((h % 1) * 60) > 0 ? ` ${Math.round((h % 1) * 60)}m` : ''}`;
+const compressPhoto = (file, maxPx = 480) => new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+        URL.revokeObjectURL(url);
+        if (!img.width || !img.height) { reject(new Error('Zero-dimension image')); return; }
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')); };
+    img.src = url;
+});
+
 /* Migrate freeFoodLog to flat [{text, tag}] format */
 const migrateFreeFoodLog = (log) => {
     if (!log) return [];
@@ -1597,6 +1623,11 @@ const DEFAULT_DAY = {
     skinNotes: '',
     notesConfirmed: false,
     skinNotesConfirmed: false,
+    sleepTime: '',
+    wakeTime: '',
+    sleepQuality: '',
+    skinPhoto: '',
+    hairPhoto: '',
 };
 
 const DEFAULT_CONFIG = {
@@ -2144,6 +2175,56 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
 
                 </div>
 
+                {/* Mood card */}
+                <div className="card" style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <IconMoodHappyFilled size={18} color="var(--amber)" />
+                        <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--txm)' }}>Mood</span>
+                        {day.moodChip && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx)', fontWeight: 600, background: 'var(--sf)', borderRadius: 8, padding: '2px 8px' }}>{day.moodChip}</span>}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                        {[{ key: 'great', IC: IconMoodHappyFilled, color: '#6BAA75', label: 'Great', bg: 'rgba(107,170,117,0.13)' }, { key: 'okay', IC: IconMoodNeutralFilled, color: '#7B8CDE', label: 'Okay', bg: 'rgba(123,140,222,0.13)' }, { key: 'low', IC: IconMoodSadFilled, color: '#E07A5F', label: 'Low', bg: 'rgba(224,122,95,0.13)' }, { key: 'stressed', IC: IconMoodAngryFilled, color: '#c25b4c', label: 'Stressed', bg: 'rgba(194,91,76,0.13)' }].map(({ key, IC, color, label, bg }) => (
+                            <div key={key} onClick={() => { haptic(); update({ moodChip: day.moodChip === key ? '' : key }); }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, padding: '10px 4px', borderRadius: 12, background: day.moodChip === key ? bg : 'var(--sf)', border: `1.5px solid ${day.moodChip === key ? color : 'var(--bd)'}`, cursor: 'pointer', transition: 'all 0.15s' }}>
+                                <IC size={22} color={day.moodChip === key ? color : 'var(--txm)'} />
+                                <span style={{ fontSize: 10, fontWeight: 700, color: day.moodChip === key ? color : 'var(--txm)', letterSpacing: '0.02em' }}>{label}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Sleep card */}
+                <div className="card" style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <IconBedFilled size={18} color="#7B8CDE" />
+                        <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--txm)' }}>Sleep</span>
+                        {calcSleepDuration(day.sleepTime, day.wakeTime) != null && <span style={{ marginLeft: 'auto', fontSize: 13, color: '#7B8CDE', fontWeight: 800, fontFamily: 'var(--mono)' }}>{fmtSleep(calcSleepDuration(day.sleepTime, day.wakeTime))}</span>}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+                                <IconMoonFilled size={13} color="#7B8CDE" />
+                                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--txm)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Bedtime</span>
+                            </div>
+                            <input type="time" className="inp" style={{ padding: '7px 10px', fontSize: 15, fontWeight: 700, fontFamily: 'var(--mono)', color: 'var(--tx)' }} value={day.sleepTime || ''} onChange={(e) => update({ sleepTime: e.target.value })} />
+                        </div>
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+                                <PhosphorIcon name="sun" size={13} color="#EF9F27" opacity={0.9} />
+                                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--txm)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Wake up</span>
+                            </div>
+                            <input type="time" className="inp" style={{ padding: '7px 10px', fontSize: 15, fontWeight: 700, fontFamily: 'var(--mono)', color: 'var(--tx)' }} value={day.wakeTime || ''} onChange={(e) => update({ wakeTime: e.target.value })} />
+                        </div>
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--txm)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Quality</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                        {[{ key: 'deep', label: 'Deep', color: '#6BAA75' }, { key: 'okay', label: 'Okay', color: '#7B8CDE' }, { key: 'light', label: 'Light', color: 'var(--amber)' }, { key: 'poor', label: 'Poor', color: '#E07A5F' }].map(({ key, label, color }) => (
+                            <div key={key} onClick={() => { haptic(); update({ sleepQuality: day.sleepQuality === key ? '' : key }); }} style={{ textAlign: 'center', padding: '7px 4px', borderRadius: 10, background: day.sleepQuality === key ? `${color}22` : 'var(--sf)', border: `1.5px solid ${day.sleepQuality === key ? color : 'var(--bd)'}`, cursor: 'pointer', transition: 'all 0.15s' }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: day.sleepQuality === key ? color : 'var(--txm)' }}>{label}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
                 {/* Water total card */}
                 <div className="card" style={{ marginBottom: 10 }}>
                     <div className="water-card-row">
@@ -2436,6 +2517,29 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                         : <span className="saved-link" onClick={() => update({ skinNotesConfirmed: false })}>✓ Saved · Edit</span>
                     }
                 </div>
+                {/* Photo Journal card */}
+                <div className="card" style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                        <IconCameraFilled size={18} color="var(--teal)" />
+                        <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--txm)' }}>Photo Journal</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        {[{ field: 'skinPhoto', label: 'Face', icon: '🙂' }, { field: 'hairPhoto', label: 'Hair', icon: '💇' }].map(({ field, label, icon }) => {
+                            const photoInputId = `photo-input-${field}`;
+                            return (
+                                <div key={field} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                                    <div style={{ width: '100%', aspectRatio: '1', borderRadius: 14, overflow: 'hidden', background: 'var(--sf)', border: '2px dashed var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }} onClick={() => document.getElementById(photoInputId)?.click()}>
+                                        {day[field] ? <img src={day[field]} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}><span style={{ fontSize: 26 }}>{icon}</span><span style={{ fontSize: 10, color: 'var(--txm)', fontWeight: 600 }}>Tap to add</span></div>}
+                                        {day[field] && <div style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); haptic(4); update({ [field]: '' }); }}>✕</div>}
+                                    </div>
+                                    <input id={photoInputId} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; try { const b64 = await compressPhoto(f); haptic(); update({ [field]: b64 }); } catch { } e.target.value = ''; }} />
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--txm)' }}>{label}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
             </div>
         </div>
     );
@@ -3390,32 +3494,11 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     const day = sanitizeDayRecord(rawDay);
     const updateDay = (patch) => setAllData(prev => ({ ...prev, [key]: { ...day, ...patch } }));
 
-    const appStreak = useMemo(() => {
-        const dayLevel = (d) => {
-            if (!d) return 0;
-            let pts = 0;
-            if (d.morningWater) pts++;
-            const mwL = effectiveMorningWater(d);
-            if ((mwL + (d.water || 0)) >= config.waterTarget) pts++;
-            if ((d.eggs || 0) >= config.eggsTarget) pts++;
-            if (d.amSkinDone) pts++;
-            if (d.pmSkinDone) pts++;
-            return pts;
-        };
-        let s = 0;
-        const d = new Date();
-        const todayK = todayKey(d);
-        // Count today immediately on first logged action; past days still require ≥2.
-        if (allData[todayK] && dayLevel(allData[todayK]) >= 1) s = 1;
-        d.setDate(d.getDate() - 1);
-        // Walk back through history; cap is a sanity bound only (~13.7 years).
-        let safety = 0;
-        while (safety < 5000) {
-            const rec = allData[todayKey(d)];
-            if (rec && dayLevel(rec) >= 2) { s++; d.setDate(d.getDate() - 1); safety++; }
-            else break;
-        }
-        return s;
+    const { foodStreak, skinStreak } = useMemo(() => {
+        const foodDayLevel = (d) => { if (!d) return 0; let pts = 0; if (d.morningWater) pts++; const mwL = effectiveMorningWater(d); if ((mwL + (d.water || 0)) >= config.waterTarget) pts++; if ((d.eggs || 0) >= config.eggsTarget) pts++; return pts; };
+        const skinDayLevel = (d) => { if (!d) return 0; return (d.amSkinDone ? 1 : 0) + (d.pmSkinDone ? 1 : 0); };
+        const countStreak = (levelFn) => { let s = 0; const d = new Date(); const todayK = todayKey(d); if (allData[todayK] && levelFn(allData[todayK]) >= 1) s = 1; d.setDate(d.getDate() - 1); let safety = 0; while (safety < 5000) { const rec = allData[todayKey(d)]; if (rec && levelFn(rec) >= 2) { s++; d.setDate(d.getDate() - 1); safety++; } else break; } return s; };
+        return { foodStreak: countStreak(foodDayLevel), skinStreak: countStreak(skinDayLevel) };
     }, [allData, config]);
 
     const onComplete = (type) => {
@@ -3440,8 +3523,8 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     return (
         <div id="nomad-routine">
             <div className="app" data-tab={activeTab}>
-                {activeTab === 'food' && <FoodScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} showToast={showToast} />}
-                {activeTab === 'skin' && <SkinScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
+                {activeTab === 'food' && <FoodScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={foodStreak} showToast={showToast} />}
+                {activeTab === 'skin' && <SkinScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={skinStreak} />}
                 {activeTab === 'log' && <LogScreen allData={allData} config={config} />}
                 {activeTab === 'settings' && <SettingsScreen config={config} setConfig={setConfig} allData={allData} setAllData={setAllData} showToast={showToast} localModRef={localModRef} configModRef={configModRef} prevAllDataRef={prevAllDataRef} />}
 
