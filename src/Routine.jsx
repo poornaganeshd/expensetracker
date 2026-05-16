@@ -2014,7 +2014,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
                     <div className="sky-top-row">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                             <div style={{ position: 'relative', width: 76, height: 76, flexShrink: 0 }}>
-                                <ActivityRing pct={pct} size={76} color={pct >= 100 ? 'var(--green)' : '#EF9F27'} trackColor="rgba(255,255,255,0.22)" />
+                                <ActivityRing pct={pct} size={76} color={pct >= 100 ? 'var(--green)' : '#EF9F27'} trackColor="rgba(255,255,255,0.45)" />
                                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                                     <span style={{ fontSize: 17, fontWeight: 800, color: 'var(--tx)', lineHeight: 1 }}>{pct}%</span>
                                     <span style={{ fontSize: 9, color: 'var(--txm)', fontWeight: 700, marginTop: 1 }}>{doneCount}/{totalCount}</span>
@@ -2047,7 +2047,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
                 <div className="sec-lbl">Today's rituals</div>
 
                 {/* Eggs counter bar */}
-                <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: 'var(--sf)', boxShadow: '0px 6px 16px rgba(0,0,0,0.20)' }}>
+                <div className="card" style={{ marginBottom: 10, padding: '14px 16px', background: '#2a4f12', boxShadow: '0px 6px 16px rgba(0,0,0,0.20)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div className="hc-icon ic-done" style={{ flexShrink: 0, background: 'rgba(255,255,255,0.15)' }}>
                             <PhosphorIcon name="egg" size={22} color={day.eggs >= config.eggsTarget ? '#B7E778' : '#B7E778'} opacity={0.7} />
