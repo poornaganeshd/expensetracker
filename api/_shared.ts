@@ -62,18 +62,18 @@ export function getNextSendAt(s: Schedule, now: Date): Date {
       const diff = ((s.send_day_of_week - n.getUTCDay()) + 7) % 7;
       if (diff !== 0) n.setUTCDate(n.getUTCDate() + diff);
     }
-  } else if (s.frequency === "monthly") {
-    n.setUTCMonth(n.getUTCMonth() + 1);
-    if (s.send_day_of_month != null) {
-      const lastDay = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 0)).getUTCDate();
-      n.setUTCDate(Math.min(s.send_day_of_month, lastDay));
-    }
-  } else if (s.frequency === "quarterly") {
-    n.setUTCMonth(n.getUTCMonth() + 3);
-    if (s.send_day_of_month != null) {
-      const lastDay = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 0)).getUTCDate();
-      n.setUTCDate(Math.min(s.send_day_of_month, lastDay));
-    }
+  } else if (s.frequency === "monthly" || s.frequency === "quarterly") {
+    // Use setUTCFullYear(y, m, d) atomically — calling setUTCMonth() on a date
+    // with day=31 silently overflows when the target month has <31 days (e.g.
+    // Jan 31 → setUTCMonth(1) lands on Mar 2/3, skipping Feb entirely).
+    const step = s.frequency === "monthly" ? 1 : 3;
+    const targetMonth = n.getUTCMonth() + step;  // setUTCFullYear handles month >= 12 by rolling the year
+    const targetYear  = n.getUTCFullYear();
+    const lastDay     = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+    const targetDay   = s.send_day_of_month != null
+      ? Math.min(s.send_day_of_month, lastDay)
+      : Math.min(n.getUTCDate(), lastDay);
+    n.setUTCFullYear(targetYear, targetMonth, targetDay);
   } else {
     n.setUTCDate(n.getUTCDate() + (s.custom_days ?? 7));
   }

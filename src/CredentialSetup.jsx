@@ -318,6 +318,9 @@ export default function CredentialSetup({ onDone, onCancel }) {
 
   const save = () => {
     if (!sbUrl.trim() || !sbKey.trim()) { setError("Supabase URL and Anon Key are required."); return; }
+    if (!/^https:\/\/[a-z0-9]{20}\.supabase\.co\/?$/.test(sbUrl.trim())) {
+      setError("Invalid Supabase URL format. Expected https://{20-char-ref}.supabase.co"); return;
+    }
     saveCredentials({ sbUrl: sbUrl.trim(), sbKey: sbKey.trim(), cloudName: cloudName.trim(), uploadPreset: uploadPreset.trim(), apiKey: apiKey.trim(), apiSecret: apiSecret.trim() });
     onDone();
   };

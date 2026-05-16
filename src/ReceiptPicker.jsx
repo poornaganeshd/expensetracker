@@ -1,4 +1,4 @@
-import { useState, useRef, useImperativeHandle, forwardRef } from "react";
+import { useState, useRef, useImperativeHandle, forwardRef, useEffect } from "react";
 import { uploadReceipt } from "./receiptUpload";
 
 const MAX = 5;
@@ -9,6 +9,13 @@ const ReceiptPicker = forwardRef(function ReceiptPicker(_, ref) {
   const [hovered, setHovered]   = useState(false);
   const cameraRef  = useRef();
   const galleryRef = useRef();
+  // Track the latest items in a ref so the unmount cleanup sees them.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  // Revoke any outstanding object URLs when the picker unmounts so blobs from
+  // an abandoned Add form don't linger in memory until page reload.
+  useEffect(() => () => { itemsRef.current.forEach(it => URL.revokeObjectURL(it.localUrl)); }, []);
 
   // ── Exposed to parent via ref ──────────────────────────────────
   useImperativeHandle(ref, () => ({
