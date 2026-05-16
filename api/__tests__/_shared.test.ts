@@ -134,6 +134,35 @@ describe('getNextSendAt', () => {
     expect(nextFeb.getUTCDate()).toBe(29); // Feb 2024 has 29 days (leap year)
   });
 
+  it('monthly does not skip a month when source day exceeds next month length', () => {
+    // Regression: previously, setUTCMonth(m+1) on Jan 31 overflowed to Mar 2,
+    // skipping Feb entirely and returning the wrong month after clamping.
+    const s = makeSchedule({ frequency: 'monthly', send_day_of_month: 15, send_hour: 6 });
+    const nowJan31 = new Date('2024-01-31T08:00:00Z');
+    const next = getNextSendAt(s, nowJan31);
+    expect(next.getUTCMonth()).toBe(1); // February, not March
+    expect(next.getUTCDate()).toBe(15);
+  });
+
+  it('monthly with no send_day_of_month clamps source day to target month length', () => {
+    // Regression: Mar 31 + 1 month should be Apr 30 (not May 1 via overflow).
+    const s = makeSchedule({ frequency: 'monthly', send_day_of_month: null, send_hour: 6 });
+    const nowMar31 = new Date('2024-03-31T08:00:00Z');
+    const next = getNextSendAt(s, nowMar31);
+    expect(next.getUTCMonth()).toBe(3); // April
+    expect(next.getUTCDate()).toBe(30); // April has 30 days
+  });
+
+  it('quarterly does not skip a month when source day exceeds target month length', () => {
+    // Regression: Nov 30 + 3 months should land in Feb (29 in leap year, not Mar 2).
+    const s = makeSchedule({ frequency: 'quarterly', send_day_of_month: 31, send_hour: 6 });
+    const nowNov30 = new Date('2023-11-30T08:00:00Z');
+    const next = getNextSendAt(s, nowNov30);
+    expect(next.getUTCFullYear()).toBe(2024);
+    expect(next.getUTCMonth()).toBe(1); // February
+    expect(next.getUTCDate()).toBe(29); // Feb 2024 has 29 days (leap year)
+  });
+
   it('quarterly: adds 3 months', () => {
     const s = makeSchedule({ frequency: 'quarterly', send_hour: 6 });
     const next = getNextSendAt(s, now);
