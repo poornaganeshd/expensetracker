@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { sendSupabaseRequest } from './offlineSync';
 import { getCredentials as _getCreds } from './credentials';
 import { analyzeFood, foodResultToText, foodResultToMacroString } from './foodVision';
-import { IconFlameFilled, IconDropletFilled, IconCalendarMonth, IconCircleCheckFilled, IconEggFilled, IconMoodHappyFilled, IconMoodNeutralFilled, IconMoodSadFilled, IconMoodAngryFilled, IconBedFilled, IconMoonFilled, IconCameraFilled, IconCalendarWeek } from '@tabler/icons-react';
+import { IconFlameFilled, IconDropletFilled, IconCalendarMonth, IconCircleCheckFilled, IconEggFilled, IconMoodHappyFilled, IconMoodNeutralFilled, IconMoodSadFilled, IconMoodAngryFilled, IconBedFilled, IconMoonFilled, IconCameraFilled, IconCalendarWeek, IconPhotoPlus } from '@tabler/icons-react';
 
 /* ============================================================
    FORM — Daily food & skincare ritual tracker  v6
@@ -2525,14 +2525,27 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         {[{ field: 'skinPhoto', label: 'Face', icon: '🙂' }, { field: 'hairPhoto', label: 'Hair', icon: '💇' }].map(({ field, label, icon }) => {
-                            const photoInputId = `photo-input-${field}`;
+                            const camId = `photo-cam-${field}`;
+                            const upId = `photo-up-${field}`;
+                            const handleFile = async (f) => { if (!f) return; try { const b64 = await compressPhoto(f); haptic(); update({ [field]: b64 }); } catch { } };
                             return (
                                 <div key={field} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                                    <div style={{ width: '100%', aspectRatio: '1', borderRadius: 14, overflow: 'hidden', background: 'var(--sf)', border: '2px dashed var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }} onClick={() => document.getElementById(photoInputId)?.click()}>
-                                        {day[field] ? <img src={day[field]} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}><span style={{ fontSize: 26 }}>{icon}</span><span style={{ fontSize: 10, color: 'var(--txm)', fontWeight: 600 }}>Tap to add</span></div>}
-                                        {day[field] && <div style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); haptic(4); update({ [field]: '' }); }}>✕</div>}
+                                    <div style={{ width: '100%', aspectRatio: '1', borderRadius: 14, overflow: 'hidden', background: 'var(--sf)', border: '2px dashed var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                                        {day[field] ? <img src={day[field]} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}><span style={{ fontSize: 26 }}>{icon}</span><span style={{ fontSize: 10, color: 'var(--txm)', fontWeight: 600 }}>Use buttons below</span></div>}
+                                        {day[field] && <div style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => { haptic(4); update({ [field]: '' }); }}>✕</div>}
                                     </div>
-                                    <input id={photoInputId} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; try { const b64 = await compressPhoto(f); haptic(); update({ [field]: b64 }); } catch { } e.target.value = ''; }} />
+                                    <input id={camId} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={async (e) => { await handleFile(e.target.files?.[0]); e.target.value = ''; }} />
+                                    <input id={upId} type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => { await handleFile(e.target.files?.[0]); e.target.value = ''; }} />
+                                    <div style={{ display: 'flex', gap: 6, width: '100%' }}>
+                                        <button onClick={() => document.getElementById(camId)?.click()} style={{ flex: 1, padding: '7px 4px', borderRadius: 9, border: '1.5px solid var(--bd)', background: 'var(--sf)', fontSize: 11, fontWeight: 700, color: 'var(--txm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                            <IconCameraFilled size={13} color="var(--txm)" />
+                                            Camera
+                                        </button>
+                                        <button onClick={() => document.getElementById(upId)?.click()} style={{ flex: 1, padding: '7px 4px', borderRadius: 9, border: '1.5px solid var(--bd)', background: 'var(--sf)', fontSize: 11, fontWeight: 700, color: 'var(--txm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                            <IconPhotoPlus size={13} color="var(--txm)" />
+                                            Upload
+                                        </button>
+                                    </div>
                                     <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--txm)' }}>{label}</span>
                                 </div>
                             );
