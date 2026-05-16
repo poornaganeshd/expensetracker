@@ -1110,7 +1110,43 @@ export default function Nomad() {
     else if (hType !== "all") items = items.filter(it => it.type === hType);
     return items.sort((a, b) => { const dd = new Date(b.date) - new Date(a.date); if (dd !== 0) return dd; return new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0); });
   }, [flt, ex, inc, tr, stl, sp, fm, hSearch, hMinAmt, hMaxAmt, hDateFrom, hDateTo, hType, cats, isrc, evs]);
-  const timelineData = useMemo(() => { const all = [...ex.map(e => ({ ...e, type: "expense" })), ...inc.map(i => ({ ...i, type: "income" })), ...tr.map(t => ({ ...t, type: "transfer" })), ...stl.map(s => ({ ...s, type: "settlement" }))].sort((a, b) => { const dd = new Date(a.date) - new Date(b.date); if (dd !== 0) return dd; return new Date(a.created_at || 0) - new Date(b.created_at || 0); }); const bal = {}; wallets.forEach(w => { bal[w.id] = wsb[w.id] || 0; }); const map = {}; all.forEach(it => { const before = { ...bal }; if (it.type === "expense") { const w = it.walletId || "upi_lite"; if (bal[w] !== undefined) bal[w] -= it.amount; } else if (it.type === "income") { const w = it.walletId || "bank"; if (bal[w] !== undefined) bal[w] += it.amount; } else if (it.type === "transfer") { if (bal[it.fromWallet] !== undefined) bal[it.fromWallet] -= it.amount; if (bal[it.toWallet] !== undefined) bal[it.toWallet] += it.amount; } else if (it.type === "settlement") { const w = it.walletId; if (bal[w] !== undefined) { if (it.direction === "owed") bal[w] += it.amount; else bal[w] -= it.amount; } } map[it.id] = { before, after: { ...bal } }; }); return map; }, [ex, inc, tr, stl, wsb, wallets]);
+  const timelineData = useMemo(() => {
+    const allSnaps = (() => { try { return JSON.parse(localStorage.getItem("nomad-cal-snaps-v1") || "[]"); } catch { return []; } })();
+    const all = [...ex.map(e => ({ ...e, type: "expense" })), ...inc.map(i => ({ ...i, type: "income" })), ...tr.map(t => ({ ...t, type: "transfer" })), ...stl.map(s => ({ ...s, type: "settlement" }))].sort((a, b) => { const dd = new Date(a.date) - new Date(b.date); if (dd !== 0) return dd; return new Date(a.created_at || 0) - new Date(b.created_at || 0); });
+    const map = {};
+    const wDelta = (tx, wId) => { if (tx.type === "expense") return (tx.walletId || "upi_lite") === wId ? -tx.amount : 0; if (tx.type === "income") return (tx.walletId || "bank") === wId ? tx.amount : 0; if (tx.type === "transfer") { if (tx.fromWallet === wId) return -tx.amount; if (tx.toWallet === wId) return tx.amount; return 0; } if (tx.type === "settlement") return tx.walletId === wId ? (tx.direction === "owed" ? tx.amount : -tx.amount) : 0; return 0; };
+    const snapsByWallet = {};
+    allSnaps.forEach(s => { if (!snapsByWallet[s.walletId]) snapsByWallet[s.walletId] = []; snapsByWallet[s.walletId].push(s); });
+    Object.values(snapsByWallet).forEach(snaps => snaps.sort((a, b) => a.ts - b.ts));
+    if (allSnaps.length === 0) {
+      const bal = {}; wallets.forEach(w => { bal[w.id] = wsb[w.id] || 0; });
+      all.forEach(it => { const before = { ...bal }; if (it.type === "expense") { const w = it.walletId || "upi_lite"; if (bal[w] !== undefined) bal[w] -= it.amount; } else if (it.type === "income") { const w = it.walletId || "bank"; if (bal[w] !== undefined) bal[w] += it.amount; } else if (it.type === "transfer") { if (bal[it.fromWallet] !== undefined) bal[it.fromWallet] -= it.amount; if (bal[it.toWallet] !== undefined) bal[it.toWallet] += it.amount; } else if (it.type === "settlement") { const w = it.walletId; if (bal[w] !== undefined) { if (it.direction === "owed") bal[w] += it.amount; else bal[w] -= it.amount; } } map[it.id] = { before, after: { ...bal } }; });
+      return map;
+    }
+    all.forEach((tx, i) => {
+      const after = {}, before = {};
+      wallets.forEach(w => {
+        const snaps = snapsByWallet[w.id] || [];
+        const txDate = tx.date;
+        let aft;
+        if (snaps.length === 0) {
+          aft = (wsb[w.id] || 0) + all.slice(0, i + 1).reduce((s, t) => s + wDelta(t, w.id), 0);
+        } else if (txDate < snaps[0].date) {
+          const sumBetween = all.slice(i + 1).filter(t => t.date <= snaps[0].date).reduce((s, t) => s + wDelta(t, w.id), 0);
+          aft = snaps[0].balance - sumBetween;
+        } else {
+          let anchorSnap = snaps[0];
+          for (const s of snaps) { if (s.date <= txDate) anchorSnap = s; else break; }
+          const sumAfterSnap = all.slice(0, i + 1).filter(t => t.date > anchorSnap.date).reduce((s, t) => s + wDelta(t, w.id), 0);
+          aft = anchorSnap.balance + sumAfterSnap;
+        }
+        after[w.id] = aft;
+        before[w.id] = aft - wDelta(tx, w.id);
+      });
+      map[tx.id] = { before, after };
+    });
+    return map;
+  }, [ex, inc, tr, stl, wsb, wallets]);
 
   const budgetStatus = useMemo(() => { const cm = localDateKey().slice(0, 7); const mEx = ex.filter(e => mk(e.date) === cm); return Object.entries(budgets).filter(entry => entry[1] > 0).map(([cid, lim]) => { const spent = mEx.filter(e => e.categoryId === cid).reduce((s, e) => s + e.amount, 0); const cat = cats.find(c => c.id === cid) || { id: cid, name: cid, color: "#999", neon: "#999" }; const pct = Math.min(100, Math.round(spent / lim * 100)); return { cid, cat, spent, lim, pct }; }); }, [budgets, ex, cats]);
 
@@ -1287,6 +1323,11 @@ export default function Nomad() {
       const updated = [entry, ...prev].slice(0, 50);
       localStorage.setItem("nomad-cal-log", JSON.stringify(updated));
       sCalLog(updated);
+    } catch { }
+    try {
+      const snaps = JSON.parse(localStorage.getItem("nomad-cal-snaps-v1") || "[]");
+      snaps.push({ walletId: wId, balance: roundMoney(desired), date: localDateKey(), ts: Date.now() });
+      localStorage.setItem("nomad-cal-snaps-v1", JSON.stringify(snaps));
     } catch { }
     showT(gap === 0 ? "Balance unchanged" : `${gap > 0 ? "Added" : "Removed"} ${fmt(Math.abs(gap))} — reconciliation logged`, "success");
   };
