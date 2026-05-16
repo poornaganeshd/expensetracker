@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { sendSupabaseRequest } from './offlineSync';
 import { getCredentials as _getCreds } from './credentials';
 import { analyzeFood, foodResultToText, foodResultToMacroString } from './foodVision';
-import { IconFlameFilled, IconDropletFilled, IconCalendarMonth, IconCircleCheckFilled, IconEggFilled } from '@tabler/icons-react';
+import { IconFlameFilled, IconDropletFilled, IconCalendarMonth, IconCircleCheckFilled, IconEggFilled, IconMoodHappyFilled, IconMoodNeutralFilled, IconMoodSadFilled, IconMoodAngryFilled, IconBedFilled, IconMoonFilled, IconCameraFilled, IconCalendarWeek, IconPhotoPlus } from '@tabler/icons-react';
 
 /* ============================================================
    FORM — Daily food & skincare ritual tracker  v6
@@ -1530,6 +1530,32 @@ const parseMorningWater = (s) => {
 const effectiveMorningWater = (day) =>
     day && day.morningWater ? parseMorningWater(day.morningWaterAmount) : 0;
 
+const calcSleepDuration = (sleepTime, wakeTime) => {
+    if (!sleepTime || !wakeTime) return null;
+    const [sh, sm] = sleepTime.split(':').map(Number);
+    const [wh, wm] = wakeTime.split(':').map(Number);
+    let mins = (wh * 60 + wm) - (sh * 60 + sm);
+    if (mins < 0) mins += 1440;
+    return mins / 60;
+};
+const fmtSleep = (h) => h == null ? '—' : `${Math.floor(h)}h${Math.round((h % 1) * 60) > 0 ? ` ${Math.round((h % 1) * 60)}m` : ''}`;
+const compressPhoto = (file, maxPx = 480) => new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+        URL.revokeObjectURL(url);
+        if (!img.width || !img.height) { reject(new Error('Zero-dimension image')); return; }
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')); };
+    img.src = url;
+});
+
 /* Migrate freeFoodLog to flat [{text, tag}] format */
 const migrateFreeFoodLog = (log) => {
     if (!log) return [];
@@ -1597,6 +1623,11 @@ const DEFAULT_DAY = {
     skinNotes: '',
     notesConfirmed: false,
     skinNotesConfirmed: false,
+    sleepTime: '',
+    wakeTime: '',
+    sleepQuality: '',
+    skinPhoto: '',
+    hairPhoto: '',
 };
 
 const DEFAULT_CONFIG = {
@@ -2144,6 +2175,56 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
 
                 </div>
 
+                {/* Mood card */}
+                <div className="card" style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <IconMoodHappyFilled size={18} color="var(--amber)" />
+                        <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--txm)' }}>Mood</span>
+                        {day.moodChip && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx)', fontWeight: 600, background: 'var(--sf)', borderRadius: 8, padding: '2px 8px' }}>{day.moodChip}</span>}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                        {[{ key: 'great', IC: IconMoodHappyFilled, color: '#6BAA75', label: 'Great', bg: 'rgba(107,170,117,0.13)' }, { key: 'okay', IC: IconMoodNeutralFilled, color: '#7B8CDE', label: 'Okay', bg: 'rgba(123,140,222,0.13)' }, { key: 'low', IC: IconMoodSadFilled, color: '#E07A5F', label: 'Low', bg: 'rgba(224,122,95,0.13)' }, { key: 'stressed', IC: IconMoodAngryFilled, color: '#c25b4c', label: 'Stressed', bg: 'rgba(194,91,76,0.13)' }].map(({ key, IC, color, label, bg }) => (
+                            <div key={key} onClick={() => { haptic(); update({ moodChip: day.moodChip === key ? '' : key }); }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, padding: '10px 4px', borderRadius: 12, background: day.moodChip === key ? bg : 'var(--sf)', border: `1.5px solid ${day.moodChip === key ? color : 'var(--bd)'}`, cursor: 'pointer', transition: 'all 0.15s' }}>
+                                <IC size={22} color={day.moodChip === key ? color : 'var(--txm)'} />
+                                <span style={{ fontSize: 10, fontWeight: 700, color: day.moodChip === key ? color : 'var(--txm)', letterSpacing: '0.02em' }}>{label}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Sleep card */}
+                <div className="card" style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <IconBedFilled size={18} color="#7B8CDE" />
+                        <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--txm)' }}>Sleep</span>
+                        {calcSleepDuration(day.sleepTime, day.wakeTime) != null && <span style={{ marginLeft: 'auto', fontSize: 13, color: '#7B8CDE', fontWeight: 800, fontFamily: 'var(--mono)' }}>{fmtSleep(calcSleepDuration(day.sleepTime, day.wakeTime))}</span>}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+                                <IconMoonFilled size={13} color="#7B8CDE" />
+                                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--txm)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Bedtime</span>
+                            </div>
+                            <input type="time" className="inp" style={{ padding: '7px 10px', fontSize: 15, fontWeight: 700, fontFamily: 'var(--mono)', color: 'var(--tx)' }} value={day.sleepTime || ''} onChange={(e) => update({ sleepTime: e.target.value })} />
+                        </div>
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+                                <PhosphorIcon name="sun" size={13} color="#EF9F27" opacity={0.9} />
+                                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--txm)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Wake up</span>
+                            </div>
+                            <input type="time" className="inp" style={{ padding: '7px 10px', fontSize: 15, fontWeight: 700, fontFamily: 'var(--mono)', color: 'var(--tx)' }} value={day.wakeTime || ''} onChange={(e) => update({ wakeTime: e.target.value })} />
+                        </div>
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--txm)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Quality</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                        {[{ key: 'deep', label: 'Deep', color: '#6BAA75' }, { key: 'okay', label: 'Okay', color: '#7B8CDE' }, { key: 'light', label: 'Light', color: 'var(--amber)' }, { key: 'poor', label: 'Poor', color: '#E07A5F' }].map(({ key, label, color }) => (
+                            <div key={key} onClick={() => { haptic(); update({ sleepQuality: day.sleepQuality === key ? '' : key }); }} style={{ textAlign: 'center', padding: '7px 4px', borderRadius: 10, background: day.sleepQuality === key ? `${color}22` : 'var(--sf)', border: `1.5px solid ${day.sleepQuality === key ? color : 'var(--bd)'}`, cursor: 'pointer', transition: 'all 0.15s' }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: day.sleepQuality === key ? color : 'var(--txm)' }}>{label}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
                 {/* Water total card */}
                 <div className="card" style={{ marginBottom: 10 }}>
                     <div className="water-card-row">
@@ -2436,6 +2517,42 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                         : <span className="saved-link" onClick={() => update({ skinNotesConfirmed: false })}>✓ Saved · Edit</span>
                     }
                 </div>
+                {/* Photo Journal card */}
+                <div className="card" style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                        <IconCameraFilled size={18} color="var(--teal)" />
+                        <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--txm)' }}>Photo Journal</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        {[{ field: 'skinPhoto', label: 'Face', icon: '🙂' }, { field: 'hairPhoto', label: 'Hair', icon: '💇' }].map(({ field, label, icon }) => {
+                            const camId = `photo-cam-${field}`;
+                            const upId = `photo-up-${field}`;
+                            const handleFile = async (f) => { if (!f) return; try { const b64 = await compressPhoto(f); haptic(); update({ [field]: b64 }); } catch { } };
+                            return (
+                                <div key={field} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                                    <div style={{ width: '100%', aspectRatio: '1', borderRadius: 14, overflow: 'hidden', background: 'var(--sf)', border: '2px dashed var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                                        {day[field] ? <img src={day[field]} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}><span style={{ fontSize: 26 }}>{icon}</span><span style={{ fontSize: 10, color: 'var(--txm)', fontWeight: 600 }}>Use buttons below</span></div>}
+                                        {day[field] && <div style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => { haptic(4); update({ [field]: '' }); }}>✕</div>}
+                                    </div>
+                                    <input id={camId} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={async (e) => { await handleFile(e.target.files?.[0]); e.target.value = ''; }} />
+                                    <input id={upId} type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => { await handleFile(e.target.files?.[0]); e.target.value = ''; }} />
+                                    <div style={{ display: 'flex', gap: 6, width: '100%' }}>
+                                        <button onClick={() => document.getElementById(camId)?.click()} style={{ flex: 1, padding: '7px 4px', borderRadius: 9, border: '1.5px solid var(--bd)', background: 'var(--sf)', fontSize: 11, fontWeight: 700, color: 'var(--txm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                            <IconCameraFilled size={13} color="var(--txm)" />
+                                            Camera
+                                        </button>
+                                        <button onClick={() => document.getElementById(upId)?.click()} style={{ flex: 1, padding: '7px 4px', borderRadius: 9, border: '1.5px solid var(--bd)', background: 'var(--sf)', fontSize: 11, fontWeight: 700, color: 'var(--txm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                            <IconPhotoPlus size={13} color="var(--txm)" />
+                                            Upload
+                                        </button>
+                                    </div>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--txm)' }}>{label}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
             </div>
         </div>
     );
@@ -2446,6 +2563,8 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
    ============================================================ */
 const LogScreen = ({ allData, config }) => {
     const [monthOffset, setMonthOffset] = useState(0);
+    const [weekOffset, setWeekOffset] = useState(0);
+    const [logView, setLogView] = useState('month');
     const [activeDay, setActiveDay] = useState(null);
     const [exported, setExported] = useState(false);
 
@@ -2532,6 +2651,12 @@ const LogScreen = ({ allData, config }) => {
             }
         }
         return count > 0 ? (total / count).toFixed(1) : '—';
+    }, [allData]);
+
+    const avgSleep = useMemo(() => {
+        const vals = Object.values(allData).map(r => calcSleepDuration(r.sleepTime, r.wakeTime)).filter(v => v != null);
+        if (!vals.length) return null;
+        return vals.reduce((a, b) => a + b, 0) / vals.length;
     }, [allData]);
 
     const cells = [];
@@ -2710,6 +2835,60 @@ const LogScreen = ({ allData, config }) => {
                     )}
                     {rec.skinNotes && <div className="dl-note">{rec.skinNotes}</div>}
                 </div>
+
+                {/* Mood & Sleep section */}
+                {(rec.moodChip || rec.sleepTime || rec.wakeTime || rec.sleepQuality) && (
+                    <div className="dl-section">
+                        <div className="dl-section-hd">
+                            <div className="dl-section-icon" style={{ background: 'rgba(123,140,222,0.15)' }}><IconMoodHappyFilled size={16} color="#7B8CDE" /></div>
+                            <span className="dl-section-lbl">Mood & Sleep</span>
+                        </div>
+                        <div className="dl-card">
+                            {rec.moodChip && (
+                                <div className="dl-row">
+                                    <div className="dl-row-left"><span className="dl-key">Mood</span></div>
+                                    <span className="dl-val" style={{ color: 'var(--tx)' }}>{rec.moodChip[0].toUpperCase() + rec.moodChip.slice(1)}</span>
+                                </div>
+                            )}
+                            {(rec.sleepTime || rec.wakeTime) && (
+                                <div className="dl-row">
+                                    <div className="dl-row-left"><IconBedFilled size={15} color="var(--txm)" /><span className="dl-key" style={{ marginLeft: 6 }}>Sleep</span></div>
+                                    <span className="dl-val" style={{ color: '#7B8CDE', fontFamily: 'var(--mono)', fontWeight: 700 }}>{rec.sleepTime || '?'} → {rec.wakeTime || '?'} · {fmtSleep(calcSleepDuration(rec.sleepTime, rec.wakeTime))}</span>
+                                </div>
+                            )}
+                            {rec.sleepQuality && (
+                                <div className="dl-row">
+                                    <div className="dl-row-left"><span className="dl-key">Quality</span></div>
+                                    <span className="dl-val" style={{ color: 'var(--tx)' }}>{rec.sleepQuality[0].toUpperCase() + rec.sleepQuality.slice(1)}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Photos section */}
+                {(rec.skinPhoto || rec.hairPhoto) && (
+                    <div className="dl-section">
+                        <div className="dl-section-hd">
+                            <div className="dl-section-icon" style={{ background: 'rgba(0,139,131,0.12)' }}><IconCameraFilled size={16} color="var(--teal)" /></div>
+                            <span className="dl-section-lbl">Photos</span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: rec.skinPhoto && rec.hairPhoto ? '1fr 1fr' : '1fr', gap: 10, marginTop: 8 }}>
+                            {rec.skinPhoto && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                    <img src={rec.skinPhoto} alt="Face" style={{ width: '100%', borderRadius: 10, objectFit: 'cover', aspectRatio: '1' }} />
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--txm)', textAlign: 'center' }}>Face</span>
+                                </div>
+                            )}
+                            {rec.hairPhoto && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                    <img src={rec.hairPhoto} alt="Hair" style={{ width: '100%', borderRadius: 10, objectFit: 'cover', aspectRatio: '1' }} />
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--txm)', textAlign: 'center' }}>Hair</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </>
         );
     };
@@ -2729,7 +2908,7 @@ const LogScreen = ({ allData, config }) => {
             <div className="body-pad">
 
                 <div style={{ display: 'flex', gap: 10, marginBottom: 14, overflowX: 'auto', paddingBottom: 4 }}>
-                    {[{ IC: IconFlameFilled, ic: 'var(--amber)', val: streak, label: `day${streak !== 1 ? 's' : ''}`, color: 'var(--amber)' }, { IC: IconCalendarMonth, ic: 'var(--teal)', val: daysTrackedThisMonth, label: 'this month', color: 'var(--teal)' }, { IC: IconCircleCheckFilled, ic: 'var(--green)', val: `${completionPct}%`, label: 'completion', color: 'var(--green)' }, { IC: IconDropletFilled, ic: 'var(--teal)', val: `${avgWater}${avgWater !== '—' ? 'L' : ''}`, label: 'avg water', color: 'var(--teal)' }].map(({ IC, ic, val, label, color }) => (
+                    {[{ IC: IconFlameFilled, ic: 'var(--amber)', val: streak, label: `day${streak !== 1 ? 's' : ''}`, color: 'var(--amber)' }, { IC: IconCalendarMonth, ic: 'var(--teal)', val: daysTrackedThisMonth, label: 'this month', color: 'var(--teal)' }, { IC: IconCircleCheckFilled, ic: 'var(--green)', val: `${completionPct}%`, label: 'completion', color: 'var(--green)' }, { IC: IconDropletFilled, ic: 'var(--teal)', val: `${avgWater}${avgWater !== '—' ? 'L' : ''}`, label: 'avg water', color: 'var(--teal)' }, { IC: IconBedFilled, ic: '#7B8CDE', val: fmtSleep(avgSleep), label: 'avg sleep', color: '#7B8CDE' }].map(({ IC, ic, val, label, color }) => (
                         <div key={label} style={{ background: 'var(--sf)', borderRadius: 18, padding: '12px 16px', minWidth: 86, flexShrink: 0, textAlign: 'center', boxShadow: 'var(--card-shadow)' }}>
                             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}><IC size={20} color={ic} /></div>
                             <div style={{ fontSize: 22, fontWeight: 800, color, fontFamily: 'var(--mono)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{val}</div>
@@ -2739,7 +2918,62 @@ const LogScreen = ({ allData, config }) => {
                 </div>
                 {(() => { const days7 = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); d.setHours(12, 0, 0, 0); const k = todayKey(d); const rec = allData[k]; const lvl = dayLevel(rec); const names = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']; return { k, lvl, label: names[d.getDay()], isToday: k === todayKey() }; }); const maxH = 40; return (<div className="card" style={{ marginBottom: 14, padding: '14px 16px' }}><div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--txm)', marginBottom: 12 }}>Last 7 days</div><div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: maxH + 22 }}>{days7.map(({ k, lvl, label, isToday }) => { const h = lvl === 0 ? 4 : Math.round((lvl / 4) * maxH); const bg = lvl === 0 ? 'var(--bd)' : lvl >= 4 ? 'var(--green)' : lvl >= 2 ? 'var(--amber)' : 'rgba(183,231,120,0.45)'; return (<div key={k} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}><div style={{ width: '100%', borderRadius: 4, background: bg, height: h, alignSelf: 'flex-end', transition: 'height 0.4s ease', minHeight: 4 }} /><div style={{ fontSize: 9, fontWeight: isToday ? 800 : 600, color: isToday ? 'var(--tx)' : 'var(--txm)', letterSpacing: isToday ? '0.02em' : 0 }}>{label}</div></div>); })}</div></div>); })()}
 
-                <div className="card">
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <button onClick={() => setLogView('month')} style={{ flex: 1, padding: '8px 0', borderRadius: 10, border: '1.5px solid var(--bd)', background: logView === 'month' ? 'var(--teal)' : 'var(--sf)', color: logView === 'month' ? '#fff' : 'var(--txm)', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                        <IconCalendarMonth size={15} color={logView === 'month' ? '#fff' : 'var(--txm)'} />
+                        Month
+                    </button>
+                    <button onClick={() => setLogView('week')} style={{ flex: 1, padding: '8px 0', borderRadius: 10, border: '1.5px solid var(--bd)', background: logView === 'week' ? 'var(--teal)' : 'var(--sf)', color: logView === 'week' ? '#fff' : 'var(--txm)', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                        <IconCalendarWeek size={15} color={logView === 'week' ? '#fff' : 'var(--txm)'} />
+                        Week
+                    </button>
+                </div>
+
+                {logView === 'week' && (() => {
+                    const mon = new Date(); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7) + weekOffset * 7); mon.setHours(12, 0, 0, 0);
+                    const days7w = Array.from({ length: 7 }, (_, i) => { const d = new Date(mon); d.setDate(mon.getDate() + i); const k = todayKey(d); const rec = allData[k]; const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']; return { k, rec, label: names[i], dateNum: d.getDate(), isToday: k === todayKey(), lvl: dayLevel(rec) }; });
+                    const weekLabel = `${mon.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} – ${days7w[6] ? new Date(days7w[6].k + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : ''}`;
+                    const MOOD_EMOJI = { great: '😊', okay: '😐', low: '😔', stressed: '😤' };
+                    return (
+                        <div className="card" style={{ marginBottom: 14 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                                <button onClick={() => setWeekOffset(w => w - 1)} style={{ background: 'none', border: 'none', fontSize: 20, color: 'var(--txm)', cursor: 'pointer', padding: '0 6px' }}>‹</button>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--txm)' }}>{weekLabel}</span>
+                                <button onClick={() => setWeekOffset(w => Math.min(0, w + 1))} style={{ background: 'none', border: 'none', fontSize: 20, color: 'var(--txm)', cursor: 'pointer', padding: '0 6px' }}>›</button>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+                                {days7w.map(({ k, rec, label, dateNum, isToday, lvl }) => {
+                                    const bg = lvl === 0 ? 'var(--bd)' : lvl >= 4 ? 'var(--green)' : lvl >= 2 ? 'var(--amber)' : 'rgba(183,231,120,0.45)';
+                                    const slpH = rec ? calcSleepDuration(rec.sleepTime, rec.wakeTime) : null;
+                                    const foodDone = rec && (rec.morningWater || (rec.eggs >= config.eggsTarget));
+                                    const skinDone = rec && (rec.amSkinDone || rec.pmSkinDone);
+                                    return (
+                                        <div key={k} onClick={() => rec && setActiveDay({ key: k, rec })} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '8px 2px', borderRadius: 10, background: isToday ? 'rgba(var(--teal-rgb, 0,139,131), 0.07)' : 'transparent', border: isToday ? '1.5px solid var(--teal)' : '1.5px solid transparent', cursor: rec ? 'pointer' : 'default' }}>
+                                            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--txm)', textTransform: 'uppercase' }}>{label}</span>
+                                            <div style={{ width: 28, height: 28, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <span style={{ fontSize: 12, fontWeight: 800, color: lvl > 0 ? 'rgba(0,0,0,0.55)' : 'var(--txm)' }}>{dateNum}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 2 }}>
+                                                <div style={{ width: 6, height: 6, borderRadius: 2, background: foodDone ? 'var(--green)' : 'var(--bd)' }} title="Food" />
+                                                <div style={{ width: 6, height: 6, borderRadius: 2, background: skinDone ? 'var(--teal)' : 'var(--bd)' }} title="Skin" />
+                                            </div>
+                                            {rec?.moodChip ? <span style={{ fontSize: 11, lineHeight: 1 }}>{MOOD_EMOJI[rec.moodChip] || ''}</span> : <span style={{ fontSize: 11, lineHeight: 1, color: 'transparent' }}>·</span>}
+                                            <span style={{ fontSize: 9, fontWeight: 700, color: '#7B8CDE', fontFamily: 'var(--mono)' }}>{slpH != null ? fmtSleep(slpH) : ''}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div style={{ display: 'flex', gap: 12, marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--bd)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--green)' }} /><span style={{ fontSize: 10, color: 'var(--txm)' }}>Food</span></div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--teal)' }} /><span style={{ fontSize: 10, color: 'var(--txm)' }}>Skin</span></div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ fontSize: 11 }}>😊</span><span style={{ fontSize: 10, color: 'var(--txm)' }}>Mood</span></div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><IconBedFilled size={12} color="#7B8CDE" /><span style={{ fontSize: 10, color: 'var(--txm)' }}>Sleep</span></div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {logView === 'month' && <div className="card">
                     <div className="cal-hd">
                         <button onClick={() => setMonthOffset(monthOffset - 1)}>‹</button>
                         <div className="m">{monthName}</div>
@@ -2770,7 +3004,7 @@ const LogScreen = ({ allData, config }) => {
                             )}
                         </div>
                     )}
-                </div>
+                </div>}
 
                 <button className={`btn ${exported ? 'green' : ''}`} onClick={exportData}>
                     {exported ? 'Exported ✓' : 'Export data'}
@@ -3390,32 +3624,11 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     const day = sanitizeDayRecord(rawDay);
     const updateDay = (patch) => setAllData(prev => ({ ...prev, [key]: { ...day, ...patch } }));
 
-    const appStreak = useMemo(() => {
-        const dayLevel = (d) => {
-            if (!d) return 0;
-            let pts = 0;
-            if (d.morningWater) pts++;
-            const mwL = effectiveMorningWater(d);
-            if ((mwL + (d.water || 0)) >= config.waterTarget) pts++;
-            if ((d.eggs || 0) >= config.eggsTarget) pts++;
-            if (d.amSkinDone) pts++;
-            if (d.pmSkinDone) pts++;
-            return pts;
-        };
-        let s = 0;
-        const d = new Date();
-        const todayK = todayKey(d);
-        // Count today immediately on first logged action; past days still require ≥2.
-        if (allData[todayK] && dayLevel(allData[todayK]) >= 1) s = 1;
-        d.setDate(d.getDate() - 1);
-        // Walk back through history; cap is a sanity bound only (~13.7 years).
-        let safety = 0;
-        while (safety < 5000) {
-            const rec = allData[todayKey(d)];
-            if (rec && dayLevel(rec) >= 2) { s++; d.setDate(d.getDate() - 1); safety++; }
-            else break;
-        }
-        return s;
+    const { foodStreak, skinStreak } = useMemo(() => {
+        const foodDayLevel = (d) => { if (!d) return 0; let pts = 0; if (d.morningWater) pts++; const mwL = effectiveMorningWater(d); if ((mwL + (d.water || 0)) >= config.waterTarget) pts++; if ((d.eggs || 0) >= config.eggsTarget) pts++; return pts; };
+        const skinDayLevel = (d) => { if (!d) return 0; return (d.amSkinDone ? 1 : 0) + (d.pmSkinDone ? 1 : 0); };
+        const countStreak = (levelFn) => { let s = 0; const d = new Date(); const todayK = todayKey(d); if (allData[todayK] && levelFn(allData[todayK]) >= 1) s = 1; d.setDate(d.getDate() - 1); let safety = 0; while (safety < 5000) { const rec = allData[todayKey(d)]; if (rec && levelFn(rec) >= 2) { s++; d.setDate(d.getDate() - 1); safety++; } else break; } return s; };
+        return { foodStreak: countStreak(foodDayLevel), skinStreak: countStreak(skinDayLevel) };
     }, [allData, config]);
 
     const onComplete = (type) => {
@@ -3440,8 +3653,8 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     return (
         <div id="nomad-routine">
             <div className="app" data-tab={activeTab}>
-                {activeTab === 'food' && <FoodScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} showToast={showToast} />}
-                {activeTab === 'skin' && <SkinScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={appStreak} />}
+                {activeTab === 'food' && <FoodScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={foodStreak} showToast={showToast} />}
+                {activeTab === 'skin' && <SkinScreen day={day} update={updateDay} config={config} onComplete={onComplete} streak={skinStreak} />}
                 {activeTab === 'log' && <LogScreen allData={allData} config={config} />}
                 {activeTab === 'settings' && <SettingsScreen config={config} setConfig={setConfig} allData={allData} setAllData={setAllData} showToast={showToast} localModRef={localModRef} configModRef={configModRef} prevAllDataRef={prevAllDataRef} />}
 
