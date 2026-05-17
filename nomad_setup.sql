@@ -268,3 +268,11 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 );
 
 ALTER TABLE push_subscriptions DISABLE ROW LEVEL SECURITY;
+
+-- ── 6. PRE-TRANSACTION BALANCE SNAPSHOTS ─────────────────────
+-- Stores the wallet balance captured at the moment each transaction was
+-- created. Calibration-independent: never recomputed, never changes.
+DO $$ BEGIN ALTER TABLE expenses  ADD COLUMN IF NOT EXISTS "balBefore" NUMERIC DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE incomes   ADD COLUMN IF NOT EXISTS "balBefore" NUMERIC DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE transfers ADD COLUMN IF NOT EXISTS "fromBalBefore" NUMERIC DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE transfers ADD COLUMN IF NOT EXISTS "toBalBefore"   NUMERIC DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
