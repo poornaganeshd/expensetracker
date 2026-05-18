@@ -122,6 +122,12 @@ export const subscribeSyncDrops = (listener) => {
   return () => dropListeners.delete(listener);
 };
 
+// Heal requests are background self-repair (load() re-upserting a row that
+// went missing from Supabase). Their failures must NEVER toast — the user
+// didn't take an action and can't act on the result. Detected via the
+// dedupeKey convention "<table>:heal:<id>" set by App.jsx.
+const isHealItem = (item) => typeof item?.dedupeKey === "string" && item.dedupeKey.includes(":heal:");
+
 const buildQueueItem = ({ path, method = "GET", headers = {}, body = null, dedupeKey = null }) => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   path,
@@ -194,7 +200,9 @@ export const sendSupabaseRequest = async (request, options = {}) => {
     // 4xx on upsert writes is a definitive reject the user must know about
     // (typically a schema mismatch). PATCH (soft-delete) and DELETE have
     // graceful fallbacks via sbDelete → sbDeleteWhere, so stay quiet there.
-    if (item.method === "POST") {
+    // Heal items are background retries and must also stay quiet — see
+    // isHealItem() above.
+    if (item.method === "POST" && !isHealItem(item)) {
       notifyDrops({ kind: "rejected", status: response.status, item });
     }
     return { ok: false, queued: false, offline: false, response };
@@ -246,7 +254,9 @@ export const flushSyncQueue = async () => {
         if (retries >= MAX_ITEM_RETRIES) {
           const dead = readDeadLetter();
           safeSetItem(DEAD_LETTER_KEY, JSON.stringify([...dead, { ...item, _retries: retries }]));
-          notifyDrops({ kind: "dead-letter", status: response.status, item });
+          if (!isHealItem(item)) {
+            notifyDrops({ kind: "dead-letter", status: response.status, item });
+          }
           progressedDuringFlush = true;
         } else {
           remaining.push({ ...item, _retries: retries });
@@ -263,9 +273,12 @@ export const flushSyncQueue = async () => {
       }
 
       // Definitive client-side reject (4xx) OR opaque/CORS (status: 0).
-      // Drop and notify the UI so the user knows a write was lost.
+      // Drop the item; notify the UI only for user-driven writes so heal
+      // retries can't spam toasts the user can't act on.
       progressedDuringFlush = true;
-      notifyDrops({ kind: "rejected", status: response.status, item });
+      if (!isHealItem(item)) {
+        notifyDrops({ kind: "rejected", status: response.status, item });
+      }
       continue;
     } catch {
       // AbortError, network failure, DNS — keep this and the rest, stop.

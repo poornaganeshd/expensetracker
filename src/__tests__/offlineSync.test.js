@@ -229,6 +229,16 @@ describe('sendSupabaseRequest', () => {
     expect(drops).toHaveLength(0);
   });
 
+  it('does NOT notify on 4xx for heal-tagged POSTs (background retry)', async () => {
+    const { sendSupabaseRequest, subscribeSyncDrops } = await import('../offlineSync.js');
+    global.fetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 400 });
+    const drops = [];
+    const unsub = subscribeSyncDrops((info) => drops.push(info));
+    await sendSupabaseRequest(makeItem({ method: 'POST', dedupeKey: 'expenses:heal:abc' }));
+    unsub();
+    expect(drops).toHaveLength(0);
+  });
+
   it('queues when fetch throws (network failure)', async () => {
     const { sendSupabaseRequest, getPendingSyncCount } = await import('../offlineSync.js');
     global.fetch = vi.fn().mockRejectedValueOnce(new Error('Failed to fetch'));
@@ -323,6 +333,25 @@ describe('flushSyncQueue', () => {
     const result = await flushSyncQueue();
     expect(result.synced).toBe(1);
     expect(result.pending).toBe(0);
+  });
+
+  it('drops heal-tagged items silently on 4xx replay (no toast)', async () => {
+    const { flushSyncQueue, queueSupabaseRequest, subscribeSyncDrops } = await import('../offlineSync.js');
+    queueSupabaseRequest(makeItem({ path: '/h1', dedupeKey: 'expenses:heal:abc' }));
+    queueSupabaseRequest(makeItem({ path: '/u1', dedupeKey: null }));
+
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 400 }) // heal: 4xx → silent
+      .mockResolvedValueOnce({ ok: false, status: 400 }); // user: 4xx → toast
+
+    const drops = [];
+    const unsub = subscribeSyncDrops((info) => drops.push(info));
+    await flushSyncQueue();
+    unsub();
+
+    expect(drops).toHaveLength(1);
+    expect(drops[0].kind).toBe('rejected');
+    expect(drops[0].item.dedupeKey).toBeNull();
   });
 
   it('stops processing and retains all on network error', async () => {
