@@ -191,6 +191,12 @@ export const sendSupabaseRequest = async (request, options = {}) => {
       return { ok: false, queued: true, offline: false, response };
     }
 
+    // 4xx on upsert writes is a definitive reject the user must know about
+    // (typically a schema mismatch). PATCH (soft-delete) and DELETE have
+    // graceful fallbacks via sbDelete → sbDeleteWhere, so stay quiet there.
+    if (item.method === "POST") {
+      notifyDrops({ kind: "rejected", status: response.status, item });
+    }
     return { ok: false, queued: false, offline: false, response };
   } catch {
     if (shouldQueue) {

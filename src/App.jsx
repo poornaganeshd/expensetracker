@@ -10,6 +10,7 @@ import ReceiptPicker from "./ReceiptPicker";
 import CredentialSetup from "./CredentialSetup";
 import { getCredentials } from "./credentials";
 import { COLS } from "./dbCols";
+import { mergeRemote, isRecentRow } from "./syncMerge";
 import { computeFinanceScore, scoreLabel } from "./financeScore";
 import { redactTransactions } from "./redactor";
 import {
@@ -1060,22 +1061,40 @@ export default function Nomad() {
           } catch { }
           return; // local data already rendered, nothing to replace
         }
-        // Merge remote with local: keep any locally-known rows that still have
-        // a pending upsert in the offline queue, so a stale Supabase snapshot
-        // can't wipe an expense (or its receipt_url) that hasn't synced yet.
-        const mergeRemote = (table, remote, prev) => {
-          const list = (remote || []).filter(r => !isPendingDelete(table, r.id));
-          const remoteIds = new Set(list.map(r => r.id));
-          const unsynced = (prev || []).filter(r => r && r.id && !remoteIds.has(r.id) && isPendingUpsert(table, r.id));
-          return [...unsynced, ...list];
-        };
-        sEx(prev => mergeRemote("expenses", dbEx, prev));
-        sInc(prev => mergeRemote("incomes", dbInc, prev));
-        sTr(prev => mergeRemote("transfers", dbTr, prev));
+        // Merge remote with local via the dedicated reconcile helper.
+        // mergeRemote(): never drops a locally-known row unless it's been
+        // explicitly deleted or has a fresher remote copy. See syncMerge.js
+        // for the full rules. Orphans (locally-known rows missing from remote
+        // with no queue entry) are returned separately so we can self-heal
+        // them via a fresh upsert below.
+        const localBackup = (() => { try { return JSON.parse(localStorage.getItem("nomad-v5") || "{}"); } catch { return {}; } })();
+        const normalizedEvs = (dbEvs || []).map(e => ({ ...e, participants: Array.isArray(e?.participants) ? e.participants.filter(p => typeof p === "string") : [] }));
+        const deps = { isPendingDelete, isPendingUpsert };
+        const exM  = mergeRemote({ table: "expenses",  remote: dbEx,           local: localBackup.expenses,   ...deps });
+        const incM = mergeRemote({ table: "incomes",   remote: dbInc,          local: localBackup.incomes,    ...deps });
+        const trM  = mergeRemote({ table: "transfers", remote: dbTr,           local: localBackup.transfers,  ...deps });
+        const spM  = mergeRemote({ table: "splits",    remote: dbSp,           local: localBackup.splits,     ...deps });
+        const recM = mergeRemote({ table: "recurring", remote: dbRec,          local: localBackup.recurring,  ...deps });
+        const evsM = mergeRemote({ table: "events",    remote: normalizedEvs,  local: localBackup.events,     ...deps });
+        sEx(exM.next);
+        sInc(incM.next);
+        sTr(trM.next);
         sStl(dbStl || []);
-        sSp(prev => mergeRemote("splits", dbSp, prev));
-        sRec(prev => mergeRemote("recurring", dbRec, prev));
-        sEvs(prev => mergeRemote("events", (dbEvs || []).map(e => ({ ...e, participants: Array.isArray(e?.participants) ? e.participants.filter(p => typeof p === "string") : [] })), prev));
+        sSp(spM.next);
+        sRec(recM.next);
+        sEvs(evsM.next);
+        // Self-heal: rows in local but missing from BOTH remote and the
+        // offline queue were almost certainly lost to a silently-rejected
+        // upsert (4xx, dead-letter exhaustion, etc.). Re-queue them so they
+        // make it back to Supabase. Restricted to recently-created rows so
+        // we never resurrect intentionally-deleted ancient items.
+        const heal = (table, cols, orphans) => orphans.filter(r => isRecentRow(r)).forEach(r => sbUpsert(table, [toSB(r, cols)], `${table}:heal:${r.id}`));
+        heal("expenses",  COLS.expenses,  exM.orphans);
+        heal("incomes",   COLS.incomes,   incM.orphans);
+        heal("transfers", COLS.transfers, trM.orphans);
+        heal("splits",    COLS.splits,    spM.orphans);
+        heal("recurring", COLS.recurring, recM.orphans);
+        heal("events",    COLS.events,    evsM.orphans);
         if (dbWsb?.length) { const wb = {}; wallets.forEach(w => { wb[w.id] = 0; }); dbWsb.forEach(r => { wb[r.wallet_id] = r.balance; }); sWsb(wb); }
         try {
           const lp = JSON.parse(localStorage.getItem("nomad-v5") || "{}");

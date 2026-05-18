@@ -207,6 +207,28 @@ describe('sendSupabaseRequest', () => {
     expect(getPendingSyncCount()).toBe(0);
   });
 
+  it('notifies drop listeners with kind:rejected on 4xx POST', async () => {
+    const { sendSupabaseRequest, subscribeSyncDrops } = await import('../offlineSync.js');
+    global.fetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 400 });
+    const drops = [];
+    const unsub = subscribeSyncDrops((info) => drops.push(info));
+    await sendSupabaseRequest(makeItem({ method: 'POST' }));
+    unsub();
+    expect(drops).toHaveLength(1);
+    expect(drops[0].kind).toBe('rejected');
+    expect(drops[0].status).toBe(400);
+  });
+
+  it('does NOT notify on 4xx PATCH so soft-delete fallbacks stay quiet', async () => {
+    const { sendSupabaseRequest, subscribeSyncDrops } = await import('../offlineSync.js');
+    global.fetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 400 });
+    const drops = [];
+    const unsub = subscribeSyncDrops((info) => drops.push(info));
+    await sendSupabaseRequest(makeItem({ method: 'PATCH' }));
+    unsub();
+    expect(drops).toHaveLength(0);
+  });
+
   it('queues when fetch throws (network failure)', async () => {
     const { sendSupabaseRequest, getPendingSyncCount } = await import('../offlineSync.js');
     global.fetch = vi.fn().mockRejectedValueOnce(new Error('Failed to fetch'));
