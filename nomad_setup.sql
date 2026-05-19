@@ -276,3 +276,17 @@ DO $$ BEGIN ALTER TABLE expenses  ADD COLUMN IF NOT EXISTS "balBefore" NUMERIC D
 DO $$ BEGIN ALTER TABLE incomes   ADD COLUMN IF NOT EXISTS "balBefore" NUMERIC DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE transfers ADD COLUMN IF NOT EXISTS "fromBalBefore" NUMERIC DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE transfers ADD COLUMN IF NOT EXISTS "toBalBefore"   NUMERIC DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+
+-- ── 7. SYNC IDEMPOTENCY KEYS ──────────────────────────────────
+-- Used by /api/sync to detect already-applied mutations so a client retry
+-- after a dropped response never double-writes. Keys older than 30 days are
+-- pruned by the proxy on each successful write.
+CREATE TABLE IF NOT EXISTS nomad_sync_keys (
+  key        TEXT        PRIMARY KEY,
+  result     JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS nomad_sync_keys_created ON nomad_sync_keys(created_at);
+
+ALTER TABLE nomad_sync_keys DISABLE ROW LEVEL SECURITY;

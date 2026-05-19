@@ -159,15 +159,40 @@ const dropQueuedByDedupeKey = (dedupeKey) => {
   if (next.length !== queue.length) writeQueue(next);
 };
 
+// In production (Vercel), route through /api/sync so the server can enforce
+// idempotency: if a request was already applied (Supabase committed but the
+// client timed out and retried), the proxy returns the cached result instead
+// of re-running the mutation. In dev / tests, go direct — the serverless
+// function isn't running locally.
+const USE_SYNC_PROXY =
+  typeof import.meta !== "undefined" && import.meta.env?.PROD === true;
+
 const performRequest = (item) => {
   const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS) : null;
-  const p = fetch(item.path, {
-    method: item.method,
-    headers: item.headers,
-    body: item.body,
-    signal: ctrl?.signal,
-  });
+
+  const url = USE_SYNC_PROXY ? "/api/sync" : item.path;
+  const options = USE_SYNC_PROXY
+    ? {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dedupeKey: item.dedupeKey ?? null,
+          method: item.method,
+          path: item.path,
+          body: item.body ?? null,
+          headers: item.headers ?? {},
+        }),
+        signal: ctrl?.signal,
+      }
+    : {
+        method: item.method,
+        headers: item.headers,
+        body: item.body,
+        signal: ctrl?.signal,
+      };
+
+  const p = fetch(url, options);
   if (timer) {
     p.finally(() => clearTimeout(timer)).catch(() => {});
   }

@@ -1,0 +1,126 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+
+// Matches the real Supabase project-ref format so arbitrary URLs can't be proxied.
+const SUPABASE_URL_RE = /^https:\/\/[a-z0-9]{20}\.supabase\.co/;
+const UPSTREAM_TIMEOUT_MS = 20_000;
+const KEY_TTL_DAYS = 30;
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const { dedupeKey, method, path, body, headers } = (req.body ?? {}) as {
+    dedupeKey?: string;
+    method?: string;
+    path?: string;
+    body?: string | null;
+    headers?: Record<string, string>;
+  };
+
+  if (!method || !path || typeof path !== "string") {
+    return res.status(400).json({ error: "method and path are required" });
+  }
+
+  // Security: only forward to valid Supabase project URLs.
+  if (!SUPABASE_URL_RE.test(path)) {
+    return res.status(400).json({ error: "path must be a Supabase REST URL" });
+  }
+
+  // Extract base URL and anon key so we can query nomad_sync_keys.
+  const baseMatch = path.match(/^(https:\/\/[a-z0-9]{20}\.supabase\.co)/);
+  const baseUrl = baseMatch?.[1];
+  const anonKey =
+    headers?.["apikey"] ??
+    headers?.["Authorization"]?.replace(/^Bearer\s+/i, "") ??
+    null;
+
+  // ── Idempotency check ────────────────────────────────────────────────────
+  // If we have a dedupeKey and can identify the Supabase instance, check
+  // whether this operation was already successfully applied.
+  if (dedupeKey && baseUrl && anonKey) {
+    try {
+      const checkRes = await fetch(
+        `${baseUrl}/rest/v1/nomad_sync_keys?key=eq.${encodeURIComponent(dedupeKey)}&select=result&limit=1`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            apikey: anonKey,
+            Authorization: `Bearer ${anonKey}`,
+          },
+        }
+      );
+      if (checkRes.ok) {
+        const rows = (await checkRes.json()) as Array<{ result: unknown }>;
+        if (rows.length > 0) {
+          // Already processed — return the cached response, no re-apply.
+          const cached = rows[0].result;
+          return res.status(200).json(cached ?? {});
+        }
+      }
+      // If the table doesn't exist yet (404/400) we fall through and forward
+      // the request normally — the table will be created on first nomad_setup run.
+    } catch {
+      // Network/parse error on the check — fall through and forward anyway.
+    }
+  }
+
+  // ── Forward to Supabase ──────────────────────────────────────────────────
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), UPSTREAM_TIMEOUT_MS);
+
+  let upstreamRes: Response;
+  let responseText: string;
+  try {
+    upstreamRes = await fetch(path, {
+      method,
+      headers: (headers ?? {}) as HeadersInit,
+      body: body ?? undefined,
+      signal: ctrl.signal,
+    });
+    responseText = await upstreamRes.text();
+  } catch (e: unknown) {
+    clearTimeout(timer);
+    if ((e as Error)?.name === "AbortError") {
+      return res.status(504).json({ error: "Upstream timeout" });
+    }
+    return res.status(502).json({ error: "Upstream error", detail: (e as Error)?.message });
+  } finally {
+    clearTimeout(timer);
+  }
+
+  // ── Store idempotency key on success ─────────────────────────────────────
+  if (upstreamRes.ok && dedupeKey && baseUrl && anonKey) {
+    let resultJson: unknown = null;
+    try { resultJson = JSON.parse(responseText); } catch { /* non-JSON body — store null */ }
+
+    // Fire-and-forget: don't block the client response waiting for key storage.
+    Promise.all([
+      // Store the key.
+      fetch(`${baseUrl}/rest/v1/nomad_sync_keys`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify({ key: dedupeKey, result: resultJson }),
+      }),
+      // Prune keys older than TTL so the table doesn't grow unbounded.
+      fetch(
+        `${baseUrl}/rest/v1/nomad_sync_keys?created_at=lt.${new Date(
+          Date.now() - KEY_TTL_DAYS * 24 * 60 * 60 * 1000
+        ).toISOString()}`,
+        {
+          method: "DELETE",
+          headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+        }
+      ),
+    ]).catch(() => {});
+  }
+
+  // ── Return upstream response unchanged ───────────────────────────────────
+  const contentType = upstreamRes.headers.get("Content-Type") ?? "application/json";
+  res.status(upstreamRes.status).setHeader("Content-Type", contentType).send(responseText);
+}
