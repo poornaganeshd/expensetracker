@@ -9,6 +9,7 @@ import {
   isRecurringDueToday,
   recurringDaysOverdue,
   distributeAmount,
+  historySortCompare,
 } from '../financeUtils.js';
 
 // ---------------------------------------------------------------------------
@@ -309,5 +310,83 @@ describe('distributeAmount', () => {
     expect(shares[0]).toBe(0.34);
     expect(shares[1]).toBe(0.33);
     expect(shares[2]).toBe(0.33);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// historySortCompare
+// ---------------------------------------------------------------------------
+describe('historySortCompare', () => {
+  it('sorts by date descending', () => {
+    const items = [
+      { id: 'a', date: '2026-05-10', created_at: '2026-05-10T10:00:00Z' },
+      { id: 'b', date: '2026-05-19', created_at: '2026-05-19T08:00:00Z' },
+      { id: 'c', date: '2026-05-15', created_at: '2026-05-15T09:00:00Z' },
+    ];
+    const sorted = [...items].sort(historySortCompare).map(i => i.id);
+    expect(sorted).toEqual(['b', 'c', 'a']);
+  });
+
+  it('uses created_at as tiebreaker on same date (newest first)', () => {
+    const items = [
+      { id: 'a', date: '2026-05-19', created_at: '2026-05-19T08:00:00Z' },
+      { id: 'b', date: '2026-05-19', created_at: '2026-05-19T12:00:00Z' },
+      { id: 'c', date: '2026-05-19', created_at: '2026-05-19T10:00:00Z' },
+    ];
+    const sorted = [...items].sort(historySortCompare).map(i => i.id);
+    expect(sorted).toEqual(['b', 'c', 'a']);
+  });
+
+  it('uses id as final tiebreaker when date and created_at match', () => {
+    const items = [
+      { id: 'aaa', date: '2026-05-19', created_at: '2026-05-19T08:00:00Z' },
+      { id: 'ccc', date: '2026-05-19', created_at: '2026-05-19T08:00:00Z' },
+      { id: 'bbb', date: '2026-05-19', created_at: '2026-05-19T08:00:00Z' },
+    ];
+    const sorted = [...items].sort(historySortCompare).map(i => i.id);
+    expect(sorted).toEqual(['ccc', 'bbb', 'aaa']);
+  });
+
+  it('does NOT use updated_at to sort (would reshuffle on every edit)', () => {
+    // Item `a` was created first and has a much later updated_at (was edited).
+    // It must NOT jump to the top — the sort must remain stable across edits.
+    const items = [
+      { id: 'a', date: '2026-05-19', created_at: '2026-05-19T08:00:00Z', updated_at: '2026-05-19T23:00:00Z' },
+      { id: 'b', date: '2026-05-19', created_at: '2026-05-19T09:00:00Z', updated_at: '2026-05-19T09:00:00Z' },
+    ];
+    const sorted = [...items].sort(historySortCompare).map(i => i.id);
+    expect(sorted).toEqual(['b', 'a']);
+  });
+
+  it('falls back to createdAt when created_at is missing', () => {
+    const items = [
+      { id: 'a', date: '2026-05-19', createdAt: '2026-05-19T08:00:00Z' },
+      { id: 'b', date: '2026-05-19', createdAt: '2026-05-19T12:00:00Z' },
+    ];
+    const sorted = [...items].sort(historySortCompare).map(i => i.id);
+    expect(sorted).toEqual(['b', 'a']);
+  });
+
+  it('handles missing date/created_at without throwing', () => {
+    const items = [
+      { id: 'a' },
+      { id: 'b', date: '2026-05-19' },
+      { id: 'c', date: '2026-05-19', created_at: '2026-05-19T10:00:00Z' },
+    ];
+    const sorted = [...items].sort(historySortCompare).map(i => i.id);
+    expect(sorted).toEqual(['c', 'b', 'a']);
+  });
+
+  it('is stable across repeated sorts (idempotent)', () => {
+    const items = [
+      { id: 'a', date: '2026-05-19', created_at: '2026-05-19T08:00:00Z' },
+      { id: 'b', date: '2026-05-19', created_at: '2026-05-19T08:00:00Z' },
+      { id: 'c', date: '2026-05-18', created_at: '2026-05-18T08:00:00Z' },
+    ];
+    const first = [...items].sort(historySortCompare).map(i => i.id);
+    const second = [...items].sort(historySortCompare).map(i => i.id);
+    const third = [...first.map(id => items.find(i => i.id === id))].sort(historySortCompare).map(i => i.id);
+    expect(first).toEqual(second);
+    expect(first).toEqual(third);
   });
 });

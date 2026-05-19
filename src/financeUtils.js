@@ -98,3 +98,18 @@ export const distributeAmount = (amount, headCount) => {
     return share / 100;
   });
 };
+
+// Stable, descending comparator for history rows.
+// Order: date desc → created_at desc → id desc.
+// `updated_at` is deliberately never used — it shifts on every edit and would
+// reshuffle history whenever any row changed. Lexicographic compares on
+// ISO/`YYYY-MM-DD` strings are equivalent to chronological compares and avoid
+// the `new Date("YYYY-MM-DD")` UTC-vs-local off-by-one.
+export const historySortCompare = (a, b) => {
+  const dd = (b?.date || "").localeCompare(a?.date || "");
+  if (dd !== 0) return dd;
+  const ca = a?.created_at || a?.createdAt || "";
+  const cb = b?.created_at || b?.createdAt || "";
+  if (ca !== cb) return cb.localeCompare(ca);
+  return String(b?.id || "").localeCompare(String(a?.id || ""));
+};
