@@ -1279,7 +1279,7 @@ export default function Nomad() {
     const amount = payAmt ? roundMoney(Math.min(payAmt, remaining)) : remaining;
     if (amount <= 0) { showT("Already fully settled", "info"); return; }
     if (s.direction === "owe") {
-      const b = wBal[wid] || 0;
+      const b = roundMoney(wBal[wid] || 0);
       if (b < amount) { showT(`Not enough — need ${fmt(amount)}, have ${fmt(b)}`, "error"); return }
       if (wid === "upi_lite") {
         const u = upiLiteUsage(today);
