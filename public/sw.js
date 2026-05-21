@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nomad-app-v9';
+const CACHE_NAME = 'nomad-app-v10';
 const APP_SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -69,14 +69,22 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('push', (event) => {
   let payload = { title: 'NOMAD', body: '', tag: 'nomad-push', requireInteraction: false };
   try { if (event.data) payload = { ...payload, ...event.data.json() }; } catch {}
-  event.waitUntil(
-    self.registration.showNotification(payload.title, {
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // If any window client is focused/visible on this device, app is active here — skip notif, toast already shown.
+    const active = clients.some(c => c.focused === true || c.visibilityState === 'visible');
+    if (active) {
+      // Forward to active client in case it wants to surface a toast for server-driven pushes (e.g. bill cron).
+      clients.forEach(c => { try { c.postMessage({ type: 'nomad-push', payload }); } catch {} });
+      return;
+    }
+    await self.registration.showNotification(payload.title, {
       body: payload.body,
       icon: '/icon-192.png',
       badge: '/icon-192.png',
       tag: payload.tag,
       requireInteraction: payload.requireInteraction,
       data: { url: '/' },
-    })
-  );
+    });
+  })());
 });

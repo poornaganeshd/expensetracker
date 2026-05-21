@@ -34,7 +34,10 @@
       "WebFetch(domain:api.github.com)",
       "Bash(grep -v \"^$\")",
       "Bash(node --input-type=module --experimental-vm-modules)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(git checkout *)"
     ]
   }
 }
