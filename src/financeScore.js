@@ -58,8 +58,10 @@ function savingsScore(totalIncome, totalExpense) {
  * @returns {number}
  */
 function billScore(recurring, month) {
-  const active = recurring.filter(r => r.active !== false);
-  if (active.length === 0) return 20; // no bills → mild bonus
+  // Only monthly bills are scored — yearly/quarterly/custom bills paid in
+  // their due month would otherwise drag the score for every other month.
+  const active = recurring.filter(r => r.active !== false && (r.frequency === "monthly" || r.frequency == null));
+  if (active.length === 0) return 20; // no monthly bills → mild bonus
   const paid = active.filter(r => String(r.lastPaidDate || "").slice(0, 7) === month).length;
   return Math.round((paid / active.length) * 25);
 }

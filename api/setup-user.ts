@@ -57,6 +57,15 @@ DO $$ BEGIN ALTER TABLE expenses  ADD COLUMN IF NOT EXISTS "balBefore"     NUMER
 DO $$ BEGIN ALTER TABLE incomes   ADD COLUMN IF NOT EXISTS "balBefore"     NUMERIC DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE transfers ADD COLUMN IF NOT EXISTS "fromBalBefore" NUMERIC DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE transfers ADD COLUMN IF NOT EXISTS "toBalBefore"   NUMERIC DEFAULT NULL; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  endpoint   TEXT        PRIMARY KEY,
+  p256dh     TEXT        NOT NULL DEFAULT '',
+  auth       TEXT        NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE push_subscriptions DISABLE ROW LEVEL SECURITY;
 `;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

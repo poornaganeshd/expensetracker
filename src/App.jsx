@@ -159,7 +159,8 @@ const isUpiLite = (walletOrId, walletList) => {
 const clearVersion = (table, id) => {
   try {
     const store = JSON.parse(localStorage.getItem(VERSIONS_KEY) || "{}");
-    if (store[table]) { delete store[table][id]; localStorage.setItem(VERSIONS_KEY, JSON.stringify(store)); }
+    const key = `${table}:${id}`;
+    if (key in store) { delete store[key]; localStorage.setItem(VERSIONS_KEY, JSON.stringify(store)); }
   } catch { /* ignore storage errors */ }
 };
 
@@ -998,9 +999,12 @@ export default function Nomad() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
 
-  // Pending splits reminder on every app open
+  // Pending splits reminder — throttled to once per day per device
   useEffect(() => {
     if (!loaded) return;
+    const lastKey = "nomad-last-splits-nudge";
+    const today = localDateKey();
+    if (localStorage.getItem(lastKey) === today) return;
     const pending = sp.filter(s => !s.settled);
     if (!pending.length) return;
     const owe = pending.filter(s => s.direction === "owe");
@@ -1013,8 +1017,10 @@ export default function Nomad() {
       const paid = stl.filter(x => x.splitId === s.id).reduce((u, x) => u + x.amount, 0);
       return t + Math.max(0, s.amount - paid);
     }, 0);
-    if (owedTotal > 0.005) showT(`${owed.length} pending — others owe you ${fmt(owedTotal)}`, "info");
-    if (oweTotal > 0.005) showT(`${owe.length} pending — you owe ${fmt(oweTotal)}`, "info");
+    let shown = false;
+    if (owedTotal > 0.005) { showT(`${owed.length} pending — others owe you ${fmt(owedTotal)}`, "info"); shown = true; }
+    if (oweTotal > 0.005) { showT(`${owe.length} pending — you owe ${fmt(oweTotal)}`, "info"); shown = true; }
+    if (shown) localStorage.setItem(lastKey, today);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
 
@@ -1026,7 +1032,7 @@ export default function Nomad() {
       const tag = ev.data.payload.tag || "";
       // Skip toasts for events the client already toasted locally (split/settle/budget/nolog).
       // Only forward server-driven pushes (bill-* from cron).
-      const isLocalEcho = /^(split|settle|budget|nolog)-/.test(tag);
+      const isLocalEcho = /^(split|splits|settle|budget|nolog)-/.test(tag);
       if (isLocalEcho) return;
       showT(`${ev.data.payload.title}${ev.data.payload.body ? " — " + ev.data.payload.body : ""}`, "info");
     };

@@ -23,7 +23,11 @@ function isMonthlyDueToday(r: Record<string, any>, todayStr: string): boolean {
   const dom = Number(r.dayOfMonth ?? 0);
   if (!dom) return false;
   const todayDay = Number(todayStr.slice(8, 10));
-  if (dom !== todayDay) return false;
+  const y = Number(todayStr.slice(0, 4));
+  const m = Number(todayStr.slice(5, 7));
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const effectiveDom = Math.min(dom, lastDay);
+  if (effectiveDom !== todayDay) return false;
   const thisMonth = todayStr.slice(0, 7);
   if ((r.lastPaidDate ?? "").slice(0, 7) === thisMonth) return false;
   if ((r.lastSkippedDate ?? "").slice(0, 7) === thisMonth) return false;
@@ -41,7 +45,7 @@ async function sendPushPayload(subs: any[], payload: string): Promise<void> {
 async function sendPushForPendingSplits(user: UserEntry, subs: any[], todayStr: string): Promise<void> {
   if (!subs.length) return;
   const [splits, settlements] = await Promise.all([
-    userGet(user.supabase_url, user.anon_key, "/splits?settled=eq.false&select=*").catch(() => [] as any[]),
+    userGet(user.supabase_url, user.anon_key, "/splits?settled=eq.false&deleted_at=is.null&select=*").catch(() => [] as any[]),
     userGet(user.supabase_url, user.anon_key, "/settlements?select=splitId,amount").catch(() => [] as any[]),
   ]);
   if (!splits.length) return;
@@ -77,8 +81,8 @@ async function sendPushForNoLog(user: UserEntry, subs: any[], todayStr: string):
   if (!subs.length) return;
   // Pull last expense + last income; pick most recent date string.
   const [lastEx, lastIn] = await Promise.all([
-    userGet(user.supabase_url, user.anon_key, "/expenses?select=date&order=date.desc&limit=1").catch(() => [] as any[]),
-    userGet(user.supabase_url, user.anon_key, "/incomes?select=date&order=date.desc&limit=1").catch(() => [] as any[]),
+    userGet(user.supabase_url, user.anon_key, "/expenses?deleted_at=is.null&select=date&order=date.desc&limit=1").catch(() => [] as any[]),
+    userGet(user.supabase_url, user.anon_key, "/incomes?deleted_at=is.null&select=date&order=date.desc&limit=1").catch(() => [] as any[]),
   ]);
   const dates = [lastEx?.[0]?.date, lastIn?.[0]?.date].filter(Boolean) as string[];
   if (!dates.length) return;
@@ -97,7 +101,7 @@ async function sendPushForNoLog(user: UserEntry, subs: any[], todayStr: string):
 
 async function sendPushForDueBills(user: UserEntry, subs: any[], todayStr: string): Promise<void> {
   if (!subs.length) return;
-  const recurring = await userGet(user.supabase_url, user.anon_key, "/recurring?active=eq.true&select=*").catch(() => [] as any[]);
+  const recurring = await userGet(user.supabase_url, user.anon_key, "/recurring?active=eq.true&deleted_at=is.null&select=*").catch(() => [] as any[]);
   const due = (recurring as any[]).filter(r => isMonthlyDueToday(r, todayStr));
   if (!due.length) return;
 
