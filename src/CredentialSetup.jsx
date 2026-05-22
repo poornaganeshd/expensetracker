@@ -414,6 +414,12 @@ export default function CredentialSetup({ onDone, onCancel }) {
               onChange={e => { if (e.target.files[0]) importConfig(e.target.files[0]); e.target.value = ""; }} />
           </label>
 
+          {!onCancel && (
+            <button className="ns-btn-backend" onClick={() => { localStorage.setItem("nomad-local-mode", "true"); window.location.reload(); }}>
+              📦 Use Local Storage Only
+            </button>
+          )}
+
           {onCancel && (
             <button className="ns-btn-cancel" onClick={onCancel}>Cancel</button>
           )}
