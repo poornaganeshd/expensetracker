@@ -310,7 +310,6 @@ export default function CredentialSetup({ onDone, onCancel }) {
           apiKey: typeof d.apiKey === "string" ? d.apiKey.trim() : "",
           apiSecret: typeof d.apiSecret === "string" ? d.apiSecret.trim() : "",
         });
-        try { localStorage.removeItem("nomad-local-mode"); } catch { /* ignore */ }
         onDone();
       } catch { setError("Failed to read config file."); }
     };
@@ -323,7 +322,6 @@ export default function CredentialSetup({ onDone, onCancel }) {
       setError("Invalid Supabase URL format. Expected https://{20-char-ref}.supabase.co"); return;
     }
     saveCredentials({ sbUrl: sbUrl.trim(), sbKey: sbKey.trim(), cloudName: cloudName.trim(), uploadPreset: uploadPreset.trim(), apiKey: apiKey.trim(), apiSecret: apiSecret.trim() });
-    try { localStorage.removeItem("nomad-local-mode"); } catch { /* ignore */ }
     onDone();
   };
 
@@ -415,12 +413,6 @@ export default function CredentialSetup({ onDone, onCancel }) {
             <input type="file" accept=".json" style={{ display: "none" }}
               onChange={e => { if (e.target.files[0]) importConfig(e.target.files[0]); e.target.value = ""; }} />
           </label>
-
-          {!onCancel && (
-            <button className="ns-btn-backend" onClick={() => { localStorage.setItem("nomad-local-mode", "true"); window.location.reload(); }}>
-              📦 Use Local Storage Only
-            </button>
-          )}
 
           {onCancel && (
             <button className="ns-btn-cancel" onClick={onCancel}>Cancel</button>
