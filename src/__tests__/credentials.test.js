@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getCredentials, saveCredentials, clearCredentials } from '../credentials.js';
+import { getCredentials, saveCredentials, clearCredentials, isLocalMode } from '../credentials.js';
 
 beforeEach(() => {
   localStorage.clear();
@@ -58,5 +58,39 @@ describe('clearCredentials', () => {
     saveCredentials({ sbUrl: 'https://x.supabase.co', sbKey: 'key' });
     clearCredentials();
     expect(getCredentials()).toEqual({});
+  });
+});
+
+describe('isLocalMode', () => {
+  it('returns true when creds are undefined', () => {
+    expect(isLocalMode(undefined)).toBe(true);
+  });
+
+  it('returns true when creds are null', () => {
+    expect(isLocalMode(null)).toBe(true);
+  });
+
+  it('returns true for empty creds object', () => {
+    expect(isLocalMode({})).toBe(true);
+  });
+
+  it('returns true when sbUrl is empty string', () => {
+    expect(isLocalMode({ sbUrl: '', sbKey: 'key' })).toBe(true);
+  });
+
+  it('returns true when sbUrl missing but other fields present', () => {
+    expect(isLocalMode({ cloudName: 'foo', apiKey: 'bar' })).toBe(true);
+  });
+
+  it('returns false when sbUrl is a valid Supabase URL', () => {
+    expect(isLocalMode({ sbUrl: 'https://abc.supabase.co', sbKey: 'k' })).toBe(false);
+  });
+
+  it('returns true when sbKey missing (matches SB_ENABLED semantics)', () => {
+    expect(isLocalMode({ sbUrl: 'https://x.supabase.co' })).toBe(true);
+  });
+
+  it('returns true when sbKey is empty string', () => {
+    expect(isLocalMode({ sbUrl: 'https://x.supabase.co', sbKey: '' })).toBe(true);
   });
 });

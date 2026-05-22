@@ -59,8 +59,16 @@ export async function uploadReceipt(file) {
   const isPdf = file.type === "application/pdf";
   const blob = isPdf ? file : await compressImage(file);
 
+  // Local fallback — no Cloudinary configured. Return a base64 data URL so
+  // the user can still attach receipts in local-only mode. The data URL is
+  // stored directly in the expense's receipt_url column. See B.20.
   if (!cloudName) {
-    throw new Error("Cloudinary not configured — add your Cloud Name in Settings → Credentials to attach receipts.");
+    return await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onerror = () => reject(new Error("Failed to encode receipt"));
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(blob);
+    });
   }
 
   // ── Cloudinary upload ─────────────────────────────────────────────────────
