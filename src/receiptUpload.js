@@ -96,22 +96,21 @@ export async function uploadReceipt(file) {
       body: form,
     });
     if (!res.ok) {
+      // Cloudinary returned 4xx (bad signature, bad creds, expired preset, quota) or 5xx.
+      // Earlier impl threw here, which blocked the entire expense save — the user lost
+      // their form input and the receipt vanished. Fall back to local data URL instead
+      // so the expense saves with the receipt, and surface a console warning so the
+      // user can diagnose the Cloudinary config via DevTools.
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `Upload failed (${res.status})`);
+      const msg = err.error?.message || `Upload failed (${res.status})`;
+      console.warn("Cloudinary upload rejected, storing receipt locally:", msg);
+      return await toDataUrl(blob);
     }
     const data = await res.json();
     return data.secure_url;
   } catch (err) {
-    // Network failure or Cloudinary error — fall back to local storage so the
-    // user can still save the transaction (App.jsx shows an info toast for data: URLs).
-    if (err.message && !err.message.startsWith("Upload failed")) {
-      // Re-wrap network errors with a friendlier prefix so the caller can detect fallback
-      console.warn("Cloudinary upload failed, storing receipt locally:", err.message);
-    } else {
-      // Cloudinary returned a non-ok status — propagate the error so the user
-      // knows their Cloudinary credentials may be wrong.
-      throw err;
-    }
+    // Network failure (DNS, offline, CORS preflight fail, etc.) — fall back to local.
+    console.warn("Cloudinary upload failed, storing receipt locally:", err?.message || err);
     return await toDataUrl(blob);
   }
 }
