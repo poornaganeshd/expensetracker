@@ -2011,6 +2011,20 @@ const MeditationCard = ({ day, update, showToast = () => {} }) => {
     const presets = [5, 10, 15, 20];
     const done = (day.meditationMin || 0) > 0;
 
+    // Capture mutable values via refs so the countdown effect can read fresh data
+    // without re-subscribing each parent render. Earlier impl listed `update`,
+    // `showToast`, `day.meditationMin`, `day.dailyChecks` in deps — each parent
+    // re-render produced new function references for `update`/`showToast` and
+    // tore down + recreated the setInterval, causing skipped or duplicate ticks.
+    const dayRef = useRef(day);
+    const updateRef = useRef(update);
+    const showToastRef = useRef(showToast);
+    const minsRef = useRef(mins);
+    useEffect(() => { dayRef.current = day; }, [day]);
+    useEffect(() => { updateRef.current = update; }, [update]);
+    useEffect(() => { showToastRef.current = showToast; }, [showToast]);
+    useEffect(() => { minsRef.current = mins; }, [mins]);
+
     useEffect(() => {
         if (!active) return;
         intervalRef.current = setInterval(() => {
@@ -2018,17 +2032,21 @@ const MeditationCard = ({ day, update, showToast = () => {} }) => {
                 if (r <= 1) {
                     clearInterval(intervalRef.current);
                     setActive(false);
-                    const newTotal = (day.meditationMin || 0) + mins;
-                    update({ meditationMin: newTotal, dailyChecks: { ...(day.dailyChecks || {}), meditation: true } });
+                    const curDay = dayRef.current;
+                    const m = minsRef.current;
+                    const newTotal = (curDay?.meditationMin || 0) + m;
+                    updateRef.current?.({ meditationMin: newTotal, dailyChecks: { ...(curDay?.dailyChecks || {}), meditation: true } });
                     try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch { /* ignore */ }
-                    showToast(`Meditation done · ${mins} min logged`, 'success');
+                    showToastRef.current?.(`Meditation done · ${m} min logged`, 'success');
                     return 0;
                 }
                 return r - 1;
             });
         }, 1000);
         return () => clearInterval(intervalRef.current);
-    }, [active, mins, day.meditationMin, day.dailyChecks, update, showToast]);
+        // Only `active` in deps — countdown should NOT restart when day data changes mid-session.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [active]);
 
     const start = () => { setRemaining(mins * 60); setActive(true); };
     const stop = () => { setActive(false); clearInterval(intervalRef.current); setRemaining(0); };

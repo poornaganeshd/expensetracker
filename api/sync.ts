@@ -74,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     upstreamRes = await fetch(path, {
       method,
-      headers: (headers ?? {}) as HeadersInit,
+      headers: (headers ?? {}) as Record<string, string>,
       body: body ?? undefined,
       signal: ctrl.signal,
     });
