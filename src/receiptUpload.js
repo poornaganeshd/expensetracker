@@ -91,7 +91,11 @@ export async function uploadReceipt(file) {
   }
 
   try {
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${isPdf ? "raw" : "image"}/upload`, {
+    // Cloudinary treats PDFs as images natively (multi-page). The /raw/upload
+    // endpoint is for arbitrary binary files (zip, docx etc) — most unsigned
+    // upload presets are scoped to resource_type=image and will 400 on /raw.
+    // Use /image/upload for both images and PDFs so the same preset works.
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
       method: "POST",
       body: form,
     });

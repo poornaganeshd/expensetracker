@@ -616,7 +616,14 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
           const urls = await receiptPickerRef.current.upload();
           rUrl = urls.length === 1 ? urls[0] : urls.length > 1 ? JSON.stringify(urls) : null;
           if (urls.some(u => typeof u === "string" && u.startsWith("data:"))) {
-            showT("Receipt saved locally — add Cloudinary in Settings to sync receipts to the cloud", "info");
+            // cloudinaryEnabled = cloudName is set. If set AND we still got a data:
+            // URL back, the upload was attempted but Cloudinary rejected/failed —
+            // show error toast pointing at config. If not set, fallback is intentional.
+            if (cloudinaryEnabled) {
+              showT("Cloudinary upload failed — receipt saved locally. Check API credentials or upload preset in Settings (DevTools → Network → cloudinary for details).", "error");
+            } else {
+              showT("Receipt saved locally — add Cloudinary in Settings to sync receipts to the cloud", "info");
+            }
           }
         } catch (err) {
           showT(err?.message || "Receipt upload failed — please try again", "error");
