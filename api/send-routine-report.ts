@@ -232,7 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       headers: makeHeaders(REGISTRY_KEY),
     });
     if (!r.ok) throw new Error(`registry ${r.status}`);
-    users = await r.json();
+    users = (await r.json()) as UserEntry[];
   } catch (e) {
     return res.status(502).json({ error: (e as Error).message });
   }

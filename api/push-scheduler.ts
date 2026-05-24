@@ -108,7 +108,7 @@ function shouldFireReminder(r: Reminder, nowUtc: Date): boolean {
 }
 
 async function processUser(user: UserEntry, nowUtc: Date) {
-  const subs: any[] = await userGet(user.supabase_url, user.anon_key, "/push_subscriptions?select=*").catch(() => []);
+  const subs = (await userGet(user.supabase_url, user.anon_key, "/push_subscriptions?select=*").catch(() => [])) as any[];
   if (!subs.length) return { user: user.supabase_url, skipped: "no subs" };
 
   // UTC date used by recurring bill check (matches send-reports convention)
@@ -184,13 +184,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       headers: makeHeaders(REGISTRY_KEY),
     });
     if (!r.ok) throw new Error(`registry ${r.status}`);
-    users = await r.json();
+    users = (await r.json()) as UserEntry[];
   } catch (e) {
     return res.status(502).json({ error: (e as Error).message });
   }
 
   const nowUtc = new Date();
   const results: any[] = [];
+
+  // Piggyback weekly routine email check at UTC hour 3.
+  // Vercel Hobby plan limits us to 2 crons total, so we trigger send-routine-report
+  // via internal HTTP self-call instead of registering a third cron entry.
+  let routineEmailTriggered: any = null;
+  if (nowUtc.getUTCHours() === 3) {
+    try {
+      const host = req.headers.host || "";
+      const proto = host.includes("localhost") ? "http" : "https";
+      const url = `${proto}://${host}/api/send-routine-report?secret=${encodeURIComponent(CRON_SECRET)}`;
+      const rr = await fetch(url, { method: "POST" });
+      routineEmailTriggered = { status: rr.status };
+    } catch (e) {
+      routineEmailTriggered = { error: (e as Error).message };
+    }
+  }
 
   for (let i = 0; i < users.length; i += CONCURRENCY) {
     const chunk = users.slice(i, i + CONCURRENCY);
@@ -203,5 +219,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  return res.status(200).json({ ok: true, processed: users.length, results, at: nowUtc.toISOString() });
+  return res.status(200).json({ ok: true, processed: users.length, results, routineEmail: routineEmailTriggered, at: nowUtc.toISOString() });
 }
