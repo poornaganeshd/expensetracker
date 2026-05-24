@@ -100,16 +100,39 @@ export const distributeAmount = (amount, headCount) => {
 };
 
 // Stable, descending comparator for history rows.
-// Order: date desc → created_at desc → id desc.
-// `updated_at` is deliberately never used — it shifts on every edit and would
-// reshuffle history whenever any row changed. Lexicographic compares on
-// ISO/`YYYY-MM-DD` strings are equivalent to chronological compares and avoid
-// the `new Date("YYYY-MM-DD")` UTC-vs-local off-by-one.
+// Order: date desc → creation timestamp desc → id desc.
+//
+// Bug-fix history: earlier impl compared `created_at` strings directly. Items
+// missing `created_at` (locally-added before first Supabase sync) had value ""
+// and any item WITH created_at sorted above them, regardless of actual age —
+// so freshly-added expenses appeared at the bottom of today's entries. Now we
+// derive a unified numeric timestamp from `created_at` / `createdAt` /
+// `updated_at` / id base36 prefix in that priority, so all items have a
+// comparable value.
+//
+// `updated_at` is deliberately last in the fallback chain — it shifts on every
+// edit, but is still a better signal than nothing when older items lack the
+// other fields. ID base36 prefix is the safest fallback (uid() encodes
+// Date.now() into the id, so base36 prefix sorts in time order).
+export const itemTimestamp = (it) => {
+  if (it?.created_at) { const n = Date.parse(it.created_at); if (Number.isFinite(n)) return n; }
+  if (it?.createdAt)  { const n = Date.parse(it.createdAt);  if (Number.isFinite(n)) return n; }
+  const id = String(it?.id || "");
+  const m = id.match(/^([0-9a-z]{8,11})/i);
+  if (m) {
+    const n = parseInt(m[1], 36);
+    // Sanity check: timestamp in ms must be after year 2001 (1e12) and before year 5000 (~1e14)
+    if (Number.isFinite(n) && n > 1_000_000_000_000 && n < 100_000_000_000_000) return n;
+  }
+  if (it?.updated_at) { const n = Date.parse(it.updated_at); if (Number.isFinite(n)) return n; }
+  return 0;
+};
+
 export const historySortCompare = (a, b) => {
   const dd = (b?.date || "").localeCompare(a?.date || "");
   if (dd !== 0) return dd;
-  const ca = a?.created_at || a?.createdAt || "";
-  const cb = b?.created_at || b?.createdAt || "";
-  if (ca !== cb) return cb.localeCompare(ca);
+  const tb = itemTimestamp(b);
+  const ta = itemTimestamp(a);
+  if (tb !== ta) return tb - ta;
   return String(b?.id || "").localeCompare(String(a?.id || ""));
 };

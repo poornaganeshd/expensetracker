@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { makeHeaders, getPeriod, getNextSendAt, withRetry } from '../_shared.js';
 import type { Schedule } from '../_shared.js';
 

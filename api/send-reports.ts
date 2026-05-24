@@ -44,10 +44,10 @@ async function sendPushPayload(subs: any[], payload: string): Promise<void> {
 
 async function sendPushForPendingSplits(user: UserEntry, subs: any[], todayStr: string): Promise<void> {
   if (!subs.length) return;
-  const [splits, settlements] = await Promise.all([
+  const [splits, settlements] = (await Promise.all([
     userGet(user.supabase_url, user.anon_key, "/splits?settled=eq.false&deleted_at=is.null&select=*").catch(() => [] as any[]),
     userGet(user.supabase_url, user.anon_key, "/settlements?select=splitId,amount").catch(() => [] as any[]),
-  ]);
+  ])) as [any[], any[]];
   if (!splits.length) return;
 
   const paidMap = new Map<string, number>();
@@ -80,10 +80,10 @@ async function sendPushForPendingSplits(user: UserEntry, subs: any[], todayStr: 
 async function sendPushForNoLog(user: UserEntry, subs: any[], todayStr: string): Promise<void> {
   if (!subs.length) return;
   // Pull last expense + last income; pick most recent date string.
-  const [lastEx, lastIn] = await Promise.all([
+  const [lastEx, lastIn] = (await Promise.all([
     userGet(user.supabase_url, user.anon_key, "/expenses?deleted_at=is.null&select=date&order=date.desc&limit=1").catch(() => [] as any[]),
     userGet(user.supabase_url, user.anon_key, "/incomes?deleted_at=is.null&select=date&order=date.desc&limit=1").catch(() => [] as any[]),
-  ]);
+  ])) as [any[], any[]];
   const dates = [lastEx?.[0]?.date, lastIn?.[0]?.date].filter(Boolean) as string[];
   if (!dates.length) return;
   const last = dates.sort().slice(-1)[0];
@@ -118,7 +118,7 @@ async function sendPushForDueBills(user: UserEntry, subs: any[], todayStr: strin
 
 async function sendAllPushes(user: UserEntry, todayStr: string): Promise<void> {
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) return;
-  const subs = await userGet(user.supabase_url, user.anon_key, "/push_subscriptions?select=*").catch(() => [] as any[]);
+  const subs = (await userGet(user.supabase_url, user.anon_key, "/push_subscriptions?select=*").catch(() => [] as any[])) as any[];
   if (!subs.length) return;
   await Promise.all([
     sendPushForDueBills(user, subs as any[], todayStr).catch(() => {}),
