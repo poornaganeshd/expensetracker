@@ -37,19 +37,26 @@ export function isLocalReceipt(url) {
   return typeof url === "string" && url.startsWith("data:");
 }
 
+// Compress a file and return it as a base64 data URL (local storage fallback).
+function toDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 // Compress + upload to Cloudinary.
 //
 // Two modes (backwards-compatible):
 //   Signed   — apiKey + apiSecret present → SHA-1 signature, no upload preset required
-//              (Cloudinary recommends this for server-less apps where apiSecret can
-//              be stored client-side by the owner, analogous to the anon Supabase key)
 //   Unsigned — uploadPreset present, no apiSecret required
 //
-// Local fallback — when Cloudinary is not configured at all (no cloudName), the image
-//   is compressed and returned as a base64 data URL so the user can still attach
-//   receipts without setting up Cloudinary. The data URL is stored directly in the
-//   expense's receipt_url column (Postgres TEXT — no size limit). Callers should
-//   check isLocalReceipt(url) to surface a "stored locally" notice.
+// Local fallback — when Cloudinary is not configured (no cloudName) OR when the
+//   Cloudinary upload fails (network error, CORS, etc.), the file is compressed and
+//   returned as a base64 data URL stored directly in the expense's receipt_url column.
+//   Callers should check isLocalReceipt(url) to surface a "stored locally" notice.
 //
 // Returns the secure_url (remote) or a data: URL (local fallback).
 export async function uploadReceipt(file) {
@@ -59,8 +66,9 @@ export async function uploadReceipt(file) {
   const isPdf = file.type === "application/pdf";
   const blob = isPdf ? file : await compressImage(file);
 
+  // No Cloudinary configured — store locally
   if (!cloudName) {
-    throw new Error("Cloudinary not configured — add your Cloud Name in Settings → Credentials to attach receipts.");
+    return await toDataUrl(blob);
   }
 
   // ── Cloudinary upload ─────────────────────────────────────────────────────
@@ -68,8 +76,7 @@ export async function uploadReceipt(file) {
   form.append("file", blob, isPdf ? "receipt.pdf" : "receipt.jpg");
 
   if (apiKey && apiSecret) {
-    // Signed upload — signature covers all non-file params sorted alphabetically,
-    // followed immediately by the API secret (no separator).
+    // Signed upload
     const timestamp = Math.floor(Date.now() / 1000);
     const signature = await sha1Hex(`timestamp=${timestamp}${apiSecret}`);
     form.append("api_key", apiKey);
@@ -79,20 +86,32 @@ export async function uploadReceipt(file) {
     // Unsigned upload via an unsigned upload preset
     form.append("upload_preset", uploadPreset);
   } else {
-    throw new Error(
-      "Cloudinary not configured. Add an Upload Preset (unsigned) " +
-      "or API Key + API Secret (signed) in Settings → Credentials."
-    );
+    // cloudName set but no auth — store locally rather than blocking the user
+    return await toDataUrl(blob);
   }
 
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${isPdf ? "raw" : "image"}/upload`, {
-    method: "POST",
-    body: form,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Upload failed (${res.status})`);
+  try {
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${isPdf ? "raw" : "image"}/upload`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Upload failed (${res.status})`);
+    }
+    const data = await res.json();
+    return data.secure_url;
+  } catch (err) {
+    // Network failure or Cloudinary error — fall back to local storage so the
+    // user can still save the transaction (App.jsx shows an info toast for data: URLs).
+    if (err.message && !err.message.startsWith("Upload failed")) {
+      // Re-wrap network errors with a friendlier prefix so the caller can detect fallback
+      console.warn("Cloudinary upload failed, storing receipt locally:", err.message);
+    } else {
+      // Cloudinary returned a non-ok status — propagate the error so the user
+      // knows their Cloudinary credentials may be wrong.
+      throw err;
+    }
+    return await toDataUrl(blob);
   }
-  const data = await res.json();
-  return data.secure_url;
 }
