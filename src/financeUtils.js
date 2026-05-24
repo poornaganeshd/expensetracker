@@ -114,7 +114,7 @@ export const distributeAmount = (amount, headCount) => {
 // edit, but is still a better signal than nothing when older items lack the
 // other fields. ID base36 prefix is the safest fallback (uid() encodes
 // Date.now() into the id, so base36 prefix sorts in time order).
-const itemTimestamp = (it) => {
+export const itemTimestamp = (it) => {
   if (it?.created_at) { const n = Date.parse(it.created_at); if (Number.isFinite(n)) return n; }
   if (it?.createdAt)  { const n = Date.parse(it.createdAt);  if (Number.isFinite(n)) return n; }
   const id = String(it?.id || "");
