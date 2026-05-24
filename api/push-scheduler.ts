@@ -79,23 +79,19 @@ function isMonthlyDueToday(r: any, todayStr: string): boolean {
   return true;
 }
 
-// Returns true if reminder should fire in the current hour for the user's local time
-// + day-of-week mask + not-yet-sent-today
+// Returns true if reminder is enabled, day-of-week matches, and not yet sent today.
+// NOTE: Vercel Hobby plan limits crons to once/day, so push-scheduler runs ONCE daily
+// (cron `0 2 * * *`). Per-slot HH:MM precision is not available on Hobby — all enabled
+// reminders for the day fire when this cron ticks. Upgrade to Pro for hourly cron +
+// proper HH:MM matching.
 function shouldFireReminder(r: Reminder, nowUtc: Date): boolean {
   if (!r.enabled) return false;
   const userMs = nowUtc.getTime() + (r.offset_minutes || 0) * 60_000;
   const userLocal = new Date(userMs);
-  const localHour = userLocal.getUTCHours();
-  const localMin  = userLocal.getUTCMinutes();
   const localDow  = userLocal.getUTCDay(); // 0=Sun..6=Sat
 
   // Day-of-week bitmask: bit 0 = Sunday
   if ((r.days_mask & (1 << localDow)) === 0) return false;
-
-  const [rh, rm] = (r.time_hhmm || "08:00").split(":").map(Number);
-  if (localHour !== rh) return false;
-  // Match within current hour, regardless of minute (cron runs hourly anyway)
-  if (rm > localMin && Math.abs(rm - localMin) > 30) return false;
 
   // Already sent today (compare on user-local date)
   if (r.last_sent_at) {
@@ -123,10 +119,13 @@ async function processUser(user: UserEntry, nowUtc: Date) {
   let totalSent = 0;
   const fired: string[] = [];
 
-  // 1. Per-slot reminders
+  // 1. Per-slot reminders — Hobby plan = single daily tick, so fire each enabled
+  // reminder once per user-local day (HH:MM precision requires Pro plan + hourly cron).
+  // The reminder body still shows its target time_hhmm so user sees "AM skincare @ 07:30".
   for (const r of (reminders as Reminder[])) {
     if (!shouldFireReminder(r, nowUtc)) continue;
-    const sent = await sendPush(subs, r.label || "Reminder", `Time for ${r.label || r.slot_id}`, `reminder-${r.id}`);
+    const body = r.time_hhmm ? `${r.label || r.slot_id} @ ${r.time_hhmm}` : `${r.label || r.slot_id}`;
+    const sent = await sendPush(subs, r.label || "Reminder", body, `reminder-${r.id}`);
     if (sent > 0) {
       totalSent += sent;
       fired.push(`reminder:${r.slot_id}`);
@@ -134,22 +133,18 @@ async function processUser(user: UserEntry, nowUtc: Date) {
     }
   }
 
-  // 2. Bills due today (only fire once per day; check via simple heuristic — first hour after midnight UTC)
-  // To avoid duplicate fires from hourly cron, only fire when UTC hour < 4 (typical IST/EU run window).
-  if (nowUtc.getUTCHours() < 4) {
-    const dueBills = (recurring as any[]).filter(r => isMonthlyDueToday(r, todayUtc));
-    if (dueBills.length > 0) {
-      const body = dueBills.length === 1
-        ? `${dueBills[0].name} is due today`
-        : `${dueBills.length} bills due today: ${dueBills.slice(0, 3).map(b => b.name).join(", ")}${dueBills.length > 3 ? "…" : ""}`;
-      const sent = await sendPush(subs, "Bills due", body, "bills-due-" + todayUtc);
-      if (sent > 0) { totalSent += sent; fired.push("bills"); }
-    }
+  // 2. Bills due today — cron runs once daily so no need to gate by UTC hour
+  const dueBills = (recurring as any[]).filter(r => isMonthlyDueToday(r, todayUtc));
+  if (dueBills.length > 0) {
+    const body = dueBills.length === 1
+      ? `${dueBills[0].name} is due today`
+      : `${dueBills.length} bills due today: ${dueBills.slice(0, 3).map(b => b.name).join(", ")}${dueBills.length > 3 ? "…" : ""}`;
+    const sent = await sendPush(subs, "Bills due", body, "bills-due-" + todayUtc);
+    if (sent > 0) { totalSent += sent; fired.push("bills"); }
   }
 
-  // 3. Streak break risk — if last log is ≥ 2 days old and user has any history, nudge
-  // Only fire in late evening window (UTC 12-16, roughly IST 6-10 PM)
-  if (nowUtc.getUTCHours() >= 12 && nowUtc.getUTCHours() <= 16 && Array.isArray(dailyLogs) && dailyLogs.length > 0) {
+  // 3. Streak break risk — if last log is ≥ 2 days old, nudge once per day
+  if (Array.isArray(dailyLogs) && dailyLogs.length > 0) {
     const lastLogDate = (dailyLogs[0] as any)?.log_date;
     if (lastLogDate) {
       const daysSince = Math.floor((Date.parse(todayUtc) - Date.parse(lastLogDate)) / 86_400_000);
@@ -192,20 +187,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const nowUtc = new Date();
   const results: any[] = [];
 
-  // Piggyback weekly routine email check at UTC hour 3.
-  // Vercel Hobby plan limits us to 2 crons total, so we trigger send-routine-report
-  // via internal HTTP self-call instead of registering a third cron entry.
+  // Piggyback weekly routine email check.
+  // Vercel Hobby plan limits us to 2 crons total AND restricts crons to once/day,
+  // so we trigger send-routine-report via internal HTTP self-call every time
+  // push-scheduler runs (also once daily). send-routine-report dedupes via
+  // last_sent_at >= 6 days, so daily polling won't spam emails.
   let routineEmailTriggered: any = null;
-  if (nowUtc.getUTCHours() === 3) {
-    try {
-      const host = req.headers.host || "";
-      const proto = host.includes("localhost") ? "http" : "https";
-      const url = `${proto}://${host}/api/send-routine-report?secret=${encodeURIComponent(CRON_SECRET)}`;
-      const rr = await fetch(url, { method: "POST" });
-      routineEmailTriggered = { status: rr.status };
-    } catch (e) {
-      routineEmailTriggered = { error: (e as Error).message };
-    }
+  try {
+    const host = req.headers.host || "";
+    const proto = host.includes("localhost") ? "http" : "https";
+    const url = `${proto}://${host}/api/send-routine-report?secret=${encodeURIComponent(CRON_SECRET)}`;
+    const rr = await fetch(url, { method: "POST" });
+    routineEmailTriggered = { status: rr.status };
+  } catch (e) {
+    routineEmailTriggered = { error: (e as Error).message };
   }
 
   for (let i = 0; i < users.length; i += CONCURRENCY) {

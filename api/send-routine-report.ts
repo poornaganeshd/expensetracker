@@ -168,11 +168,11 @@ async function processUser(user: UserEntry, nowUtc: Date) {
 
   const userNow = userLocalNow(nowUtc, s.offset_minutes);
   const localDow = userNow.getUTCDay();
-  const localHour = userNow.getUTCHours();
 
-  // Only fire when local day-of-week matches AND we're in the configured hour window (±1 hour)
+  // Vercel Hobby plan = single daily cron tick, so we cannot match user's exact send_hour.
+  // Just check day-of-week + last_sent_at >= 6 days. send_hour kept in schema for
+  // UI display + future Pro-plan hourly precision.
   if (localDow !== s.send_day_of_week) return { user: user.supabase_url, skipped: `dow ${localDow}≠${s.send_day_of_week}` };
-  if (Math.abs(localHour - s.send_hour) > 1) return { user: user.supabase_url, skipped: `hour ${localHour}≠${s.send_hour}` };
 
   // Already sent this week?
   if (s.last_sent_at) {
