@@ -545,6 +545,9 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
         try {
           const urls = await receiptPickerRef.current.upload();
           rUrl = urls.length === 1 ? urls[0] : urls.length > 1 ? JSON.stringify(urls) : null;
+          if (urls.some(u => typeof u === "string" && u.startsWith("data:"))) {
+            showT("Receipt saved locally — add Cloudinary in Settings to sync receipts to the cloud", "info");
+          }
         } catch (err) {
           showT(err?.message || "Receipt upload failed — please try again", "error");
           return; // keep form + picker state intact for retry
