@@ -1944,14 +1944,14 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
         if (!t) return;
         haptic();
         const entry = aiMacros ? { text: t, tag: logTag, ...aiMacros } : { text: t, tag: logTag };
-        update({ freeFoodLog: [...foodLog, entry] });
+        update(d => ({ freeFoodLog: [...migrateFreeFoodLog(d.freeFoodLog), entry] }));
         setLogInput('');
         setAiMacros(null);
     };
 
     const removeEntry = (i) => {
         haptic(4);
-        update({ freeFoodLog: foodLog.filter((_, idx) => idx !== i) });
+        update(d => ({ freeFoodLog: migrateFreeFoodLog(d.freeFoodLog).filter((_, idx) => idx !== i) }));
     };
 
     const dailyCals = useMemo(() => foodLog.reduce((s, e) => s + (e.calories || 0), 0), [foodLog]);
@@ -2015,7 +2015,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
                 <div
                     className={`hcard ${day.morningWater ? 'hc-amber' : 'hc-amber-idle'}`}
                     style={{ marginBottom: 10 }}
-                    onClick={() => { haptic(); update({ morningWater: !day.morningWater }); }}
+                    onClick={() => { haptic(); update(d => ({ morningWater: !d.morningWater })); }}
                 >
                     <div className="hc-top">
                         <div className="hc-icon ic-done">
@@ -2058,7 +2058,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
                     <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--txm)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Quality</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
                         {[{ key: 'deep', label: 'Deep', color: '#6BAA75' }, { key: 'okay', label: 'Okay', color: '#7B8CDE' }, { key: 'light', label: 'Light', color: 'var(--amber)' }, { key: 'poor', label: 'Poor', color: '#E07A5F' }].map(({ key, label, color }) => (
-                            <div key={key} onClick={() => { haptic(); update({ sleepQuality: day.sleepQuality === key ? '' : key }); }} style={{ textAlign: 'center', padding: '7px 4px', borderRadius: 10, background: day.sleepQuality === key ? `${color}22` : 'var(--sf)', border: `1.5px solid ${day.sleepQuality === key ? color : 'var(--bd)'}`, cursor: 'pointer', transition: 'all 0.15s' }}>
+                            <div key={key} onClick={() => { haptic(); update(d => ({ sleepQuality: d.sleepQuality === key ? '' : key })); }} style={{ textAlign: 'center', padding: '7px 4px', borderRadius: 10, background: day.sleepQuality === key ? `${color}22` : 'var(--sf)', border: `1.5px solid ${day.sleepQuality === key ? color : 'var(--bd)'}`, cursor: 'pointer', transition: 'all 0.15s' }}>
                                 <div style={{ fontSize: 11, fontWeight: 700, color: day.sleepQuality === key ? color : 'var(--txm)' }}>{label}</div>
                             </div>
                         ))}
@@ -2079,8 +2079,8 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
                             <div className="water-big">{(totalWater).toFixed(1)}<span className="u">L</span></div>
                             <div className="water-target">of {config.waterTarget}L</div>
                             <div className="stepper" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
-                                <button onClick={() => { haptic(); update({ water: Math.max(0, day.water - 0.5) }); }} disabled={day.water <= 0}>−</button>
-                                <button onClick={() => { haptic(); update({ water: day.water + 0.5 }); }} disabled={totalWater >= config.waterTarget}>+</button>
+                                <button onClick={() => { haptic(); update(d => ({ water: Math.max(0, (d.water || 0) - 0.5) })); }} disabled={day.water <= 0}>−</button>
+                                <button onClick={() => { haptic(); update(d => ({ water: (d.water || 0) + 0.5 })); }} disabled={totalWater >= config.waterTarget}>+</button>
                             </div>
                         </div>
                     </div>
@@ -2093,7 +2093,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
                                 <div
                                     key={p}
                                     className={`track-pt ${isOn ? 'on' : isSoft ? 'soft' : ''}`}
-                                    onClick={() => { haptic(); const newWater = Math.max(0, p - mwL); update({ water: newWater }); }}
+                                    onClick={() => { haptic(); update(d => ({ water: Math.max(0, p - effectiveMorningWater(d)) })); }}
                                 />
                             );
                         })}
@@ -2182,7 +2182,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                         {[{ key: 'great', IC: IconMoodHappyFilled, color: '#6BAA75', label: 'Great', bg: 'rgba(107,170,117,0.13)' }, { key: 'okay', IC: IconMoodNeutralFilled, color: '#7B8CDE', label: 'Okay', bg: 'rgba(123,140,222,0.13)' }, { key: 'low', IC: IconMoodSadFilled, color: '#E07A5F', label: 'Low', bg: 'rgba(224,122,95,0.13)' }, { key: 'stressed', IC: IconMoodAngryFilled, color: '#c25b4c', label: 'Stressed', bg: 'rgba(194,91,76,0.13)' }].map(({ key, IC, color, label, bg }) => (
-                            <div key={key} onClick={() => { haptic(); update({ moodChip: day.moodChip === key ? '' : key }); }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, padding: '10px 4px', borderRadius: 12, background: day.moodChip === key ? bg : 'var(--sf)', border: `1.5px solid ${day.moodChip === key ? color : 'var(--bd)'}`, cursor: 'pointer', transition: 'all 0.15s' }}>
+                            <div key={key} onClick={() => { haptic(); update(d => ({ moodChip: d.moodChip === key ? '' : key })); }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, padding: '10px 4px', borderRadius: 12, background: day.moodChip === key ? bg : 'var(--sf)', border: `1.5px solid ${day.moodChip === key ? color : 'var(--bd)'}`, cursor: 'pointer', transition: 'all 0.15s' }}>
                                 <IC size={22} color={day.moodChip === key ? color : 'var(--txm)'} />
                                 <span style={{ fontSize: 10, fontWeight: 700, color: day.moodChip === key ? color : 'var(--txm)', letterSpacing: '0.02em' }}>{label}</span>
                             </div>
@@ -2197,7 +2197,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
                     <div className="pills" style={{ marginBottom: 10, opacity: day.notesConfirmed ? 0.6 : 1 }}>
                         {['light', 'normal', 'heavy'].map((k) => (
                             <div key={k} className={`pill ${day.skinFeelChip === k ? 'on' : ''}`}
-                                onClick={() => !day.notesConfirmed && update({ skinFeelChip: day.skinFeelChip === k ? '' : k })}>
+                                onClick={() => !day.notesConfirmed && update(d => ({ skinFeelChip: d.skinFeelChip === k ? '' : k }))}>
                                 {k[0].toUpperCase() + k.slice(1)}
                             </div>
                         ))}
@@ -2206,7 +2206,7 @@ const FoodScreen = ({ day, update, config, onComplete, streak, showToast = () =>
                     <div className="pills" style={{ marginBottom: 12, opacity: day.notesConfirmed ? 0.6 : 1 }}>
                         {['high', 'medium', 'low'].map((k) => (
                             <div key={k} className={`pill ${day.energyChip === k ? 'on' : ''}`}
-                                onClick={() => !day.notesConfirmed && update({ energyChip: day.energyChip === k ? '' : k })}>
+                                onClick={() => !day.notesConfirmed && update(d => ({ energyChip: d.energyChip === k ? '' : k }))}>
                                 {k[0].toUpperCase() + k.slice(1)}
                             </div>
                         ))}
@@ -2257,16 +2257,20 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
     }, [day.pmSkinDone]);
 
     const toggleAmStep = (i) => {
-        const next = [...(day.amSteps || [])];
-        next[i] = !next[i];
-        const allDone = amStepList.every((_, idx) => !!next[idx]);
-        update({ amSteps: next, amSkinDone: allDone });
+        update(d => {
+            const next = [...(d.amSteps || [])];
+            next[i] = !next[i];
+            const allDone = amStepList.every((_, idx) => !!next[idx]);
+            return { amSteps: next, amSkinDone: allDone };
+        });
     };
     const togglePmStep = (i) => {
-        const next = [...(day.pmSteps || [])];
-        next[i] = !next[i];
-        const allDone = pmStepList.every((_, idx) => !!next[idx]);
-        update({ pmSteps: next, pmSkinDone: allDone });
+        update(d => {
+            const next = [...(d.pmSteps || [])];
+            next[i] = !next[i];
+            const allDone = pmStepList.every((_, idx) => !!next[idx]);
+            return { pmSteps: next, pmSkinDone: allDone };
+        });
     };
 
     return (
@@ -2359,7 +2363,7 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                     <div className="pills" style={{ marginBottom: 10, opacity: day.skinNotesConfirmed ? 0.6 : 1 }}>
                         {['clear', 'breakouts', 'purging', 'oily', 'dry'].map((k) => (
                             <div key={k} className={`pill ${day.skinTodayChip === k ? 'on teal' : ''}`}
-                                onClick={() => !day.skinNotesConfirmed && update({ skinTodayChip: day.skinTodayChip === k ? '' : k })}>
+                                onClick={() => !day.skinNotesConfirmed && update(d => ({ skinTodayChip: d.skinTodayChip === k ? '' : k }))}>
                                 {k[0].toUpperCase() + k.slice(1)}
                             </div>
                         ))}
@@ -2368,7 +2372,7 @@ const SkinScreen = ({ day, update, config, onComplete, streak }) => {
                     <div className="pills" style={{ marginBottom: 12, opacity: day.skinNotesConfirmed ? 0.6 : 1 }}>
                         {[['none', 'None'], ['mild', 'Mild dryness'], ['irritation', 'Irritation']].map(([k, l]) => (
                             <div key={k} className={`pill ${day.reactionChip === k ? 'on teal' : ''}`}
-                                onClick={() => !day.skinNotesConfirmed && update({ reactionChip: day.reactionChip === k ? '' : k })}>{l}</div>
+                                onClick={() => !day.skinNotesConfirmed && update(d => ({ reactionChip: d.reactionChip === k ? '' : k }))}>{l}</div>
                         ))}
                     </div>
                     <textarea
@@ -2990,7 +2994,11 @@ const RoutineEditor = ({ config, setConfig }) => {
    SETTINGS SCREEN
    ============================================================ */
 const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = () => { }, localModRef, configModRef, prevAllDataRef }) => {
-    const update = (patch) => setConfig(sanitizeConfig({ ...config, ...patch }));
+    const update = (patchOrFn) => setConfig(prev => {
+        const cur = sanitizeConfig(prev);
+        const patch = typeof patchOrFn === 'function' ? patchOrFn(cur) : patchOrFn;
+        return sanitizeConfig({ ...cur, ...patch });
+    });
 
     const [restoreMode, setRestoreMode] = useState('both'); // 'both' | 'data' | 'config'
     const [open, setOpen] = useState({ targets: true, skincare: false, routine: false, data: true });
@@ -3111,9 +3119,9 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
                                     <div className="desc">Daily goal in litres</div>
                                 </div>
                                 <div className="stepper">
-                                    <button onClick={() => update({ waterTarget: Math.max(1.5, config.waterTarget - 0.5) })}>−</button>
+                                    <button onClick={() => update(c => ({ waterTarget: Math.max(1.5, c.waterTarget - 0.5) }))}>−</button>
                                     <div className="val">{config.waterTarget}L</div>
-                                    <button onClick={() => update({ waterTarget: Math.min(5, config.waterTarget + 0.5) })}>+</button>
+                                    <button onClick={() => update(c => ({ waterTarget: Math.min(5, c.waterTarget + 0.5) }))}>+</button>
                                 </div>
                             </div>
                         </div>
@@ -3124,9 +3132,9 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
                                     <div className="desc">Daily kcal</div>
                                 </div>
                                 <div className="stepper">
-                                    <button onClick={() => update({ calGoal: Math.max(800, (config.calGoal || 2000) - 100) })}>−</button>
+                                    <button onClick={() => update(c => ({ calGoal: Math.max(800, (c.calGoal || 2000) - 100) }))}>−</button>
                                     <div className="val">{config.calGoal || 2000}</div>
-                                    <button onClick={() => update({ calGoal: Math.min(5000, (config.calGoal || 2000) + 100) })}>+</button>
+                                    <button onClick={() => update(c => ({ calGoal: Math.min(5000, (c.calGoal || 2000) + 100) }))}>+</button>
                                 </div>
                             </div>
                         </div>
@@ -3137,9 +3145,9 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
                                     <div className="desc">Daily grams</div>
                                 </div>
                                 <div className="stepper">
-                                    <button onClick={() => update({ proteinGoal: Math.max(20, (config.proteinGoal || 80) - 5) })}>−</button>
+                                    <button onClick={() => update(c => ({ proteinGoal: Math.max(20, (c.proteinGoal || 80) - 5) }))}>−</button>
                                     <div className="val">{config.proteinGoal || 80}g</div>
-                                    <button onClick={() => update({ proteinGoal: Math.min(300, (config.proteinGoal || 80) + 5) })}>+</button>
+                                    <button onClick={() => update(c => ({ proteinGoal: Math.min(300, (c.proteinGoal || 80) + 5) }))}>+</button>
                                 </div>
                             </div>
                         </div>
@@ -3150,9 +3158,9 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
                                     <div className="desc">Daily grams</div>
                                 </div>
                                 <div className="stepper">
-                                    <button onClick={() => update({ carbsGoal: Math.max(50, (config.carbsGoal || 250) - 10) })}>−</button>
+                                    <button onClick={() => update(c => ({ carbsGoal: Math.max(50, (c.carbsGoal || 250) - 10) }))}>−</button>
                                     <div className="val">{config.carbsGoal || 250}g</div>
-                                    <button onClick={() => update({ carbsGoal: Math.min(600, (config.carbsGoal || 250) + 10) })}>+</button>
+                                    <button onClick={() => update(c => ({ carbsGoal: Math.min(600, (c.carbsGoal || 250) + 10) }))}>+</button>
                                 </div>
                             </div>
                         </div>
@@ -3163,9 +3171,9 @@ const SettingsScreen = ({ config, setConfig, allData, setAllData, showToast = ()
                                     <div className="desc">Daily grams</div>
                                 </div>
                                 <div className="stepper">
-                                    <button onClick={() => update({ fatGoal: Math.max(20, (config.fatGoal || 65) - 5) })}>−</button>
+                                    <button onClick={() => update(c => ({ fatGoal: Math.max(20, (c.fatGoal || 65) - 5) }))}>−</button>
                                     <div className="val">{config.fatGoal || 65}g</div>
-                                    <button onClick={() => update({ fatGoal: Math.min(200, (config.fatGoal || 65) + 5) })}>+</button>
+                                    <button onClick={() => update(c => ({ fatGoal: Math.min(200, (c.fatGoal || 65) + 5) }))}>+</button>
                                 </div>
                             </div>
                         </div>
@@ -3460,7 +3468,11 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     const key = todayKey();
     const rawDay = allData[key] || {};
     const day = sanitizeDayRecord(rawDay);
-    const updateDay = (patch) => setAllData(prev => ({ ...prev, [key]: { ...DEFAULT_DAY, ...(prev[key] || {}), ...patch } }));
+    const updateDay = (patchOrFn) => setAllData(prev => {
+        const cur = { ...DEFAULT_DAY, ...(prev[key] || {}) };
+        const patch = typeof patchOrFn === 'function' ? patchOrFn(cur) : patchOrFn;
+        return { ...prev, [key]: { ...cur, ...patch } };
+    });
 
     const { foodStreak, skinStreak } = useMemo(() => {
         const foodDayLevel = (d) => { if (!d) return 0; let pts = 0; if (d.morningWater) pts++; const mwL = effectiveMorningWater(d); if ((mwL + (d.water || 0)) >= config.waterTarget) pts++; return pts; };
