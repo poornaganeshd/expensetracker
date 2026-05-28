@@ -2050,7 +2050,7 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
           <div key={t.id} onClick={() => dismissToast(t.id)} style={{ pointerEvents: "auto", cursor: "pointer", background: t.type === "error" ? "#D4726A" : t.type === "success" ? "#6BAA75" : t.type === "warn" ? "#E07A5F" : "#7B8CDE", color: "#fff", borderRadius: 18, padding: "10px 18px", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 600, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", textAlign: "center", lineHeight: 1.4, wordBreak: "break-word", maxWidth: "min(440px, 92vw)", animation: "ti 0.25s ease-out", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
             <span>{t.msg}</span>
             {t.count > 1 && <span style={{ background: "rgba(255,255,255,0.28)", borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>×{t.count}</span>}
-            {t.undo && <button onClick={() => undoDelete(t.id)} style={{ background: "rgba(255,255,255,0.25)", color: "#fff", border: "none", borderRadius: 12, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>UNDO</button>}
+            {t.undo && <button onClick={(e) => { e.stopPropagation(); undoDelete(t.id); }} style={{ background: "rgba(255,255,255,0.25)", color: "#fff", border: "none", borderRadius: 12, padding: "3px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>UNDO</button>}
           </div>
         ))}
       </div>
