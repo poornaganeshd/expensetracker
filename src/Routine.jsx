@@ -3460,13 +3460,13 @@ export default function RoutineApp({ darkMode = false, onTabChange }) {
     const key = todayKey();
     const rawDay = allData[key] || {};
     const day = sanitizeDayRecord(rawDay);
-    const updateDay = (patch) => setAllData(prev => ({ ...prev, [key]: { ...day, ...patch } }));
+    const updateDay = (patch) => setAllData(prev => ({ ...prev, [key]: { ...DEFAULT_DAY, ...(prev[key] || {}), ...patch } }));
 
     const { foodStreak, skinStreak } = useMemo(() => {
         const foodDayLevel = (d) => { if (!d) return 0; let pts = 0; if (d.morningWater) pts++; const mwL = effectiveMorningWater(d); if ((mwL + (d.water || 0)) >= config.waterTarget) pts++; return pts; };
         const skinDayLevel = (d) => { if (!d) return 0; return (d.amSkinDone ? 1 : 0) + (d.pmSkinDone ? 1 : 0); };
-        const countStreak = (levelFn) => { let s = 0; const d = new Date(); const todayK = todayKey(d); if (allData[todayK] && levelFn(allData[todayK]) >= 1) s = 1; d.setDate(d.getDate() - 1); let safety = 0; while (safety < 5000) { const rec = allData[todayKey(d)]; if (rec && levelFn(rec) >= 2) { s++; d.setDate(d.getDate() - 1); safety++; } else break; } return s; };
-        return { foodStreak: countStreak(foodDayLevel), skinStreak: countStreak(skinDayLevel) };
+        const countStreak = (levelFn, pastThreshold = 2) => { let s = 0; const d = new Date(); const todayK = todayKey(d); if (allData[todayK] && levelFn(allData[todayK]) >= 1) s = 1; d.setDate(d.getDate() - 1); let safety = 0; while (safety < 5000) { const rec = allData[todayKey(d)]; if (rec && levelFn(rec) >= pastThreshold) { s++; d.setDate(d.getDate() - 1); safety++; } else break; } return s; };
+        return { foodStreak: countStreak(foodDayLevel, 1), skinStreak: countStreak(skinDayLevel, 2) };
     }, [allData, config]);
 
     const onComplete = (type) => {
