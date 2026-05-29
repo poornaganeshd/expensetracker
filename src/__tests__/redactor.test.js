@@ -30,17 +30,25 @@ describe('redactText — Aadhaar', () => {
 });
 
 describe('redactText — credit/debit card', () => {
-  // Aadhaar pattern (3×4 digits) fires first on 16-digit card numbers, so the
-  // card digits are redacted (as [AADHAAR]) even if [CARD] tag doesn't appear.
-  it('removes card digits from output (redacted as Aadhaar or Card)', () => {
+  it('redacts a hyphen-grouped 16-digit card as [CARD]', () => {
     const result = redactText('Card 1234-5678-9012-3456 used');
+    expect(result).toContain('[CARD]');
     expect(result).not.toContain('1234');
-    expect(result).not.toContain('9012');
+    expect(result).not.toContain('3456');
+  });
+
+  it('redacts a space-grouped 16-digit card fully (no last group leak)', () => {
+    // Regression: the 12-digit Aadhaar rule used to fire first and consume the
+    // first 3 groups, leaving the final 4 digits in plaintext.
+    const result = redactText('paid 4111 1111 1111 1111 to John Smith');
+    expect(result).toContain('[CARD]');
+    expect(result).not.toMatch(/\d/);
   });
 
   it('does not leave raw 16-digit card number in output', () => {
     const result = redactText('1234 5678 9012 3456');
     expect(result).not.toMatch(/\b\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4}\b/);
+    expect(result).not.toContain('3456');
   });
 });
 

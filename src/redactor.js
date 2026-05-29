@@ -19,10 +19,11 @@
 const PATTERN_DEFS = [
   // Indian PAN card: ABCDE1234F (5 letters, 4 digits, 1 letter)
   { src: String.raw`\b[A-Z]{5}\d{4}[A-Z]\b`,                          flags: "g",  tag: "[PAN]"     },
+  // Credit/debit card: 16 digits in groups (must run BEFORE Aadhaar so a
+  // grouped 16-digit card isn't partially eaten by the 12-digit Aadhaar rule)
+  { src: String.raw`\b\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4}\b`,        flags: "g",  tag: "[CARD]"    },
   // Aadhaar: 12 digits (not preceded by ₹ or digits — avoid amount clash)
   { src: String.raw`(?<![₹\d])\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b`,      flags: "g",  tag: "[AADHAAR]" },
-  // Credit/debit card: 16 digits in groups
-  { src: String.raw`\b\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4}\b`,        flags: "g",  tag: "[CARD]"    },
   // Bank account numbers: 9–18 digit standalone numbers
   { src: String.raw`(?<![₹\d])\b\d{9,18}\b(?!\.\d)`,                  flags: "g",  tag: "[ACCOUNT]" },
   // UPI IDs: something@upi / something@okaxis etc.
