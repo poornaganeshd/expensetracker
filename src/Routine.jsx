@@ -2810,7 +2810,7 @@ const LogScreen = ({ allData, config }) => {
                                 {entries.map(([k, rec]) => {
                                     const dateLabel = new Date(k + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
                                     return (
-                                        <div key={k} onClick={() => setActiveDay(k)} style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        <div key={k} onClick={() => setActiveDay({ key: k, rec })} style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4 }}>
                                             <div style={{ position: 'relative', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: 'var(--sf)', border: '1px solid var(--bd)' }}>
                                                 {rec.skinPhoto ? <img src={rec.skinPhoto} alt={dateLabel} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : rec.hairPhoto ? <img src={rec.hairPhoto} alt={dateLabel} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
                                                 {rec.skinPhoto && rec.hairPhoto && <div style={{ position: 'absolute', bottom: 3, right: 3, background: 'rgba(0,0,0,0.55)', borderRadius: 4, padding: '1px 4px', fontSize: 8, color: '#fff', fontWeight: 700 }}>2</div>}
