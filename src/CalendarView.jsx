@@ -16,10 +16,22 @@ export default function CalendarView({
   const [vM, sM] = useState(today.getMonth());
   const [sel, sSel] = useState(localDateKey());
 
-  const goB = () => { if (vM === 0) { sM(11); sY(y => y - 1); } else sM(m => m - 1); };
+  const clampSelToMonth = (yy, mm) => {
+    const last = new Date(yy, mm + 1, 0).getDate();
+    const isCur = yy === today.getFullYear() && mm === today.getMonth();
+    const day = isCur ? today.getDate() : 1;
+    sSel(`${yy}-${String(mm + 1).padStart(2, "0")}-${String(Math.min(day, last)).padStart(2, "0")}`);
+  };
+  const goB = () => {
+    const ny = vM === 0 ? vY - 1 : vY;
+    const nm = vM === 0 ? 11 : vM - 1;
+    sY(ny); sM(nm); clampSelToMonth(ny, nm);
+  };
   const goF = () => {
     if (vY === today.getFullYear() && vM === today.getMonth()) return;
-    if (vM === 11) { sM(0); sY(y => y + 1); } else sM(m => m + 1);
+    const ny = vM === 11 ? vY + 1 : vY;
+    const nm = vM === 11 ? 0 : vM + 1;
+    sY(ny); sM(nm); clampSelToMonth(ny, nm);
   };
   const iC = vY === today.getFullYear() && vM === today.getMonth();
   const fd = new Date(vY, vM, 1).getDay();
@@ -95,29 +107,32 @@ export default function CalendarView({
           color: isSel ? "#fff" : "var(--text)",
           lineHeight: 1,
         }}>{d}</div>
-        {dat.exp > 0 && (
-          <div style={{
-            fontSize: 8,
-            fontFamily: "var(--font-h)",
-            fontWeight: 700,
-            color: isSel ? "#fff" : "#E07A5F",
-            lineHeight: 1,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}>
-            {dat.exp >= 1000 ? `₹${(dat.exp / 1000).toFixed(1)}k` : `₹${Math.round(dat.exp)}`}
-          </div>
-        )}
-        {dat.inc > 0 && (
-          <div style={{
-            position: "absolute",
-            width: 5,
-            height: 5,
-            borderRadius: "50%",
-            background: isSel ? "#fff" : "#6BAA75",
-          }} />
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 3, justifyContent: "flex-end" }}>
+          {dat.inc > 0 && (
+            <div style={{
+              width: 5,
+              height: 5,
+              borderRadius: "50%",
+              background: isSel ? "#fff" : "#6BAA75",
+              flexShrink: 0,
+            }} />
+          )}
+          {dat.exp > 0 && (
+            <div style={{
+              fontSize: 8,
+              fontFamily: "var(--font-h)",
+              fontWeight: 700,
+              color: isSel ? "#fff" : "#E07A5F",
+              lineHeight: 1,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              minWidth: 0,
+            }}>
+              {dat.exp >= 1000 ? `₹${(dat.exp / 1000).toFixed(1)}k` : `₹${Math.round(dat.exp)}`}
+            </div>
+          )}
+        </div>
       </div>
     );
   }

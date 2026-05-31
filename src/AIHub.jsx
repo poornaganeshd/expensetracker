@@ -83,6 +83,15 @@ function Card({ title, desc, color = "#7B8CDE", children, busy, onRun, runLabel 
   );
 }
 
+function Row({ k, v }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+      <span style={{ color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 600 }}>{k}</span>
+      <span style={{ fontFamily: "var(--font-h)", fontWeight: 700, color: "var(--text)" }}>{v}</span>
+    </div>
+  );
+}
+
 function ResultBox({ children }) {
   return (
     <div style={{
@@ -154,19 +163,42 @@ export default function AIHub({
     try {
       const month = new Date(); month.setDate(month.getDate() - 30);
       const monthC = month.toISOString().slice(0, 10);
-      const recentTxs = recent90.expenses.filter(e => String(e.date || "") >= monthC).slice(0, 30);
+      const candidates = recent90.expenses.filter(e => String(e.date || "") >= monthC);
       const history = redactTransactions(recent90.expenses);
+
+      // Heuristic prefilter: only spend on AI for txns above 1.5× their category median.
+      // Cuts AI calls 5-10× while keeping recall high for genuine outliers.
+      const byCat = new Map();
+      recent90.expenses.forEach(e => {
+        if (!byCat.has(e.categoryId)) byCat.set(e.categoryId, []);
+        byCat.get(e.categoryId).push(Number(e.amount) || 0);
+      });
+      const medians = new Map();
+      byCat.forEach((arr, cid) => {
+        const sorted = [...arr].sort((a, b) => a - b);
+        medians.set(cid, sorted[Math.floor(sorted.length / 2)] || 0);
+      });
+      const prioritized = candidates
+        .filter(e => {
+          const med = medians.get(e.categoryId) || 0;
+          return med === 0 || Number(e.amount) > med * 1.5;
+        })
+        .slice(0, 20);
+
+      // Parallelize in batches of 5 to avoid overwhelming the AI provider.
       const flagged = [];
-      for (const tx of recentTxs) {
-        try {
-          const data = await callAnalyze("anomaly", {
-            txn: { date: tx.date, amount: tx.amount, categoryId: tx.categoryId, note: redact(tx.note || "") },
-            history,
-          });
-          if (data.anomaly && data.severity !== "none" && data.severity !== "low") {
-            flagged.push({ tx, ...data });
+      const BATCH = 5;
+      for (let i = 0; i < prioritized.length; i += BATCH) {
+        const batch = prioritized.slice(i, i + BATCH);
+        const results = await Promise.allSettled(batch.map(tx => callAnalyze("anomaly", {
+          txn: { date: tx.date, amount: tx.amount, categoryId: tx.categoryId, note: redact(tx.note || "") },
+          history,
+        })));
+        results.forEach((r, idx) => {
+          if (r.status === "fulfilled" && r.value.anomaly && r.value.severity !== "none" && r.value.severity !== "low") {
+            flagged.push({ tx: batch[idx], ...r.value });
           }
-        } catch { /* ignore individual failures */ }
+        });
         if (flagged.length >= 8) break;
       }
       sAnomResults({ flagged });
@@ -666,7 +698,14 @@ export default function AIHub({
         />
         {voiceResult && (
           <ResultBox>
-            <pre style={{ margin: 0, fontSize: 11, fontFamily: "monospace", whiteSpace: "pre-wrap" }}>{JSON.stringify(voiceResult, null, 2)}</pre>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <Row k="Amount" v={voiceResult.amount != null ? fmt(voiceResult.amount) : "—"} />
+              <Row k="Type" v={voiceResult.type || "—"} />
+              <Row k="Category" v={voiceResult.categoryId ? catName(voiceResult.categoryId) : "—"} />
+              <Row k="Wallet" v={voiceResult.walletId ? (wallets.find(w => w.id === voiceResult.walletId)?.name || voiceResult.walletId) : "—"} />
+              <Row k="Note" v={voiceResult.note || "—"} />
+              <Row k="Confidence" v={voiceResult.confidence || "—"} />
+            </div>
           </ResultBox>
         )}
       </Card>

@@ -458,6 +458,43 @@ Give a coaching message.`;
   },
 };
 
+// Post-process model output so callers get safe, normalized payloads regardless
+// of small model quirks (out-of-list IDs, invalid enums, missing arrays).
+function sanitize(mode: Mode, parsed: Record<string, unknown>, body: Record<string, unknown>): Record<string, unknown> {
+  if (mode === "voice-parse") {
+    const wallets    = (body.wallets    as Wallet[])    || [];
+    const categories = (body.categories as Category[])  || [];
+    const walletIds  = new Set(wallets.map(w => w.id));
+    const catIds     = new Set(categories.map(c => c.id));
+    const validTypes = new Set(["expense", "income", "transfer"]);
+    return {
+      ...parsed,
+      type:       validTypes.has(String(parsed.type)) ? parsed.type : "expense",
+      walletId:   walletIds.has(String(parsed.walletId))   ? parsed.walletId   : null,
+      categoryId: catIds.has(String(parsed.categoryId))     ? parsed.categoryId : null,
+    };
+  }
+  if (mode === "anomaly") {
+    const validSev = new Set(["none", "low", "medium", "high"]);
+    return {
+      ...parsed,
+      severity: validSev.has(String(parsed.severity)) ? parsed.severity : "none",
+      anomaly:  Boolean(parsed.anomaly),
+    };
+  }
+  if (mode === "tax") {
+    const items = Array.isArray(parsed.items) ? parsed.items : [];
+    const totalDeductible = typeof parsed.totalDeductible === "number"
+      ? parsed.totalDeductible
+      : items.reduce((s: number, it: unknown) => {
+          const a = (it as { amount?: number })?.amount;
+          return s + (typeof a === "number" ? a : 0);
+        }, 0);
+    return { ...parsed, totalDeductible };
+  }
+  return parsed;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
@@ -468,15 +505,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const mode = String(body.mode || "") as Mode;
 
-  const handler = MODES[mode];
-  if (!handler) {
+  const modeHandler = MODES[mode];
+  if (!modeHandler) {
     return res.status(400).json({ error: `Unknown mode "${mode}". Valid: ${Object.keys(MODES).join(", ")}` });
   }
 
-  const userPrompt = handler.buildUser(body);
+  const userPrompt = modeHandler.buildUser(body);
 
   try {
-    const raw = await callText(userPrompt, handler.systemPrompt);
+    const raw = await callText(userPrompt, modeHandler.systemPrompt);
 
     let parsed: unknown;
     try { parsed = extractJSON(raw); }
@@ -485,12 +522,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: "AI returned non-JSON. Try again." });
     }
 
-    if (!handler.validate(parsed)) {
+    if (!modeHandler.validate(parsed)) {
       console.error(`[ai-analyze:${mode}] Invalid shape:`, JSON.stringify(parsed).slice(0, 300));
       return res.status(502).json({ error: "AI returned unexpected data shape. Try again." });
     }
 
-    return res.status(200).json(parsed);
+    const sanitized = sanitize(mode, parsed as Record<string, unknown>, body);
+    return res.status(200).json(sanitized);
 
   } catch (err) {
     if (err instanceof AiProviderError) {

@@ -216,11 +216,14 @@ function validateLedger(obj: unknown): obj is LedgerResult {
   return o.entries.every(en => {
     if (!en || typeof en !== "object") return false;
     const e = en as Record<string, unknown>;
+    const conf = e.confidence;
+    const okConf = conf === undefined || ["high", "medium", "low"].includes(conf as string);
     return (
       typeof e.date === "string" &&
       typeof e.amount === "number" &&
       typeof e.note === "string" &&
-      ["expense", "income"].includes(e.type as string)
+      ["expense", "income"].includes(e.type as string) &&
+      okConf
     );
   });
 }
