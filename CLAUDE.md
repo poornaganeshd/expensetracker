@@ -19,7 +19,8 @@ Guidance for Claude Code working in this repo. Read once at session start.
 ```bash
 npm run dev            # Vite dev server (HMR)
 npm run build          # production build → dist/
-npm run lint           # ESLint (JS/JSX only; api/ TS not linted)
+npm run lint           # ESLint (JS/JSX only)
+npm run typecheck      # tsc --noEmit on api/ (TS not linted by ESLint)
 npm test               # vitest run (unit) — excludes e2e/**
 npm run test:watch
 npm run test:coverage
@@ -29,7 +30,8 @@ npm run test:e2e       # Playwright (needs dev server; localhost:5173)
 ## Baselines (verify before/after edits; don't regress)
 
 - **Tests:** 453 pass / 0 fail, 21 files (`npm test`).
-- **Lint:** 16 problems (8 errors, 8 warnings) — all cosmetic `react-refresh/only-export-components` + react-compiler rules. Not real bugs; don't chase to zero.
+- **Lint:** 0 errors / 16 warnings (`npm run lint`). Warnings are cosmetic react-compiler/`exhaustive-deps` noise on the monoliths — don't chase to zero. The 5 react-compiler/react-refresh *error* rules are demoted to `warn` for `App.jsx`/`Routine.jsx`/`TrendChart.jsx` only (see `eslint.config.js`); they stay errors everywhere else, so CI gates lint strictly.
+- **Typecheck:** clean (`npm run typecheck` → `tsc --noEmit` on `api/`).
 - **Build:** succeeds (~1.16 MB bundle; the >500 kB chunk warning is expected).
 
 ## Working agreements
@@ -41,7 +43,7 @@ npm run test:e2e       # Playwright (needs dev server; localhost:5173)
 
 ## Testing
 
-Vitest + jsdom (configured in `vite.config.js` under `test`). Coverage via `@vitest/coverage-v8`. CI (`.github/workflows/ci.yml`) runs `npm test` + `npm run build` on every push/PR — keep green.
+Vitest + jsdom (configured in `vite.config.js` under `test`). Coverage via `@vitest/coverage-v8`. CI (`.github/workflows/ci.yml`) has two jobs on every push/PR — keep both green: **test** (`lint` → `typecheck` → `npm test` → `build`) and **e2e** (Playwright chromium; config self-starts the dev server when `CI` is set).
 
 | Source | Test |
 |---|---|

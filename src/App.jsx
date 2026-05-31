@@ -18,6 +18,7 @@ import {
   roundMoney, localDateKey, getRecurringDueDate, isRecurringDueToday,
   recurringDaysOverdue, distributeAmount, historySortCompare, itemTimestamp,
 } from "./financeUtils";
+import { parseAmount, parseVoiceTx, parseBankCsv } from "./txParsers";
 const APP = "NOMAD", CUR = "₹";
 // Use crypto.randomUUID() when available (all modern browsers + Node 14.17+).
 // Falls back to a longer random suffix than the previous 4 chars to keep
@@ -127,19 +128,6 @@ const dl = d => { const t = localDateKey(), y = localDateKey(new Date(Date.now()
 const ls = { fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 6, display: "block", fontFamily: "var(--font-h)", fontWeight: 600 };
 const is = { background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "11px 14px", color: "var(--text)", fontSize: 14, fontFamily: "var(--font-b)", outline: "none", width: "100%", boxSizing: "border-box" };
 const isFix = e => !!(e.recurring === true || (e.note && e.note.endsWith(" (recurring)")));
-
-// Locale-aware amount parser. Accepts "3.24", "3,24" (EU decimal), "1,234.56" (US thousands), "1,23,456.78" (Indian).
-// Returns NaN for empty / unparseable input — callers should guard with Number.isFinite.
-const parseAmount = (s) => {
-  if (typeof s === "number") return s;
-  if (s == null) return NaN;
-  const str = String(s).trim();
-  if (!str) return NaN;
-  const hasComma = str.includes(",");
-  const hasPeriod = str.includes(".");
-  if (hasComma && !hasPeriod && str.split(",").length === 2 && /,\d{1,2}$/.test(str)) return Number(str.replace(",", "."));
-  return Number(str.replace(/,/g, ""));
-};
 
 // True if a wallet (object) or wallet id imposes UPI Lite-style restrictions:
 // spend-only, ₹5000 daily / ₹1L monthly cap, max ₹5000 balance.
@@ -511,29 +499,6 @@ function extractKeyword(note) {
   const skip = new Set(["paid","for","at","the","to","from","in","on","a","an","rs","inr","and","or","by","with","via","of","per","my","via","recharge","payment","pay","bill"]);
   const words = note.toLowerCase().replace(/[₹,]/g, " ").split(/\s+/).filter(w => w.length > 2 && !skip.has(w) && !/^\d+$/.test(w));
   return words[0] || note.toLowerCase().trim().slice(0, 20);
-}
-
-function parseVoiceTx(transcript, { wallets = [], categories = [] } = {}) {
-  if (!transcript) return {};
-  const txt = String(transcript).toLowerCase().replace(/[,.!?]/g, " ").replace(/\s+/g, " ").trim();
-  const amtMatch = txt.match(/(?:rs\.?|rupees?|₹)?\s*(\d+(?:\.\d+)?)\s*(?:rs\.?|rupees?|₹|bucks?)?/);
-  const amount = amtMatch ? parseFloat(amtMatch[1]) : null;
-  let wid = null;
-  const walletAliases = { upi_lite: ["upi lite", "upi", "lite"], bank: ["bank", "account", "debit"], cash: ["cash"] };
-  for (const w of wallets) {
-    const aliases = walletAliases[w.id] || [w.name.toLowerCase()];
-    if (aliases.some(a => txt.includes(a))) { wid = w.id; break; }
-  }
-  let cid = null;
-  for (const c of categories) {
-    if (txt.includes(c.name.toLowerCase())) { cid = c.id; break; }
-  }
-  let note = txt;
-  if (amtMatch) note = note.replace(amtMatch[0], " ");
-  note = note.replace(/\b(rs|rupees?|bucks?|paid|spent|got|received|added)\b/g, " ");
-  if (wid) (walletAliases[wid] || []).forEach(a => { note = note.replace(new RegExp("\\b" + a + "\\b", "g"), " "); });
-  note = note.replace(/\s+/g, " ").trim();
-  return { amount, walletId: wid, categoryId: cid, note: note || null };
 }
 
 function VoiceAdd({ onParsed, accent = "#E07A5F", compact = false }) {
@@ -1728,47 +1693,6 @@ export default function Nomad() {
     if (migrated > 0 && failed === 0) showT(`Migrated ${migrated} receipt${migrated === 1 ? "" : "s"} to Cloudinary`, "success");
     else if (migrated > 0) showT(`Migrated ${migrated} of ${total} · ${failed} failed: ${firstError || "unknown error"}`, "info");
     else showT(`All ${failed} migration attempt${failed === 1 ? "" : "s"} failed: ${firstError || "unknown error"}`, "error");
-  };
-  // Parse CSV text into array of {date, amount, note, type} rows.
-  // Handles HDFC/ICICI/SBI/generic bank statement formats.
-  // Debit columns → expense, Credit columns → income.
-  const parseBankCsv = (text) => {
-    const lines = text.split(/\r?\n/).filter(l => l.trim());
-    if (lines.length < 2) return [];
-    const parseRow = line => { const cells = []; let cur = "", inQ = false; for (const ch of line) { if (ch === '"') { inQ = !inQ; } else if (ch === ',' && !inQ) { cells.push(cur.trim()); cur = ""; } else { cur += ch; } } cells.push(cur.trim()); return cells.map(c => c.replace(/^"|"$/g, "").trim()); };
-    const headers = parseRow(lines[0]).map(h => h.toLowerCase());
-    // Exact header match first so short abbreviations like "dr"/"cr" (debit/credit
-    // columns in Indian statements) work. Substring matching skips ≤2-char keywords —
-    // otherwise "cr" matches "des(cr)iption" and mis-detects the credit column on
-    // SBI/generic CSVs that put Description before the Credit column.
-    const colIdx = (keywords) => {
-      const exact = headers.findIndex(h => keywords.includes(h));
-      if (exact >= 0) return exact;
-      return headers.findIndex(h => keywords.some(k => k.length > 2 && h.includes(k)));
-    };
-    const dateCol = colIdx(["date", "txn date", "trans date", "transaction date", "value date"]);
-    const debitCol = colIdx(["debit", "withdrawal", "dr", "debit amount", "withdrawal amt"]);
-    const creditCol = colIdx(["credit", "deposit", "cr", "credit amount", "deposit amt"]);
-    const amtCol = colIdx(["amount", "amt"]);
-    const descCol = colIdx(["narration", "description", "particulars", "details", "remarks", "payee", "note", "transaction description"]);
-    const rows = [];
-    for (let i = 1; i < lines.length; i++) {
-      const cells = parseRow(lines[i]);
-      if (cells.length < 2) continue;
-      const rawDate = dateCol >= 0 ? cells[dateCol] : null;
-      if (!rawDate) continue;
-      const parsedDate = (() => { const d = new Date(rawDate); if (!Number.isNaN(d.getTime())) return localDateKey(d); const m = rawDate.match(/^(\d{2})[/-](\d{2})[/-](\d{2,4})$/); if (m) { const y = m[3].length === 2 ? "20" + m[3] : m[3]; return `${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`; } return null; })();
-      if (!parsedDate) continue;
-      const cleanAmt = v => parseFloat((v || "").replace(/[^0-9.]/g, "")) || 0;
-      const debit = debitCol >= 0 ? cleanAmt(cells[debitCol]) : 0;
-      const credit = creditCol >= 0 ? cleanAmt(cells[creditCol]) : 0;
-      const generic = amtCol >= 0 ? cleanAmt(cells[amtCol]) : 0;
-      const note = descCol >= 0 ? cells[descCol] : "";
-      if (debit > 0) rows.push({ date: parsedDate, amount: debit, note, type: "expense" });
-      else if (credit > 0) rows.push({ date: parsedDate, amount: credit, note, type: "income" });
-      else if (generic > 0) rows.push({ date: parsedDate, amount: generic, note, type: "expense" });
-    }
-    return rows;
   };
   const impCsv = (file) => { const r = new FileReader(); r.onerror = () => showT("Failed to read CSV file", "error"); r.onload = e => { const rows = parseBankCsv(e.target.result); if (rows.length === 0) { showT("No valid rows found — check CSV format", "error"); return; } sCsvPreview(rows); showT(`Parsed ${rows.length} rows — review and confirm import`, "info"); }; r.readAsText(file); };
   const confirmCsvImport = () => { if (!csvPreview?.length) return; let imported = 0; csvPreview.forEach(row => { const ok = row.type === "income" ? addI({ id: uid(), amount: row.amount, sourceId: "allowance", walletId: "bank", date: row.date, note: (row.note || "").slice(0, 500) }) : addE({ id: uid(), amount: row.amount, categoryId: "food", walletId: "bank", date: row.date, note: (row.note || "").slice(0, 500) }); if (ok !== false) imported++; }); sCsvPreview(null); showT(`Imported ${imported} transactions — recategorize as needed`, "success"); };
