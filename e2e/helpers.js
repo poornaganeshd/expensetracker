@@ -66,7 +66,12 @@ export function funded(bal = 100000) {
   return { walletStartBal: { bank: bal, cash: bal, upi_lite: 5000 } };
 }
 
-/** Build a minimal expense row that renders in TxCard (note is what tests assert on). */
+/**
+ * Build a minimal expense row that renders in TxCard. Default date is TODAY so
+ * the row matches the History tab's current-month filter (`fm` defaults to
+ * `localDateKey().slice(0, 7)`); a hard-coded past date would silently fail
+ * once the CI clock advances past it.
+ */
 export function makeExpense(overrides = {}) {
   return {
     id: "e2e-exp-" + Math.random().toString(36).slice(2),
@@ -75,7 +80,7 @@ export function makeExpense(overrides = {}) {
     categoryId: "food",
     walletId: "bank",
     note: "Test expense",
-    date: "2026-05-01",
+    date: new Date().toISOString().slice(0, 10),
     balBefore: 1000,
     ...overrides,
   };
