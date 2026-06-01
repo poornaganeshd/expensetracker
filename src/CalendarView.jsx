@@ -95,7 +95,7 @@ export default function CalendarView({
     cells.push(
       <div
         key={d}
-        onClick={() => sSel(ds)}
+        onClick={() => sSel(isSel && controlled ? null : ds)}
         style={{
           minHeight: 44,
           minWidth: 0,
