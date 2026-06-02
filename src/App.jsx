@@ -132,7 +132,14 @@ const ml = k => { const [y, m] = k.split("-"); return new Date(y, m - 1).toLocal
 const dl = d => { const t = localDateKey(), y = localDateKey(new Date(Date.now() - 864e5)); return d === t ? "Today" : d === y ? "Yesterday" : new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) };
 const ls = { fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 6, display: "block", fontFamily: "var(--font-h)", fontWeight: 600 };
 const is = { background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "11px 14px", color: "var(--text)", fontSize: 14, fontFamily: "var(--font-b)", outline: "none", width: "100%", boxSizing: "border-box" };
-const isFix = e => !!(e.recurring === true || (e.note && e.note.endsWith(" (recurring)")));
+const FIX_SUFFIX = " (recurring)";
+const isFix = e => !!(e.recurring === true || (e.note && e.note.endsWith(FIX_SUFFIX)));
+// Persist a "fixed cost" flag through the same note-suffix channel isFix reads.
+// (expenses have no dedicated `recurring` DB column, so the suffix is the
+// cross-device, migration-free marker.) markFixedNote tags a note; dispNote
+// strips the tag for display since the FIXED badge already conveys it.
+const markFixedNote = n => { const t = String(n || "").trim(); if (!t) return "Fixed expense" + FIX_SUFFIX; return t.endsWith(FIX_SUFFIX) ? t : t + FIX_SUFFIX; };
+const dispNote = n => String(n || "").replace(/ \(recurring\)$/, "");
 
 // True if a wallet (object) or wallet id imposes UPI Lite-style restrictions:
 // spend-only, ₹5000 daily / ₹1L monthly cap, max ₹5000 balance.
@@ -535,7 +542,7 @@ function VoiceAdd({ onParsed, accent = "#E07A5F", compact = false }) {
 
 function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, onAddExpense: oE, onAddIncome: oI, onAddTransfer: oT, onAddRec: oR, onError: showT = () => {}, patterns = [], autoRules = [], onLearnRule = () => {}, wallets: aw = WALLETS, cloudinaryEnabled = false }) {
   const _AD = (() => { try { return JSON.parse(sessionStorage.getItem("nomad-add-draft") || "{}"); } catch { return {}; } })();
-  const [type, sType] = useState(_AD.type || "expense"), [amt, sAmt] = useState(_AD.amt || "0"), [catId, sCat] = useState(_AD.catId || cats[0]?.id || ""), [srcId, sSrc] = useState(isrc[0]?.id || ""), [wid, sW] = useState(_AD.wid || "bank"), [iwid, sIW] = useState("bank"), [tFrom, sTF] = useState("bank"), [tTo, sTT] = useState("upi_lite"), [date, sDate] = useState(_AD.date || localDateKey()), [note, sNote] = useState(_AD.note || "");
+  const [type, sType] = useState(_AD.type || "expense"), [amt, sAmt] = useState(_AD.amt || "0"), [catId, sCat] = useState(_AD.catId || cats[0]?.id || ""), [srcId, sSrc] = useState(isrc[0]?.id || ""), [wid, sW] = useState(_AD.wid || "bank"), [iwid, sIW] = useState("bank"), [tFrom, sTF] = useState("bank"), [tTo, sTT] = useState("upi_lite"), [date, sDate] = useState(_AD.date || localDateKey()), [note, sNote] = useState(_AD.note || ""), [fixed, sFixed] = useState(false);
   const [rName, sRN] = useState(""), [rAmt, sRA] = useState(""), [rCat, sRC] = useState("rent"), [rWal, sRW] = useState("bank"), [rFreq, sRF] = useState("monthly"), [rDay, sRD] = useState(1), [rInt, sRI] = useState(30), [rStart, sRS] = useState(localDateKey()), [rOther, sRO] = useState(""), [rYM, sRYM] = useState(1), [rYD, sRYD] = useState(1);
   const [fxCur, setFxCur] = useState("INR"), [fxRate, setFxRate] = useState(null), [fxFetching, setFxFetching] = useState(false);
   const [fxExpanded, setFxExpanded] = useState(false), [fxSearch, setFxSearch] = useState("");
@@ -557,6 +564,21 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
     if (direct) return direct.id;
     const fuzzy = cats.find(c => c.name.toLowerCase().includes(h) || h.includes(c.name.toLowerCase()));
     return fuzzy?.id || catId || cats[0]?.id;
+  };
+  // Map a free-text payment-method hint from a receipt/UPI screenshot (e.g.
+  // "UPI Lite", "GPay", "Credit Card", "Cash") to one of the user's wallet ids.
+  // Returns null when nothing matches so the form keeps the current selection.
+  const matchWalletHint = (hint) => {
+    const h = String(hint || "").toLowerCase().trim();
+    if (!h) return null;
+    const direct = aw.find(w => w.name.toLowerCase() === h);
+    if (direct) return direct.id;
+    const fuzzy = aw.find(w => w.name.toLowerCase().includes(h) || h.includes(w.name.toLowerCase()));
+    if (fuzzy) return fuzzy.id;
+    if (/\blite\b/.test(h)) { const ul = aw.find(isUpiLite); if (ul) return ul.id; }
+    if (/cash/.test(h)) { const c = aw.find(w => /cash/i.test(w.name)); if (c) return c.id; }
+    if (/upi|gpay|phonepe|paytm|bank|card|credit|debit|account|net ?bank/.test(h)) { const b = aw.find(w => /bank/i.test(w.name)) || aw.find(w => !isUpiLite(w)); if (b) return b.id; }
+    return null;
   };
   const extractItems = async () => {
     if (itemsLoading) return;
@@ -625,8 +647,13 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
       // gracefully and that file is reported in the failures count.
       const allData = await receiptPickerRef.current.getAllItemsData();
       if (!allData.length) { showT("No readable receipts", "error"); return; }
+      // Send the user's real category + wallet names so the AI can pick from
+      // them (rather than inventing labels). Names aren't PII — the receipt
+      // image itself is already going to the provider.
+      const catNames = cats.map(c => c.name);
+      const walNames = aw.map(w => w.name);
       const results = await Promise.all(allData.map(data =>
-        fetch("/api/food-vision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, type: "receipt" }) })
+        fetch("/api/food-vision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, type: "receipt", categories: catNames, wallets: walNames }) })
           .then(r => r.json().then(d => ({ ok: r.ok, d })))
           .catch(err => ({ ok: false, d: { error: err?.message || "OCR failed" } }))
       ));
@@ -634,12 +661,16 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
       let merchant = "";
       let earliestDate = "";
       let lowestConf = "high";
+      let catHint = "";
+      let payHint = "";
       const failures = [];
       results.forEach((res, i) => {
         if (!res.ok) { failures.push(res.d?.error || `file ${i + 1}`); return; }
         const d = res.d;
         if (Number(d.amount) > 0) totalAmt += Number(d.amount);
         if (!merchant && d.merchant) merchant = d.merchant;
+        if (!catHint && d.category) catHint = d.category;
+        if (!payHint && d.paymentMethod) payHint = d.paymentMethod;
         if (d.date && /^\d{4}-\d{2}-\d{2}$/.test(d.date)) {
           if (!earliestDate || d.date < earliestDate) earliestDate = d.date;
         }
@@ -652,8 +683,12 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
       if (totalAmt > 0) sAmt(String(roundMoney(totalAmt)));
       if (merchant) sNote(merchant + (results.length > 1 ? ` (${results.length} receipts)` : ""));
       if (earliestDate) sDate(earliestDate);
+      let setCat = null, setWal = null;
+      if (catHint) { const cid = matchCatHint(catHint); if (cid) { sCat(cid); setCat = cats.find(c => c.id === cid)?.name || null; } }
+      if (payHint) { const wid2 = matchWalletHint(payHint); if (wid2) { sW(wid2); setWal = aw.find(w => w.id === wid2)?.name || null; } }
       const okCount = results.length - failures.length;
-      const baseMsg = `Scanned ${okCount}/${results.length} · ${merchant || "(no merchant)"} ${totalAmt > 0 ? "₹" + roundMoney(totalAmt) : ""} · ${lowestConf}`;
+      const extras = [setCat && `→ ${setCat}`, setWal && `· ${setWal}`].filter(Boolean).join(" ");
+      const baseMsg = `Scanned ${okCount}/${results.length} · ${merchant || "(no merchant)"} ${totalAmt > 0 ? "₹" + roundMoney(totalAmt) : ""}${extras ? " " + extras : ""} · ${lowestConf}`;
       showT(failures.length ? `${baseMsg} — ${failures.length} failed` : baseMsg, lowestConf === "low" || failures.length ? "info" : "success");
     } catch (e) {
       showT(e.message || "OCR error", "error");
@@ -663,7 +698,7 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
   };
   // Clear AI-bulk previews when switching transaction type — they're built
   // for the current type's wallet/category context and become stale otherwise.
-  useEffect(() => { sItemsPreview(null); }, [type]);
+  useEffect(() => { sItemsPreview(null); sFixed(false); }, [type]);
   useEffect(() => { const c = fxCur.trim().toUpperCase(); if (c.length !== 3 || c === "INR") { setFxRate(null); return; } setFxFetching(true); getExchangeRate(c).then(r => { setFxRate(r); setFxFetching(false); }).catch(() => { setFxRate(null); setFxFetching(false); }); }, [fxCur]);
   useEffect(() => { try { sessionStorage.setItem("nomad-add-draft", JSON.stringify({ type, amt, catId, wid, date, note })); } catch { /* ignore storage errors */ } }, [type, amt, catId, wid, date, note]);
   const tc = type === "expense" ? "#E07A5F" : type === "income" ? "#6BAA75" : type === "transfer" ? "#7B8CDE" : "#A78BFA";
@@ -701,7 +736,7 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
       if (type === "expense") {
         const txId = uid();
         if (isFX) saveCurrencyMeta(txId, fxCur, a, fxRate);
-        txOk = oE({ id: txId, amount: inrAmt, categoryId: catId, date, note, walletId: wid, ...(rUrl ? { receipt_url: rUrl } : {}) }) !== false;
+        txOk = oE({ id: txId, amount: inrAmt, categoryId: catId, date, note: fixed ? markFixedNote(note) : note, walletId: wid, recurring: fixed || undefined, ...(rUrl ? { receipt_url: rUrl } : {}) }) !== false;
       } else if (type === "income") {
         const txId = uid();
         if (isFX) saveCurrencyMeta(txId, fxCur, a, fxRate);
@@ -713,6 +748,7 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
       receiptPickerRef.current?.clear();
       sAmt("0");
       sNote("");
+      sFixed(false);
       try { sessionStorage.removeItem("nomad-add-draft"); } catch { /* ignore */ }
     } finally {
       setSubmitting(false);
@@ -811,6 +847,14 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
           {itemsPreview && (() => { const sum = roundMoney(itemsPreview.items.reduce((s, it) => s + (Number(it.amount) || 0), 0)); const total = roundMoney(itemsPreview.total || 0); const drift = roundMoney(sum - total); const driftBig = total > 0 && Math.abs(drift) > 5; return <div style={{ background: alpha(tc, 0.06), border: `1.5px solid ${alpha(tc, 0.4)}`, borderRadius: 14, padding: "10px 12px", marginBottom: 10 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}><div style={{ fontFamily: "var(--font-h)", fontSize: 11, fontWeight: 800, color: tc, letterSpacing: ".5px" }}>RECEIPT ITEMS · {itemsPreview.merchant || "(no merchant)"}</div><span style={{ fontSize: 9.5, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 700 }}>{itemsPreview.items.length} item{itemsPreview.items.length === 1 ? "" : "s"}</span></div><div style={{ maxHeight: 280, overflowY: "auto", paddingRight: 2 }}>{itemsPreview.items.map((it, i) => <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: i < itemsPreview.items.length - 1 ? "1px dashed var(--border)" : "none", fontSize: 11.5 }}><span style={{ flex: 2, minWidth: 0, fontFamily: "var(--font-h)", fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.name}</span><select value={it.categoryId || ""} onChange={e => updateItemCat(i, e.target.value)} title="Set category — AI's guess is just a starting point" style={{ flex: "0 1 auto", maxWidth: 120, padding: "3px 4px", borderRadius: 6, border: `1px solid ${alpha(tc, 0.35)}`, background: "var(--card)", color: "var(--text)", fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 10, outline: "none", cursor: "pointer" }}>{cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><span style={{ fontFamily: "var(--font-h)", fontWeight: 800, color: tc, flexShrink: 0, minWidth: 54, textAlign: "right" }}>{fmt(Number(it.amount) || 0)}</span></div>)}</div><div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, padding: "6px 8px", borderRadius: 8, background: driftBig ? alpha("#D4726A", 0.12) : alpha(tc, 0.06), border: driftBig ? "1px solid #D4726A40" : "none" }}><span style={{ fontSize: 10.5, fontFamily: "var(--font-h)", color: driftBig ? "#D4726A" : "var(--muted)", fontWeight: 700 }}>{driftBig ? `Items sum ${fmt(sum)} ≠ receipt ${fmt(total)} (Δ${drift > 0 ? "+" : ""}${fmt(drift)})` : total > 0 ? `Items sum ${fmt(sum)} ≈ ${fmt(total)}` : `Items sum ${fmt(sum)}`}</span></div><div style={{ display: "flex", gap: 6, marginTop: 8 }}><button onClick={confirmItemsImport} style={{ flex: 2, padding: "8px", border: "none", borderRadius: 9, background: tc, color: "#fff", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Add {itemsPreview.items.length} item{itemsPreview.items.length === 1 ? "" : "s"}</button><button onClick={() => sItemsPreview(null)} style={{ flex: 1, padding: "8px", border: "1.5px solid var(--border)", borderRadius: 9, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Cancel</button></div></div>; })()}
         </div>
 
+        {isExp && <button onClick={() => sFixed(f => !f)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "13px 15px", marginBottom: 14, borderRadius: 16, border: `1.5px solid ${fixed ? "#A78BFA" : "var(--border)"}`, background: fixed ? alpha("#A78BFA", 0.1) : "var(--card)", cursor: "pointer", textAlign: "left", boxShadow: "0 2px 10px rgba(0,0,0,0.04)" }}>
+          <div style={{ width: 40, height: 23, borderRadius: 12, background: fixed ? "#A78BFA" : "var(--border)", position: "relative", flexShrink: 0, transition: "background .15s" }}><div style={{ position: "absolute", top: 2.5, left: fixed ? 19.5 : 2.5, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }} /></div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 800, color: fixed ? "#A78BFA" : "var(--text)" }}>Mark as fixed cost</div>
+            <div style={{ fontFamily: "var(--font-b)", fontSize: 10.5, color: "var(--muted)", marginTop: 2, lineHeight: 1.35 }}>Regular/unavoidable spend (rent, bills, recharge). Counts under <strong>Fixed</strong> in your breakdown — no schedule needed.</div>
+          </div>
+        </button>}
+
         <button onClick={submit} disabled={submitting} style={{ width: "100%", padding: "15px", border: "none", borderRadius: 16, background: submitting ? alpha(tc, 0.6) : tc, color: "#fff", fontSize: 15, fontFamily: "var(--font-h)", fontWeight: 800, letterSpacing: ".3px", cursor: submitting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: `0 8px 22px ${alpha(tc, 0.4)}` }}>
           {submitting && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite" /></path></svg>}
           {!submitting && <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">{isInc ? <><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></> : <><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></>}</svg>}
@@ -846,7 +890,7 @@ const TxCard = memo(function TxCard({ item: it, categories: cats, incomeSources:
   if (isTr) return <div style={{ ...cc, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}><div style={{ width: 44, height: 44, borderRadius: 12, background: "#7B8CDE14", display: "flex", alignItems: "center", justifyContent: "center" }}><DI2 id="transfer" accent="#7B8CDE" size={22} /></div><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)" }}>Transfer</div><div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 2, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{fW?.name} → {tW?.name} · {dl(it.date)}</div></div><div style={{ fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 15, color: "#7B8CDE" }}>{fmt(it.amount)}</div><button onClick={() => od(it.id, it.type)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.35 }}>✕</button></div>;
   if (isS) { const sW = wl.find(x => x.id === it.walletId); const sCat = it.categoryId ? cats.find(c => c.id === it.categoryId) : null; const accent = it.direction === "owed" ? "#6BAA75" : "#E07A5F"; return <div style={{ ...cc, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}><div style={{ width: 44, height: 44, borderRadius: 12, background: (sCat?.color || accent) + "14", display: "flex", alignItems: "center", justifyContent: "center" }}>{sCat ? <DI2 id={sCat.id} accent={sCat.neon || sCat.color} size={22} /> : <DI2 id={it.direction === "owed" ? "received" : "paid"} accent={accent} size={22} />}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)" }}>{it.direction === "owed" ? `${it.splitName} paid back` : `Paid ${it.splitName}`}</span>{sCat && <span style={{ fontSize: 8, fontFamily: "var(--font-h)", fontWeight: 600, color: sCat.color, background: sCat.color + "15", padding: "1px 5px", borderRadius: 3 }}>{sCat.name.toUpperCase()}</span>}</div><div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 2, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{sW?.name} · {dl(it.date)}{it.note ? " · " + it.note : ""}</div></div><div style={{ fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 15, color: accent }}>{it.direction === "owed" ? "+" : "−"}{fmt(it.amount)}</div><button onClick={() => od(it.id, it.type)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.35 }}>✕</button></div> }
   if (isSpl) { const pal=["#E07A5F","#6BAA75","#7B8CDE","#F4A261","#81B29A","#A78BFA"]; let h=0; for(const c of(it.name||""))h=(h*31+c.charCodeAt(0))&0xffff; const aC=pal[h%pal.length],ini=(it.name||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(),owes=it.direction==="owe"; return <div style={{...cc,borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,marginBottom:10,opacity:it.settled?0.6:1}}><div style={{width:44,height:44,borderRadius:"50%",background:aC,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontFamily:"var(--font-h)",fontSize:14,fontWeight:700,color:"#fff"}}>{ini}</span></div><div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:"var(--text)",fontFamily:"var(--font-h)",display:"flex",alignItems:"center",gap:6}}>{it.name}{it.settled&&<span style={{fontSize:9,fontFamily:"var(--font-h)",fontWeight:600,color:"#6BAA75",background:"#6BAA7515",padding:"1px 5px",borderRadius:3}}>SETTLED</span>}</div><div style={{fontSize:12,color:"var(--muted)",fontFamily:"var(--font-b)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{owes?"You owe":"Owes you"}{it.note?" · "+it.note:""} · {dl(it.date)}</div></div><div style={{fontFamily:"var(--font-h)",fontWeight:600,fontSize:15,color:owes?"#E07A5F":"#6BAA75",flexShrink:0}}>{owes?"−":"+"}{fmt(it.amount)}</div><button onClick={()=>od(it.id,it.type)} style={{background:"none",border:"none",color:"var(--muted)",cursor:"pointer",fontSize:14,opacity:0.35,flexShrink:0}}>✕</button></div>; }
-  return <div style={{ ...cc, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}><div style={{ width: 44, height: 44, borderRadius: 12, background: (cat?.color || "#999") + "14", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{cat ? <DI2 id={cat.id} accent={cat.neon || cat.color} size={22} /> : <span style={{ fontSize: 22 }}>❓</span>}</div><div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}><div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)" }}>{cat?.name || "Unknown"}</span>{isE && <span style={{ fontSize: 7, fontFamily: "var(--font-h)", fontWeight: 600, color: isFix(it) ? "#A78BFA" : "#FBBF24", background: isFix(it) ? "#A78BFA15" : "#FBBF2415", padding: "1px 5px", borderRadius: 3 }}>{isFix(it) ? "FIXED" : "FLEX"}</span>}{w && <span style={{ fontSize: 9, fontFamily: "var(--font-h)", fontWeight: 600, color: w.color, background: w.color + "18", padding: "2px 6px", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 2 }}><DI2 id={w.id} accent={w.neon || w.color} size={10} /></span>}</div><div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evT && <span style={{ fontWeight: 600, color: "var(--ts)" }}>{evT} · </span>}{dl(it.date)}{it.note ? " · " + it.note : ""}</div>{fxMeta && <div style={{ fontSize: 10, color: "#7B8CDE", fontFamily: "var(--font-h)", fontWeight: 600, marginTop: 3, letterSpacing: "0.3px" }}>{fxMeta.currency} {fxMeta.originalAmount} @ {Number(fxMeta.rateUsed).toFixed(2)}</div>}
+  return <div style={{ ...cc, borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}><div style={{ width: 44, height: 44, borderRadius: 12, background: (cat?.color || "#999") + "14", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{cat ? <DI2 id={cat.id} accent={cat.neon || cat.color} size={22} /> : <span style={{ fontSize: 22 }}>❓</span>}</div><div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}><div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-h)" }}>{cat?.name || "Unknown"}</span>{isE && <span style={{ fontSize: 7, fontFamily: "var(--font-h)", fontWeight: 600, color: isFix(it) ? "#A78BFA" : "#FBBF24", background: isFix(it) ? "#A78BFA15" : "#FBBF2415", padding: "1px 5px", borderRadius: 3 }}>{isFix(it) ? "FIXED" : "FLEX"}</span>}{w && <span style={{ fontSize: 9, fontFamily: "var(--font-h)", fontWeight: 600, color: w.color, background: w.color + "18", padding: "2px 6px", borderRadius: 4, display: "inline-flex", alignItems: "center", gap: 2 }}><DI2 id={w.id} accent={w.neon || w.color} size={10} /></span>}</div><div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-b)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evT && <span style={{ fontWeight: 600, color: "var(--ts)" }}>{evT} · </span>}{dl(it.date)}{(() => { const dn = dispNote(it.note); return dn ? " · " + dn : ""; })()}</div>{fxMeta && <div style={{ fontSize: 10, color: "#7B8CDE", fontFamily: "var(--font-h)", fontWeight: 600, marginTop: 3, letterSpacing: "0.3px" }}>{fxMeta.currency} {fxMeta.originalAmount} @ {Number(fxMeta.rateUsed).toFixed(2)}</div>}
     {(isE || isI) && it.receipt_url && (() => { let urls; try { urls = JSON.parse(it.receipt_url); if (!Array.isArray(urls)) urls = [it.receipt_url]; } catch { urls = [it.receipt_url]; } return <div style={{ marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap" }}>{urls.map((u, i) => { const isPdf = typeof u === "string" && (u.startsWith("data:application/pdf") || u.toLowerCase().endsWith(".pdf")); return <a key={i} href={u} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#6BAA75", fontFamily: "var(--font-h)", fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3 }}>{isPdf ? <FilePdf size={12} /> : <Receipt size={12} />}{urls.length > 1 ? `${isPdf ? "PDF" : "Receipt"} ${i + 1}` : (isPdf ? "PDF" : "Receipt")}</a>; })}</div>; })()}</div><div style={{ fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 15, color: isE ? "#E07A5F" : "#6BAA75", flexShrink: 0 }}>{isE ? "−" : "+"}{fmt(it.amount)}</div>{isE && oRef && it.walletId !== "__tracked__" && <button onClick={() => oRef(it)} title="Refund this expense as income" style={{ background: "none", border: "none", color: "#6BAA75", cursor: "pointer", fontSize: 14, opacity: 0.5, flexShrink: 0, padding: "0 2px" }}>↩</button>}<button onClick={() => od(it.id, it.type)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 14, opacity: 0.35, flexShrink: 0 }}>✕</button></div>
 });
 
