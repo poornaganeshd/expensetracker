@@ -130,6 +130,18 @@ describe('computeFinanceScore — spread', () => {
     expect(breakdown.spread).toBeLessThan(20);
     expect(breakdown.spread).toBeGreaterThanOrEqual(0);
   });
+
+  it('returns a finite score when an expense has undefined amount', () => {
+    const { breakdown, score } = computeFinanceScore({
+      month: M,
+      expenses: [
+        { date: '2026-05-01', amount: undefined, categoryId: 'food' },
+        { date: '2026-05-02', amount: 500,       categoryId: 'transport' },
+      ],
+    });
+    expect(Number.isFinite(breakdown.spread)).toBe(true);
+    expect(Number.isFinite(score)).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
