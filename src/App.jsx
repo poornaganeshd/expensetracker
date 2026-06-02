@@ -824,7 +824,16 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
           <div style={{ ...microLabel("var(--muted)"), marginBottom: 11 }}>{isExp ? "Category" : "Source"}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>{catList.map(c => { const on = selCatId === c.id; return <button key={c.id} onClick={() => setSelCat(c.id)} style={{ padding: "8px 13px 8px 10px", borderRadius: 100, fontSize: 12.5, fontFamily: "var(--font-h)", border: `1.5px solid ${on ? c.color : "var(--border)"}`, background: on ? alpha(c.color, 0.13) : "var(--bg)", color: on ? c.color : "var(--ts)", cursor: "pointer", fontWeight: on ? 800 : 600, display: "flex", alignItems: "center", gap: 6 }}><DI2 id={c.id} accent={c.neon || c.color} size={15} />{c.name}</button>; })}</div>
 
-          {isExp && <button onClick={() => sFixed(f => !f)} title="Regular/unavoidable spend (rent, bills, recharge) — counts under Fixed in your breakdown" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "7px 12px", borderRadius: 100, fontSize: 12, fontFamily: "var(--font-h)", fontWeight: fixed ? 800 : 600, border: `1.5px solid ${fixed ? "#A78BFA" : "var(--border)"}`, background: fixed ? alpha("#A78BFA", 0.13) : "var(--bg)", color: fixed ? "#A78BFA" : "var(--muted)", cursor: "pointer" }}><Lightning size={13} weight={fixed ? "fill" : "regular"} />Fixed cost</button>}
+          {isExp && <button onClick={() => sFixed(f => !f)} aria-pressed={fixed} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 12, padding: "9px 12px", borderRadius: 12, border: `1.5px solid ${fixed ? alpha("#A78BFA", 0.5) : "var(--border)"}`, background: fixed ? alpha("#A78BFA", 0.07) : "var(--bg)", cursor: "pointer", textAlign: "left", transition: "background .15s, border-color .15s" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+              <Lightning size={16} weight={fixed ? "fill" : "regular"} color={fixed ? "#A78BFA" : "var(--muted)"} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: "var(--font-h)", fontSize: 12.5, fontWeight: 700, color: fixed ? "#A78BFA" : "var(--text)" }}>Fixed cost</div>
+                <div style={{ fontFamily: "var(--font-b)", fontSize: 10, color: "var(--muted)", lineHeight: 1.3, marginTop: 1 }}>Rent, bills, recharge — counts under Fixed</div>
+              </div>
+            </div>
+            <div style={{ width: 40, height: 23, borderRadius: 12, background: fixed ? "#A78BFA" : "var(--border)", position: "relative", flexShrink: 0, transition: "background .15s" }}><div style={{ position: "absolute", top: 2.5, left: fixed ? 19.5 : 2.5, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }} /></div>
+          </button>}
 
           <div style={{ height: 1, background: "var(--border)", margin: "16px -18px" }} />
 
