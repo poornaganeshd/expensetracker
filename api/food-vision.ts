@@ -60,13 +60,15 @@ Rules:
 
 const FOOD_USER_PROMPT = "Identify every visible food item in this photo. List each item separately with its count or portion size, then estimate combined nutrition for the visible Indian portions.";
 
-const RECEIPT_SYSTEM_PROMPT = `You are an OCR assistant that extracts structured data from receipt photos.
-Analyse the receipt and return ONLY valid JSON with no markdown fences or explanation:
+const RECEIPT_SYSTEM_PROMPT = `You are an OCR assistant that extracts structured data from receipt photos and payment screenshots (UPI / GPay / PhonePe / Paytm / card).
+Analyse the image and return ONLY valid JSON with no markdown fences or explanation:
 {
   "merchant":   "store or merchant name as printed",
   "amount":     420.50,
   "date":       "2026-05-22",
   "currency":   "INR",
+  "category":   "best-fit spending category",
+  "paymentMethod": "how it was paid if visible, else \\"\\"",
   "confidence": "high"
 }
 
@@ -74,11 +76,28 @@ Rules:
 - amount: total payable (after tax/discount). Strip currency symbols. Return as number.
 - date: ISO YYYY-MM-DD. If only DD/MM/YYYY or DD-MMM is visible, convert. If no date readable, return "".
 - currency: ISO 4217 code. Default "INR" if symbol is ₹ or Rs. Use "USD" for $, "EUR" for €, etc.
+- category: classify the purchase into ONE short spending category. If the user message lists candidate categories, you MUST pick the closest one verbatim from that list; otherwise use a generic label (Food, Groceries, Bills, Transport, Shopping, Health, Entertainment, Other).
+- paymentMethod: ONLY if the image clearly shows how it was paid (e.g. "UPI Lite", "UPI", "GPay", "PhonePe", "Card", "Cash", "Netbanking"). If the user message lists candidate wallets, prefer the closest one verbatim. If not visible, return "".
 - confidence: "high" if all fields are clearly legible, "medium" if amount is clear but other fields blurry, "low" if mostly unreadable.
 - If multiple totals appear, use the final grand total (after taxes).
 - Return exactly this JSON structure, nothing else.`;
 
-const RECEIPT_USER_PROMPT = "Extract merchant, total amount, date, and currency from this receipt.";
+const RECEIPT_USER_PROMPT = "Extract merchant, total amount, date, currency, the best-fit category, and the payment method (if shown) from this receipt or payment screenshot.";
+
+// Append the user's real category / wallet names so the model classifies into
+// the lists the app actually uses instead of inventing labels.
+function buildReceiptUserPrompt(categories?: unknown, wallets?: unknown): string {
+  const clean = (arr: unknown, cap: number) =>
+    Array.isArray(arr)
+      ? arr.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map(s => s.trim()).slice(0, cap)
+      : [];
+  const cats = clean(categories, 40);
+  const wals = clean(wallets, 12);
+  let p = RECEIPT_USER_PROMPT;
+  if (cats.length) p += `\nCandidate categories (pick the closest name verbatim): ${cats.join(", ")}.`;
+  if (wals.length) p += `\nCandidate wallets / payment methods (pick the closest name verbatim if visible): ${wals.join(", ")}.`;
+  return p;
+}
 
 const RECEIPT_ITEMS_SYSTEM_PROMPT = `You are an OCR assistant that extracts line items from a receipt photo.
 Return ONLY valid JSON with no markdown fences:
@@ -138,6 +157,8 @@ interface ReceiptResult {
   amount: number;
   date: string;
   currency: string;
+  category: string;
+  paymentMethod: string;
   confidence: "high" | "medium" | "low";
   provider?: string;
 }
@@ -240,10 +261,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = req.body ?? {};
-  const { imageBase64, mimeType = "image/jpeg", type = "food" } = body as {
+  const { imageBase64, mimeType = "image/jpeg", type = "food", categories, wallets } = body as {
     imageBase64?: string;
     mimeType?: string;
     type?: "food" | "receipt" | "receipt-items" | "ledger";
+    categories?: unknown;
+    wallets?: unknown;
   };
 
   if (!imageBase64 || typeof imageBase64 !== "string") {
@@ -270,7 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     type === "ledger"        ? LEDGER_SYSTEM_PROMPT        :
                                FOOD_SYSTEM_PROMPT;
   const userPrompt =
-    type === "receipt"       ? RECEIPT_USER_PROMPT       :
+    type === "receipt"       ? buildReceiptUserPrompt(categories, wallets) :
     type === "receipt-items" ? RECEIPT_ITEMS_USER_PROMPT :
     type === "ledger"        ? LEDGER_USER_PROMPT        :
                                FOOD_USER_PROMPT;
@@ -303,6 +326,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         amount:     Math.round(parsed.amount * 100) / 100,
         date:       parsed.date.trim(),
         currency:   (parsed.currency.trim().toUpperCase() || "INR"),
+        category:   typeof parsed.category === "string" ? parsed.category.trim() : "",
+        paymentMethod: typeof parsed.paymentMethod === "string" ? parsed.paymentMethod.trim() : "",
         confidence: parsed.confidence,
         provider,
       };
