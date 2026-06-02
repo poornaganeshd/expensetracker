@@ -405,7 +405,8 @@ Rules:
 - Only suggest reminders with ≥3 supporting data points.
 - Cap at 5.`,
     buildUser: (b) => {
-      const today = String(b.today || "");
+      const todayRaw = String(b.today || "");
+      const today = /^\d{4}-\d{2}-\d{2}$/.test(todayRaw) ? todayRaw : "";
       const dayName = today
         ? ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][new Date(`${today}T12:00:00`).getDay()]
         : "";
@@ -436,7 +437,10 @@ Rules:
 - message: 1-2 sentences, specific numbers.
 - actions: 1-3 items, each label ≤ 6 words.`,
     buildUser: (b) => {
-      const budgets   = b.budgets   as Record<string, number> | undefined;
+      const budgetsRaw = b.budgets;
+      const budgets = budgetsRaw && typeof budgetsRaw === "object" && !Array.isArray(budgetsRaw)
+        ? (budgetsRaw as Record<string, number>)
+        : undefined;
       const monthExp  = ((b.monthExpenses as Txn[]) || []).slice(0, 200);
       const dayOfMonth = Number(b.dayOfMonth || 1);
       const daysInMonth = Number(b.daysInMonth || 30);

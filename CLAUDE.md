@@ -29,7 +29,7 @@ npm run test:e2e       # Playwright (needs dev server; localhost:5173)
 
 ## Baselines (verify before/after edits; don't regress)
 
-- **Tests:** 350 pass / 0 fail, 17 files (`npm test`).
+- **Tests:** 351 pass / 0 fail, 17 files (`npm test`).
 - **Lint:** 0 errors / 14 warnings (`npm run lint`). Warnings are cosmetic react-compiler/`exhaustive-deps` noise on the monoliths — don't chase to zero. The react-compiler/react-refresh *error* rules are demoted to `warn` for `App.jsx`/`Routine.jsx`/`TrendChart.jsx` only (see `eslint.config.js`); they stay errors everywhere else, so CI gates lint strictly.
 - **Typecheck:** clean (`npm run typecheck` → `tsc --noEmit` on `api/`).
 - **Build:** succeeds (~1.16 MB bundle; the >500 kB chunk warning is expected).
@@ -93,7 +93,7 @@ First run shows `CredentialSetup.jsx`. Creds (Supabase URL + anon key, optional 
 | `currencyConverter.js` | INR FX rates, 24h-cached in localStorage |
 | `financeUtils.js` | pure money/date helpers (`roundMoney`, `localDateKey`, recurring due-date, `distributeAmount`, `historySortCompare`). **No side effects.** |
 | `financeScore.js`, `redactor.js`, `foodVision.js` | finance score; PII redaction before AI; client food-photo compress + call |
-| `txParsers.js` | pure parsing utilities: `parseAmount` (locale-aware — EU comma, US thousands, Indian lakhs), `parseVoiceTx` (spoken text → `{amount, walletId, categoryId, note}`), `parseBankCsv` (HDFC/ICICI/SBI/generic CSV → transaction array, max 300 rows) |
+| `txParsers.js` | pure parsing utilities: `parseAmount` (locale-aware — EU comma, US thousands, Indian lakhs), `parseVoiceTx` (spoken text → `{amount, walletId, categoryId, note}`), `parseBankCsv` (HDFC/ICICI/SBI/generic CSV → transaction array) |
 
 ### Offline-first write path
 All Supabase writes go through `sendSupabaseRequest` in `offlineSync.js`. Offline or 5xx → serialised into localStorage queue `nomad-sync-queue-v1`, replayed on reconnect/visibility. Dedup by `dedupeKey`; bodies merged on dedup. Per-item retry; after 3 fails → dead-letter `nomad-sync-failed-v1`. Drops surface via `subscribeSyncDrops` (wired to toasts) — route any new drop condition through it. In production, writes route through **`/api/sync`** proxy for server-side idempotency (`nomad_sync_keys` table); dev/test go direct.
@@ -133,7 +133,7 @@ Cron in `vercel.json` (only `send-reports`). Env: `VITE_SUPABASE_URL`/`SUPABASE_
 - **Group splits use `distributeAmount` (`grpShareMap`)**, not `total/n`, to avoid ₹0.01 residue. `addE` must include `paidBy` in its `COLS.expenses` write or group summaries break on reload.
 - **Tags were removed** — don't re-add (redundant with Events). SQL `tags` columns are dead but harmless.
 - **Routine date math** uses a noon anchor (`new Date(y, m, d, 12)`) to dodge DST off-by-one. Keep it when touching streak/calendar code.
-- **`txParsers.js` is the only source for amount/voice/CSV parsing.** `parseAmount` handles EU comma-decimal, US thousands, and Indian lakh formats. `parseBankCsv` handles HDFC/ICICI/SBI and generic CSV layouts with auto-detected column headers. Don't re-implement these inline in `App.jsx`.
+- **`txParsers.js` is the only source for amount/voice/CSV parsing.** `parseAmount` handles EU comma-decimal, US thousands, and Indian lakh formats. `parseBankCsv` handles HDFC/ICICI/SBI and generic CSV layouts with auto-detected column headers (no row-count cap). Don't re-implement these inline in `App.jsx`.
 - **`AIHub.jsx` calls only `/api/ai-analyze`** (not the older `ai-insights`/`ai-categorize`/`ai-chat` endpoints) for its 11 tools. The omnibus `ai-analyze.ts` is the preferred pattern for new AI features — add a mode there rather than a new file to stay under the Vercel Hobby function limit.
 - **`api/ai-analyze.ts` has a sanitize step** — after AI returns JSON, each mode's `sanitize()` function normalises enum values and resets out-of-list IDs to `null`. Always add sanitization when accepting AI output for a new mode; don't let raw AI strings reach the client.
 - **`balances.test.js` and `helpers.test.js` mirror inline logic in `App.jsx`** — they duplicate and test pure functions that live inside the monolith. If you extract or change `wBal` accumulation or `parseAmount`/`isUpiLite`, update these tests to match.

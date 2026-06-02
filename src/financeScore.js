@@ -79,7 +79,7 @@ function spreadScore(expenses) {
   const total = expenses.reduce((s, e) => s + (e.amount || 0), 0);
   if (total === 0) return 10;
   const byCat  = {};
-  expenses.forEach(e => { byCat[e.categoryId] = (byCat[e.categoryId] || 0) + e.amount; });
+  expenses.forEach(e => { byCat[e.categoryId] = (byCat[e.categoryId] || 0) + (e.amount || 0); });
   const maxAmt = Math.max(...Object.values(byCat));
   const mcp    = maxAmt / total;
   if (mcp <= 0.40) return 20;
