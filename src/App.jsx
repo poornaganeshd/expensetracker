@@ -582,7 +582,28 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
   };
   const extractItems = async () => {
     if (itemsLoading) return;
-    if (!receiptPickerRef.current?.hasAny) { showT("Add a receipt first", "error"); return; }
+    // No receipt attached → split the typed note into line items via text AI,
+    // distributing the entered amount across them. (Receipt-free fallback.)
+    if (!receiptPickerRef.current?.hasAny) {
+      const noteText = note.trim();
+      const total = (fxCur !== "INR" && fxRate > 0) ? roundMoney((parseFloat(amt) || 0) * fxRate) : (parseFloat(amt) || 0);
+      if (!noteText) { showT("Add a receipt, or type a note to split", "error"); return; }
+      if (!(total > 0)) { showT("Enter an amount to split", "error"); return; }
+      sItemsLoading(true); sItemsPreview(null);
+      try {
+        const r = await fetch("/api/ai-analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "note-items", note: noteText, total, currency: "INR", categories: cats.map(c => ({ id: c.id, name: c.name })) }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Split failed");
+        const items = (Array.isArray(d.items) ? d.items : []).filter(it => Number(it.amount) > 0);
+        if (!items.length) { showT("Couldn't split that note into items", "info"); return; }
+        sItemsPreview({ merchant: d.merchant || "", total, currency: "INR", items: items.map(it => ({ ...it, categoryId: matchCatHint(it.category) })), confidence: d.confidence || "medium" });
+      } catch (e) {
+        showT(e.message || "Split error", "error");
+      } finally {
+        sItemsLoading(false);
+      }
+      return;
+    }
     sItemsLoading(true); sItemsPreview(null);
     try {
       // Multi-file/PDF: scan every attached item, merge results.
@@ -832,7 +853,7 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
                 <div style={{ fontFamily: "var(--font-b)", fontSize: 10, color: "var(--muted)", lineHeight: 1.3, marginTop: 1 }}>Rent, bills, recharge — counts under Fixed</div>
               </div>
             </div>
-            <div style={{ width: 40, height: 23, borderRadius: 12, background: fixed ? "#A78BFA" : "var(--border)", position: "relative", flexShrink: 0, transition: "background .15s" }}><div style={{ position: "absolute", top: 2.5, left: fixed ? 19.5 : 2.5, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }} /></div>
+            <div style={{ width: 32, height: 18, borderRadius: 9, background: fixed ? "#A78BFA" : "var(--border)", position: "relative", flexShrink: 0, transition: "background .15s" }}><div style={{ position: "absolute", top: 2, left: fixed ? 16 : 2, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }} /></div>
           </button>}
 
           <div style={{ height: 1, background: "var(--border)", margin: "16px -18px" }} />
@@ -844,7 +865,7 @@ function AddPage({ categories: cats, incomeSources: isrc, recurringCats: rCats, 
           <div style={{ display: "flex", gap: 7, marginBottom: 7 }}>
             <input type="date" value={date} onChange={e => sDate(e.target.value)} style={{ ...is, flex: 1, minWidth: 0, padding: "0 12px", height: 44, fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 12.5 }} />
             {isExp && <button onClick={scanReceipt} disabled={ocrLoading} title="Scan receipt — auto-fill amount, merchant, date" style={{ flexShrink: 0, width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", cursor: ocrLoading ? "default" : "pointer", border: `1.5px solid ${alpha(tc, 0.5)}`, background: alpha(tc, 0.1), color: tc, opacity: ocrLoading ? 0.6 : 1 }}>{ocrLoading ? <span style={{ width: 15, height: 15, border: `2px solid ${alpha(tc, 0.35)}`, borderTopColor: tc, borderRadius: "50%", animation: "nmSpin .7s linear infinite", display: "inline-block" }} /> : <Receipt size={17} weight="regular" />}</button>}
-            {isExp && <button onClick={extractItems} disabled={itemsLoading} title="Split receipt into line items — adds one expense per item" style={{ flexShrink: 0, width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", cursor: itemsLoading ? "default" : "pointer", border: `1.5px solid ${alpha(tc, 0.5)}`, background: alpha(tc, 0.1), color: tc, opacity: itemsLoading ? 0.6 : 1 }}>{itemsLoading ? <span style={{ width: 15, height: 15, border: `2px solid ${alpha(tc, 0.35)}`, borderTopColor: tc, borderRadius: "50%", animation: "nmSpin .7s linear infinite", display: "inline-block" }} /> : <Robot size={17} weight="regular" />}</button>}
+            {isExp && <button onClick={extractItems} disabled={itemsLoading} title="Split into line items — from a receipt, or from your note + amount if none is attached" style={{ flexShrink: 0, width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", cursor: itemsLoading ? "default" : "pointer", border: `1.5px solid ${alpha(tc, 0.5)}`, background: alpha(tc, 0.1), color: tc, opacity: itemsLoading ? 0.6 : 1 }}>{itemsLoading ? <span style={{ width: 15, height: 15, border: `2px solid ${alpha(tc, 0.35)}`, borderTopColor: tc, borderRadius: "50%", animation: "nmSpin .7s linear infinite", display: "inline-block" }} /> : <Robot size={17} weight="regular" />}</button>}
           </div>
           <div style={{ marginBottom: 8 }}>
             <input value={note} onChange={e => { const v = e.target.value; sNote(v); sAiCatSug(null); if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current); if (type === "expense") { const kw = v.toLowerCase().trim(); const m = autoRules.find(r => kw.includes(r.keyword.toLowerCase())); if (m) { sCat(m.categoryId); } else if (v.trim().length >= 3) { aiDebounceRef.current = setTimeout(async () => { sAiCatLoading(true); try { const r = await fetch("/api/ai-categorize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note: v.trim(), categories: cats.map(c => ({ id: c.id, name: c.name })) }) }); const d = await r.json(); if (r.ok && d.categoryId) sAiCatSug({ ...d, keyword: extractKeyword(v) }); } catch { /* silent */ } finally { sAiCatLoading(false); } }, 800); } } }} placeholder="Add a note…" style={{ ...is, height: 44, padding: "0 12px" }} />
