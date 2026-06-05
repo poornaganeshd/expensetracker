@@ -16,6 +16,7 @@
  *   mood-correlation   Finance + mood logs → correlation insights
  *   tax                Txns → tax-deductible classification (India 80C etc.)
  *   split-cats         One expense → multi-category split suggestion
+ *   note-items         One note + total → individual line items (no receipt)
  *   smart-reminders    Schedule context → predictive nudges
  *   goal-coach         Budgets vs spend → coaching message
  *
@@ -37,6 +38,7 @@ type Mode =
   | "mood-correlation"
   | "tax"
   | "split-cats"
+  | "note-items"
   | "smart-reminders"
   | "goal-coach";
 
@@ -387,6 +389,39 @@ Categories: ${categories.map(c => `${c.id}=${c.name}`).join(", ")}
 Suggest a category split.`;
     },
     validate: (p) => Boolean(p && typeof p === "object" && Array.isArray((p as Record<string, unknown>).splits)),
+  },
+
+  "note-items": {
+    systemPrompt: `You break a single expense note into the individual line items it mentions (e.g. "lunch + dinner", "milk, bread, eggs", "uber and coffee"). This is the no-receipt fallback for a receipt line-item splitter.
+Return ONLY valid JSON:
+{
+  "merchant": "",
+  "items": [
+    { "name": "Lunch",  "amount": 47, "category": "Food & Drinks" },
+    { "name": "Dinner", "amount": 47, "category": "Food & Drinks" }
+  ]
+}
+
+Rules:
+- Split the note into the distinct things it mentions, one item each.
+- Distribute the given total across the items so the amounts sum to the total EXACTLY. If the note states no per-item prices, split as evenly as is sensible.
+- amount: a positive number only — no currency symbol.
+- category: choose the closest match from the provided category names for each item.
+- If the note clearly describes only one thing, return a single item with the full total.
+- Cap at 20 items.`,
+    buildUser: (b) => {
+      const note       = String(b.note || "");
+      const total      = Number(b.total) || 0;
+      const currency   = String(b.currency || "INR");
+      const categories = ((b.categories as Category[]) || []);
+      return `Note: ${note}
+Total: ${currency} ${total}
+
+Categories: ${categories.map(c => c.name).join(", ")}
+
+Split this note into line items.`;
+    },
+    validate: (p) => Boolean(p && typeof p === "object" && Array.isArray((p as Record<string, unknown>).items)),
   },
 
   "smart-reminders": {
