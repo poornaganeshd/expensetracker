@@ -1666,10 +1666,10 @@ export default function Nomad() {
   const mBal = roundMoney(Object.values(wBal).reduce((s, v) => s + v, 0));
   // Per-wallet verification state. NOMAD can't read your bank, so "verified"
   // means "you recently confirmed the real balance here and nothing has piled
-  // up since". A wallet goes stale after enough new activity (5 txns) OR time
-  // (7 days), and shows "drift" when your LAST reconcile found a non-zero gap
+  // up since". A wallet goes stale after enough new activity (3 txns) OR time
+  // (3 days), and shows "drift" when your LAST reconcile found a non-zero gap
   // (i.e. you'd been missing entries — patch the balance AND add what's missing).
-  const VFY_STALE_TX = 5, VFY_STALE_DAYS = 7, VFY_GAP_TOL = 1;
+  const VFY_STALE_TX = 3, VFY_STALE_DAYS = 3, VFY_GAP_TOL = 1;
   const walletVerify = useMemo(() => {
     const txTs = (tx) => { const t = tx.created_at || tx.createdAt || tx.updated_at; return t ? new Date(t).getTime() : (tx.date ? new Date(tx.date + "T23:59:59").getTime() : 0); };
     const out = {};
