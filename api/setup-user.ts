@@ -61,14 +61,6 @@ DO $$ BEGIN ALTER TABLE splits      ADD COLUMN IF NOT EXISTS "categoryId" TEXT; 
 DO $$ BEGIN ALTER TABLE settlements ADD COLUMN IF NOT EXISTS "categoryId" TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE settlements ADD COLUMN IF NOT EXISTS note         TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
-CREATE TABLE IF NOT EXISTS push_subscriptions (
-  endpoint   TEXT        PRIMARY KEY,
-  p256dh     TEXT        NOT NULL DEFAULT '',
-  auth       TEXT        NOT NULL DEFAULT '',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-ALTER TABLE push_subscriptions DISABLE ROW LEVEL SECURITY;
 `;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

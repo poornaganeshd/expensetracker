@@ -36,7 +36,6 @@ const SB_KEY = _creds.sbKey || import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const SB_ENABLED = Boolean(_creds.sbUrl && _creds.sbKey);
 const sbH = SB_ENABLED ? { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` } : {};
 const localMode = !_creds.sbUrl;
-const needsSetup = false;
 const FETCH_TIMEOUT_MS = 8000;
 const fetchWithTimeout = async (url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) => {
   const ctrl = new AbortController();
@@ -1236,7 +1235,7 @@ const cc = { background: "var(--card)", border: "1px solid var(--border)", borde
 
 export default function Nomad() {
   const [module, setModule] = useState("finance");
-  const [showSetup, setShowSetup] = useState(needsSetup);
+  const [showSetup, setShowSetup] = useState(false);
   const [backendOpen, sBackendOpen] = useState(false);
   const [reportOpen, sReportOpen] = useState(false);
   const [reportEmail, sReportEmail] = useState("");
@@ -1379,21 +1378,6 @@ export default function Nomad() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
 
-  // Surface server-pushed messages as toasts when app is active (SW forwards via postMessage)
-  useEffect(() => {
-    if (!navigator.serviceWorker) return;
-    const onMsg = (ev) => {
-      if (ev.data?.type !== "nomad-push" || !ev.data.payload?.title) return;
-      const tag = ev.data.payload.tag || "";
-      // Skip toasts for events the client already toasted locally (split/settle/budget/nolog).
-      // Only forward server-driven pushes (bill-* from cron).
-      const isLocalEcho = /^(split|splits|settle|budget|nolog)-/.test(tag);
-      if (isLocalEcho) return;
-      showT(`${ev.data.payload.title}${ev.data.payload.body ? " — " + ev.data.payload.body : ""}`, "info");
-    };
-    navigator.serviceWorker.addEventListener("message", onMsg);
-    return () => navigator.serviceWorker.removeEventListener("message", onMsg);
-  }, []);
 
   useEffect(() => subscribePendingSync(sPendingSync), []);
 
@@ -2225,7 +2209,7 @@ export default function Nomad() {
   };
   const impBackup = (file) => { const r = new FileReader(); r.onerror = () => showT("Failed to read backup file", "error"); r.onload = (e) => { try { const d = JSON.parse(e.target.result); if (!d._v || !d._v.startsWith("nomad")) { showT("Invalid backup file", "error"); return } const arrFields = ["expenses", "incomes", "transfers", "settlements", "splits", "recurring", "events", "categories", "incomeSources"]; for (const f of arrFields) { if (d[f] !== undefined && !Array.isArray(d[f])) { showT(`Backup corrupt: ${f}`, "error"); return; } } sEx(d.expenses || []); sInc(d.incomes || []); sTr(d.transfers || []); sStl(d.settlements || []); sSp(d.splits || []); sRec(d.recurring || []); sEvs(d.events || []); if (d.categories?.length) sCats(d.categories); if (d.incomeSources?.length) sIsrc(d.incomeSources); if (d.darkMode !== undefined) sDm(d.darkMode); if (d.walletStartBal && typeof d.walletStartBal === "object") sWsb(d.walletStartBal); if (d.wallets?.length) sWallets(d.wallets); if (Array.isArray(d.autoRules)) sAutoRules(d.autoRules); if (d.budgets && typeof d.budgets === "object") sBudgets(d.budgets); showT("Backup restored on this device", "success") } catch { showT("Failed to read file", "error") } }; r.readAsText(file) };
 
-  if (showSetup) return <CredentialSetup onDone={() => window.location.reload()} onCancel={needsSetup ? undefined : () => setShowSetup(false)} />;
+  if (showSetup) return <CredentialSetup onDone={() => window.location.reload()} onCancel={() => setShowSetup(false)} />;
   if (!loaded) return null;
   const theme = dm ? { "--bg": "#000000", "--card": "#0F0F0F", "--border": "#1F1F1F", "--text": "#E5E7EB", "--ts": "#9CA3AF", "--muted": "#6B7280", "--nav-bg": "rgba(0,0,0,0.95)" } : { "--bg": "#F2F0EB", "--card": "#FFF", "--border": "rgba(0,0,0,0.06)", "--text": "#1A1A2E", "--ts": "#4A4A5A", "--muted": "#8A8A9A", "--nav-bg": "rgba(242,240,235,0.92)" };
 

@@ -218,10 +218,6 @@ ALTER TABLE splits   ADD COLUMN IF NOT EXISTS skipped       BOOLEAN DEFAULT FALS
 ALTER TABLE events   ADD COLUMN IF NOT EXISTS type          TEXT DEFAULT 'solo';
 ALTER TABLE events   ADD COLUMN IF NOT EXISTS participants  JSONB DEFAULT '[]';
 
--- Tags (array of strings) on expenses and incomes
-ALTER TABLE expenses ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
-ALTER TABLE incomes  ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
-
 ALTER TABLE report_schedules    DISABLE ROW LEVEL SECURITY;
 ALTER TABLE report_delivery_log DISABLE ROW LEVEL SECURITY;
 
@@ -266,15 +262,6 @@ ALTER TABLE routine_daily_logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE routine_daily_logs REPLICA IDENTITY DEFAULT;
 
 -- ── 5. PUSH NOTIFICATIONS ─────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS push_subscriptions (
-  endpoint   TEXT        PRIMARY KEY,
-  p256dh     TEXT        NOT NULL DEFAULT '',
-  auth       TEXT        NOT NULL DEFAULT '',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-ALTER TABLE push_subscriptions DISABLE ROW LEVEL SECURITY;
 
 -- Per-slot push reminders. Cron checks each row daily.
 -- slot_id: free-form ("am_skincare", "water_2h", "pm_skincare", custom)
