@@ -175,13 +175,18 @@ export async function processSchedule(
   // current period; a 1-year rolling backup is more than enough for the rest.
   const backupCutoff = format(subDays(now, 365), "yyyy-MM-dd");
 
+  // Exclude soft-deleted rows (deleted_at IS NOT NULL). Without this, items the
+  // user deleted in-app still inflate report totals and get resurrected from the
+  // backup attachment on restore — the frontend filters them everywhere, so the
+  // email/backup must match. (deleted_at is added to all core tables by
+  // nomad_setup.sql, the same script that creates report_schedules.)
   const [expenses, incomes, transfers, allExpenses, allIncomes, allTransfers] = await Promise.all([
-    s.include_expenses  ? userGet(sbUrl, sbKey, `/expenses?date=gte.${pStart}&date=lte.${pEnd}${catFilter}&select=*`)  : [],
-    s.include_incomes   ? userGet(sbUrl, sbKey, `/incomes?date=gte.${pStart}&date=lte.${pEnd}&select=*`)               : [],
-    s.include_transfers ? userGet(sbUrl, sbKey, `/transfers?date=gte.${pStart}&date=lte.${pEnd}&select=*`)             : [],
-    userGet(sbUrl, sbKey, `/expenses?date=gte.${backupCutoff}&select=*&order=date.desc`),
-    userGet(sbUrl, sbKey, `/incomes?date=gte.${backupCutoff}&select=*&order=date.desc`),
-    userGet(sbUrl, sbKey, `/transfers?date=gte.${backupCutoff}&select=*&order=date.desc`),
+    s.include_expenses  ? userGet(sbUrl, sbKey, `/expenses?date=gte.${pStart}&date=lte.${pEnd}${catFilter}&deleted_at=is.null&select=*`)  : [],
+    s.include_incomes   ? userGet(sbUrl, sbKey, `/incomes?date=gte.${pStart}&date=lte.${pEnd}&deleted_at=is.null&select=*`)               : [],
+    s.include_transfers ? userGet(sbUrl, sbKey, `/transfers?date=gte.${pStart}&date=lte.${pEnd}&deleted_at=is.null&select=*`)             : [],
+    userGet(sbUrl, sbKey, `/expenses?date=gte.${backupCutoff}&deleted_at=is.null&select=*&order=date.desc`),
+    userGet(sbUrl, sbKey, `/incomes?date=gte.${backupCutoff}&deleted_at=is.null&select=*&order=date.desc`),
+    userGet(sbUrl, sbKey, `/transfers?date=gte.${backupCutoff}&deleted_at=is.null&select=*&order=date.desc`),
   ]) as [Expense[], Income[], Transfer[], Expense[], Income[], Transfer[]];
 
   const totalSpent     = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
