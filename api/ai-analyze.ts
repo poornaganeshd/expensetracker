@@ -16,6 +16,7 @@
  *   mood-correlation   Finance + mood logs → correlation insights
  *   tax                Txns → tax-deductible classification (India 80C etc.)
  *   split-cats         One expense → multi-category split suggestion
+ *   note-items         One note + total → individual line items (no receipt)
  *   smart-reminders    Schedule context → predictive nudges
  *   goal-coach         Budgets vs spend → coaching message
  *
@@ -37,6 +38,7 @@ type Mode =
   | "mood-correlation"
   | "tax"
   | "split-cats"
+  | "note-items"
   | "smart-reminders"
   | "goal-coach";
 
@@ -389,29 +391,67 @@ Suggest a category split.`;
     validate: (p) => Boolean(p && typeof p === "object" && Array.isArray((p as Record<string, unknown>).splits)),
   },
 
+  "note-items": {
+    systemPrompt: `You break a single expense note into the individual line items it mentions (e.g. "lunch + dinner", "milk, bread, eggs", "uber and coffee"). This is the no-receipt fallback for a receipt line-item splitter.
+Return ONLY valid JSON:
+{
+  "merchant": "",
+  "items": [
+    { "name": "Lunch",  "amount": 47, "category": "Food & Drinks" },
+    { "name": "Dinner", "amount": 47, "category": "Food & Drinks" }
+  ]
+}
+
+Rules:
+- Split the note into the distinct things it mentions, one item each.
+- Distribute the given total across the items so the amounts sum to the total EXACTLY. If the note states no per-item prices, split as evenly as is sensible.
+- amount: a positive number only — no currency symbol.
+- category: choose the closest match from the provided category names for each item.
+- If the note clearly describes only one thing, return a single item with the full total.
+- Cap at 20 items.`,
+    buildUser: (b) => {
+      const note       = String(b.note || "");
+      const total      = Number(b.total) || 0;
+      const currency   = String(b.currency || "INR");
+      const categories = ((b.categories as Category[]) || []);
+      return `Note: ${note}
+Total: ${currency} ${total}
+
+Categories: ${categories.map(c => c.name).join(", ")}
+
+Split this note into line items.`;
+    },
+    validate: (p) => Boolean(p && typeof p === "object" && Array.isArray((p as Record<string, unknown>).items)),
+  },
+
   "smart-reminders": {
     systemPrompt: `You generate predictive reminders based on a user's logging history.
 Return ONLY valid JSON:
 {
   "reminders": [
-    { "title": "Grocery run usually today", "detail": "You logged groceries on the last 4 Saturdays", "priority": "medium", "categoryId": "groceries" }
+    { "title": "Grocery run usually today", "detail": "You logged groceries on the last 4 Tuesdays, avg ₹184", "priority": "medium", "categoryId": "groceries" }
   ]
 }
 
 Rules:
 - priority: low | medium | high.
-- detail: include the supporting pattern (count, weekday, average amount).
+- detail: include the supporting pattern (count, weekday or day-of-month, average amount).
+- CRITICAL: Only include reminders that match TODAY's weekday or day-of-month. If today is Tuesday, only surface patterns that repeat on Tuesdays or on this date. Do NOT surface Saturday patterns on a Tuesday.
 - Only suggest reminders with ≥3 supporting data points.
 - Cap at 5.`,
     buildUser: (b) => {
-      const today = String(b.today || "");
+      const todayRaw = String(b.today || "");
+      const today = /^\d{4}-\d{2}-\d{2}$/.test(todayRaw) ? todayRaw : "";
+      const dayName = today
+        ? ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][new Date(`${today}T12:00:00`).getDay()]
+        : "";
       const expenses = ((b.expenses as Txn[]) || []).slice(0, 400);
-      return `Today: ${today}
+      return `Today: ${today}${dayName ? ` (${dayName})` : ""}
 
 Expenses (date, amount, category, note):
 ${expenses.map(e => `${e.date} ₹${e.amount} ${e.categoryId} ${e.note || ""}`).join("\n")}
 
-Generate smart reminders for today.`;
+Generate smart reminders relevant to ${dayName || "today"}.`;
     },
     validate: (p) => Boolean(p && typeof p === "object" && Array.isArray((p as Record<string, unknown>).reminders)),
   },
@@ -432,7 +472,10 @@ Rules:
 - message: 1-2 sentences, specific numbers.
 - actions: 1-3 items, each label ≤ 6 words.`,
     buildUser: (b) => {
-      const budgets   = b.budgets   as Record<string, number> | undefined;
+      const budgetsRaw = b.budgets;
+      const budgets = budgetsRaw && typeof budgetsRaw === "object" && !Array.isArray(budgetsRaw)
+        ? (budgetsRaw as Record<string, number>)
+        : undefined;
       const monthExp  = ((b.monthExpenses as Txn[]) || []).slice(0, 200);
       const dayOfMonth = Number(b.dayOfMonth || 1);
       const daysInMonth = Number(b.daysInMonth || 30);

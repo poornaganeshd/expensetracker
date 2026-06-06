@@ -46,7 +46,7 @@ async function attachAndExtract(page) {
   // (hasAny=true) before extracting — otherwise the click races React state and
   // extractItems bails with "Add a receipt first".
   await expect(page.getByAltText("receipt")).toBeVisible();
-  await page.getByTitle("Split receipt into line items — adds one expense per item").click();
+  await page.getByTitle("Split into line items — from a receipt, or from your note + amount if none is attached").click();
   // Wait on the editor rows themselves (the thing the tests act on), generous
   // timeout so heavy parallel-suite load (canvas compress + OCR round-trip)
   // can't flake the extract step.

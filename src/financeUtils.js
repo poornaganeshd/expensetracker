@@ -61,6 +61,11 @@ export const getRecurringDueDate = (record, todayString) => {
   if (record.frequency === 'custom') {
     const intervalDays = Number(record.intervalDays) || 0;
     if (intervalDays <= 0) return null;
+    // First occurrence (never paid or skipped) IS the start date, so an
+    // "every N days" bill is due on its start day and can be confirmed right
+    // after it's added. Once paid/skipped, the next due anchors on that action
+    // + interval.
+    if (!record.lastPaidDate && !record.lastSkippedDate) return isoDate(start);
     const anchor = dateOnly(getRecurringAnchorDate(record));
     if (Number.isNaN(anchor.getTime())) return null;
     const due = new Date(anchor);
@@ -76,6 +81,8 @@ export const isRecurringDueToday = (record, todayString) => {
   if (!dueDate || dueDate > todayString) return false;
   if (record.frequency === 'monthly') return !(record.lastPaidDate?.slice(0, 7) === dueDate.slice(0, 7) || record.lastSkippedDate?.slice(0, 7) === dueDate.slice(0, 7));
   if (record.frequency === 'yearly') return !(record.lastPaidDate?.slice(0, 4) === dueDate.slice(0, 4) || record.lastSkippedDate?.slice(0, 4) === dueDate.slice(0, 4));
+  // custom: the first occurrence (no payment/skip yet) is due/awaiting action.
+  if (!record.lastPaidDate && !record.lastSkippedDate) return true;
   return getRecurringAnchorDate(record) !== dueDate;
 };
 
