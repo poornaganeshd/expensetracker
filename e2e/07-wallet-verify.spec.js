@@ -13,21 +13,24 @@ async function openReconcile(page) {
   await expect(page.getByText("Reconcile Bank", { exact: false })).toBeVisible();
 }
 
-test("verify path: matching balance confirms in-sync without logging an adjustment", async ({ page }) => {
+test("verify path: matching balance logs a zero-gap verification (clears drift)", async ({ page }) => {
   await openReconcile(page);
 
-  // Drawer opens pre-filled with NOMAD's balance → gap 0 → Verify affordance.
-  await expect(page.getByText("Matches NOMAD balance", { exact: false })).toBeVisible();
+  // Drawer opens pre-filled with NOMAD's balance → gap 0 → "Verify" button.
   const verifyBtn = page.getByRole("button", { name: /Verify/ });
   await expect(verifyBtn).toBeVisible();
 
   await verifyBtn.click();
 
-  // Success toast, and — crucially — NO calibration entry written (a zero-gap
-  // log is what used to stamp the misleading ⚖ adjustment badge / "false view").
   await expect(page.getByText(/verified — balance in sync/)).toBeVisible();
-  const calLog = await page.evaluate(() => localStorage.getItem("nomad-cal-log"));
-  expect(calLog == null || JSON.parse(calLog).length === 0).toBe(true);
+  // A gap:0 entry IS the verification record — it is what flips the wallet
+  // badge from Drift/Verify to "Verified" (walletVerify reads cal-log).
+  await expect.poll(async () =>
+    page.evaluate(() => {
+      try { const l = JSON.parse(localStorage.getItem("nomad-cal-log") || "[]"); return l.length === 1 && l[0].gap === 0; }
+      catch { return false; }
+    })
+  ).toBe(true);
 });
 
 test("reconcile path: a different balance logs an adjustment", async ({ page }) => {
