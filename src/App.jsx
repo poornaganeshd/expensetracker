@@ -1477,10 +1477,15 @@ export default function Nomad() {
       try { await flushSyncQueue(); } catch { /* keep going on flush failure */ }
       // Background refresh — replace with authoritative Supabase data
       try {
-        const [dbEx, dbInc, dbTr, dbStl, dbSp, dbRec, dbWsb, dbEvs] = await Promise.all([
+        const [dbEx, dbInc, dbTr, dbStl, dbSp, dbRec, dbWsb, dbEvs, delEx, delInc, delTr, delSp, delRec, delEvs] = await Promise.all([
           sbGet("expenses"), sbGet("incomes"), sbGet("transfers"), sbGet("settlements"),
-          sbGet("splits"), sbGet("recurring"), sbGet("wallet_balances"), sbGet("events")
+          sbGet("splits"), sbGet("recurring"), sbGet("wallet_balances"), sbGet("events"),
+          // Tombstones — soft-deleted IDs so deletes made on other devices
+          // propagate here instead of being resurrected from the local backup.
+          sbGetDeleted("expenses"), sbGetDeleted("incomes"), sbGetDeleted("transfers"),
+          sbGetDeleted("splits"), sbGetDeleted("recurring"), sbGetDeleted("events"),
         ]);
+        const delIds = (rows) => new Set((rows || []).map(r => r.id).filter(id => id != null));
         const hadRemoteFailure = [dbEx, dbInc, dbTr, dbStl, dbSp, dbRec, dbWsb, dbEvs].some(x => x === null);
         if (hadRemoteFailure) return false;
         // First-time connect: migrate local data up to Supabase
@@ -1519,12 +1524,12 @@ export default function Nomad() {
         const localBackup = (() => { try { return JSON.parse(localStorage.getItem("nomad-v5") || "{}"); } catch { return {}; } })();
         const normalizedEvs = (dbEvs || []).map(e => ({ ...e, participants: Array.isArray(e?.participants) ? e.participants.filter(p => typeof p === "string") : [] }));
         const deps = { isPendingDelete, isPendingUpsert };
-        const exM  = mergeRemote({ table: "expenses",  remote: dbEx,           local: localBackup.expenses,   ...deps });
-        const incM = mergeRemote({ table: "incomes",   remote: dbInc,          local: localBackup.incomes,    ...deps });
-        const trM  = mergeRemote({ table: "transfers", remote: dbTr,           local: localBackup.transfers,  ...deps });
-        const spM  = mergeRemote({ table: "splits",    remote: dbSp,           local: localBackup.splits,     ...deps });
-        const recM = mergeRemote({ table: "recurring", remote: dbRec,          local: localBackup.recurring,  ...deps });
-        const evsM = mergeRemote({ table: "events",    remote: normalizedEvs,  local: localBackup.events,     ...deps });
+        const exM  = mergeRemote({ table: "expenses",  remote: dbEx,           local: localBackup.expenses,   ...deps, remoteDeletedIds: delIds(delEx) });
+        const incM = mergeRemote({ table: "incomes",   remote: dbInc,          local: localBackup.incomes,    ...deps, remoteDeletedIds: delIds(delInc) });
+        const trM  = mergeRemote({ table: "transfers", remote: dbTr,           local: localBackup.transfers,  ...deps, remoteDeletedIds: delIds(delTr) });
+        const spM  = mergeRemote({ table: "splits",    remote: dbSp,           local: localBackup.splits,     ...deps, remoteDeletedIds: delIds(delSp) });
+        const recM = mergeRemote({ table: "recurring", remote: dbRec,          local: localBackup.recurring,  ...deps, remoteDeletedIds: delIds(delRec) });
+        const evsM = mergeRemote({ table: "events",    remote: normalizedEvs,  local: localBackup.events,     ...deps, remoteDeletedIds: delIds(delEvs) });
         const stlM = mergeRemote({ table: "settlements", remote: dbStl,         local: localBackup.settlements, ...deps });
         sEx(exM.next);
         sInc(incM.next);
