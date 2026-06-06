@@ -168,6 +168,25 @@ const dropQueuedByDedupeKey = (dedupeKey) => {
 const USE_SYNC_PROXY =
   typeof import.meta !== "undefined" && import.meta.env?.PROD === true;
 
+// The server-side idempotency key (api/sync.ts) MUST be unique per logical
+// write — NOT the offline-queue `dedupeKey`. dedupeKey is deliberately reused
+// across writes to the same row (e.g. "wallet_balances:bank", "splits:<id>",
+// "routine:day:<date>") so the offline queue collapses duplicate edits. But the
+// /api/sync proxy treats whatever key it receives as "already applied, never
+// re-run". Sending the reused dedupeKey meant every 2nd+ recalibration / split
+// toggle / routine-day edit hit the proxy's idempotency cache and silently did
+// NOT apply to Supabase — looked synced locally, reverted on reload, never
+// reached other devices, lost when offline.
+//
+// `item.id` is set once at enqueue and preserved across flush retries, so it is
+// stable for a given write (retries of the SAME operation stay idempotent) yet
+// unique per distinct write (different values always apply). Keyless writes
+// (plain inserts, dedupeKey == null) keep no server idempotency — they carry a
+// client-generated row id and use merge-duplicates upserts, so a retried insert
+// is harmless.
+export const idempotencyKeyFor = (item) =>
+  item && item.dedupeKey ? `${item.dedupeKey}:${item.id}` : null;
+
 const performRequest = (item) => {
   const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS) : null;
@@ -178,7 +197,7 @@ const performRequest = (item) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          dedupeKey: item.dedupeKey ?? null,
+          dedupeKey: idempotencyKeyFor(item),
           method: item.method,
           path: item.path,
           body: item.body ?? null,

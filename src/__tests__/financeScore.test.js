@@ -282,3 +282,25 @@ describe('scoreLabel', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: spread sub-score must never poison the total to NaN when an
+// expense is missing its `amount` (corrupt/imported row). Previously byCat used
+// `e.amount` (no `|| 0` guard) so one undefined amount → maxAmt NaN → score NaN.
+// ---------------------------------------------------------------------------
+describe('computeFinanceScore — robustness against missing amounts', () => {
+  it('never returns NaN when an expense has no amount', () => {
+    const { score, breakdown } = computeFinanceScore({
+      month: M,
+      incomes:  [{ date: '2026-05-01', amount: 5000 }],
+      expenses: [
+        { date: '2026-05-02', amount: 1000, categoryId: 'food' },
+        { date: '2026-05-03', categoryId: 'transport' }, // no amount
+      ],
+    });
+    expect(Number.isFinite(score)).toBe(true);
+    expect(Number.isFinite(breakdown.spread)).toBe(true);
+    expect(score).toBeGreaterThanOrEqual(0);
+    expect(score).toBeLessThanOrEqual(100);
+  });
+});

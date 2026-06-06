@@ -542,3 +542,40 @@ describe('isPendingUpsert', () => {
     expect(isPendingUpsert('expenses', 'abc')).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// idempotencyKeyFor — regression guard for the cross-device sync bug where a
+// reused dedupeKey ("wallet_balances:bank", "splits:<id>", "routine:day:<date>")
+// made the /api/sync idempotency cache silently drop every 2nd+ write to the
+// same row. The key sent to the proxy MUST be unique per write (dedupeKey:id)
+// while retries of the SAME queued item stay stable.
+// ---------------------------------------------------------------------------
+describe('idempotencyKeyFor', () => {
+  beforeEach(() => { localStorage.clear(); vi.resetModules(); });
+
+  it('returns null for keyless (plain insert) writes', async () => {
+    const { idempotencyKeyFor } = await import('../offlineSync.js');
+    expect(idempotencyKeyFor({ id: 'abc', dedupeKey: null })).toBe(null);
+    expect(idempotencyKeyFor({ id: 'abc' })).toBe(null);
+    expect(idempotencyKeyFor(null)).toBe(null);
+  });
+
+  it('combines dedupeKey with the queue-item id', async () => {
+    const { idempotencyKeyFor } = await import('../offlineSync.js');
+    expect(idempotencyKeyFor({ id: 'X1', dedupeKey: 'wallet_balances:bank' }))
+      .toBe('wallet_balances:bank:X1');
+  });
+
+  it('is UNIQUE for two writes sharing a dedupeKey but different ids', async () => {
+    const { idempotencyKeyFor } = await import('../offlineSync.js');
+    const a = idempotencyKeyFor({ id: 'X1', dedupeKey: 'wallet_balances:bank' });
+    const b = idempotencyKeyFor({ id: 'X2', dedupeKey: 'wallet_balances:bank' });
+    expect(a).not.toBe(b); // different recalibrations must NOT collide → both apply
+  });
+
+  it('is STABLE for retries of the same queued item (stays idempotent)', async () => {
+    const { idempotencyKeyFor } = await import('../offlineSync.js');
+    const item = { id: 'X9', dedupeKey: 'splits:s1' };
+    expect(idempotencyKeyFor(item)).toBe(idempotencyKeyFor(item));
+  });
+});
