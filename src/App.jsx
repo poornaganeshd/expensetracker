@@ -3,7 +3,7 @@ import { FilmSlate, ForkKnife, Airplane, GameController, ShoppingCart, MusicNote
 import { IconCheck, IconTrash, IconHistory, IconChevronRight, IconChevronLeft, IconSend, IconAlertTriangle, IconX, IconClock, IconArrowDown, IconArrowUp, IconPlus, IconPlayerSkipForward } from "@tabler/icons-react";
 import { ComposedChart, Bar, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import RoutineApp from "./Routine";
-import { flushSyncQueue, getPendingSyncCount, getDeadLetterCount, clearDeadLetter, sendSupabaseRequest, subscribePendingSync, subscribeSyncDrops, isPendingDelete, isPendingUpsert } from "./offlineSync";
+import { flushSyncQueue, getPendingSyncCount, getDeadLetterCount, clearDeadLetter, sendSupabaseRequest, subscribePendingSync, subscribeSyncDrops, isPendingDelete, isPendingUpsert, hasPendingDedupeKey } from "./offlineSync";
 import { checkBillReminders } from "./billReminders";
 import { getExchangeRate, saveCurrencyMeta, getCurrencyMeta } from "./currencyConverter";
 import ReceiptPicker from "./ReceiptPicker";
@@ -11,12 +11,12 @@ import CredentialSetup from "./CredentialSetup";
 import { getCredentials } from "./credentials";
 import { uploadReceipt } from "./receiptUpload";
 import { COLS } from "./dbCols";
-import { mergeRemote, isRecentRow } from "./syncMerge";
+import { mergeRemote, isRecentRow, unionById } from "./syncMerge";
 import { computeFinanceScore, scoreLabel } from "./financeScore";
 import { redactTransactions } from "./redactor";
 import {
   roundMoney, localDateKey, getRecurringDueDate, isRecurringDueToday,
-  recurringDaysOverdue, distributeAmount, historySortCompare, itemTimestamp,
+  recurringDaysOverdue, distributeAmount, groupShareTotals, historySortCompare, itemTimestamp,
 } from "./financeUtils";
 import { parseAmount, parseVoiceTx, parseBankCsv } from "./txParsers";
 import CalendarView from "./CalendarView";
@@ -126,6 +126,12 @@ const sbGetDeleted = async (table) => {
 };
 const sbDeleteWhere = async (table, filter) => sbWrite(`${SB_URL}/rest/v1/${table}?${filter}`, { method: "DELETE", dedupeKey: `${table}:delete:${filter}` });
 const fmt = n => CUR + (Number(n) || 0).toLocaleString("en-IN"), mk = d => d.slice(0, 7);
+// Group expenses someone ELSE paid (logged for the event ledger only). They
+// carry walletId "__tracked__", never touch a wallet, and must be EXCLUDED
+// from personal-spend aggregations — YOUR share enters spending via the "owe"
+// settlement when you pay the payer back. Counting the tracked row (full
+// amount) AND the settlement double-counts money you never spent.
+const isTrackedExp = e => e?.walletId === "__tracked__";
 const ml = k => { const [y, m] = k.split("-"); return new Date(y, m - 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }) };
 const dl = d => { const t = localDateKey(), y = localDateKey(new Date(Date.now() - 864e5)); return d === t ? "Today" : d === y ? "Yesterday" : new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) };
 const ls = { fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 6, display: "block", fontFamily: "var(--font-h)", fontWeight: 600 };
@@ -1158,13 +1164,17 @@ function Events({ events: evs, expenses: ex, splits: sp, settlements: stl, categ
   const addSplit = () => { if (!sn.trim() || !sa || Number(sa) <= 0 || !sel) return; oS({ id: uid(), name: sn.trim(), amount: Number(sa), direction: sd, settled: false, eventId: sel.id, note: spNote }); sSN(""); sSA(""); sSPNote("") };
   const netSpent = (evId) => {
     const ev = evs.find(x => x.id === evId);
-    const e = ex.filter(x => x.eventId === evId).reduce((s, x) => s + x.amount, 0);
+    const eAmts = ex.filter(x => x.eventId === evId).map(x => x.amount);
+    const e = eAmts.reduce((s, x) => s + x, 0);
     const settleOut = stl.filter(x => x.eventId === evId && x.direction === "owe").reduce((s, x) => s + x.amount, 0);
     const settleIn = stl.filter(x => x.eventId === evId && x.direction === "owed").reduce((s, x) => s + x.amount, 0);
     if (ev?.type === "group") {
       const parts = (ev.participants || []).filter((v, i, arr) => v && v.trim() && arr.findIndex(x => x.toLowerCase() === v.toLowerCase()) === i);
       const n = 1 + parts.length;
-      if (n > 0) { const shares = distributeAmount(e, n); return Math.max(0, shares[0] || 0); }
+      // Per-expense distribution (groupShareTotals), NOT distributeAmount of the
+      // event total — must agree with the per-expense split records or the
+      // remainder paise drift apart across multiple entries.
+      if (n > 0) { const shares = groupShareTotals(eAmts, n); return Math.max(0, shares[0] || 0); }
     }
     return Math.max(0, e + settleOut - settleIn);
   };
@@ -1191,7 +1201,7 @@ function Events({ events: evs, expenses: ex, splits: sp, settlements: stl, categ
     const allParts = isGroup ? ["You", ...(sel.participants || []).filter((v, i, arr) => v && v.trim() && arr.findIndex(x => x.toLowerCase() === v.toLowerCase()) === i)] : [];
     const grpPaid = isGroup ? allParts.reduce((acc, p) => { const pl = p.toLowerCase(); acc[p] = eExps.filter(e => p === "You" ? (!e.paidBy || e.paidBy === "me") : (e.paidBy || "").toLowerCase() === pl).reduce((s, e) => s + e.amount, 0); return acc; }, {}) : {};
     const grpTotal = isGroup ? Object.values(grpPaid).reduce((s, v) => s + v, 0) : 0;
-    const _gShares = isGroup && allParts.length > 0 ? distributeAmount(grpTotal, allParts.length) : [];
+    const _gShares = isGroup && allParts.length > 0 ? groupShareTotals(eExps.map(e => e.amount), allParts.length) : [];
     const grpShareMap = Object.fromEntries(allParts.map((p, i) => [p, _gShares[i] || 0]));
     const grpShare = isGroup && allParts.length > 0 ? (grpShareMap["You"] ?? roundMoney(grpTotal / allParts.length)) : 0;
     const eStl = isGroup ? (stl || []).filter(s => s.eventId === sel.id) : [];
@@ -1560,13 +1570,23 @@ export default function Nomad() {
         const recM = mergeRemote({ table: "recurring", remote: dbRec,          local: localBackup.recurring,  ...deps, remoteDeletedIds: delIds(delRec) });
         const evsM = mergeRemote({ table: "events",    remote: normalizedEvs,  local: localBackup.events,     ...deps, remoteDeletedIds: delIds(delEvs) });
         const stlM = mergeRemote({ table: "settlements", remote: dbStl,         local: localBackup.settlements, ...deps });
-        sEx(exM.next);
-        sInc(incM.next);
-        sTr(trM.next);
-        sStl(stlM.next);
-        sSp(spM.next);
-        sRec(recM.next);
-        sEvs(evsM.next);
+        // Apply via FUNCTIONAL updates merged against the LIVE state unioned
+        // with the backup — never the backup alone. The Promise.all above can
+        // take seconds; anything the user logs in that window exists only in
+        // live state (its POST is in flight, so it's not in the offline queue,
+        // and the 800ms-debounced nomad-v5 write may not have fired). Setting
+        // exM.next directly would wipe those rows from state, and the next
+        // debounced backup would then persist the wiped state — entries
+        // silently vanish exactly when several are logged in quick succession.
+        const applyMerge = (setter, table, remote, backupRows, deletedIds) =>
+          setter(prev => mergeRemote({ table, remote, local: unionById(prev, backupRows), ...deps, remoteDeletedIds: deletedIds }).next);
+        applyMerge(sEx,  "expenses",   dbEx,          localBackup.expenses,    delIds(delEx));
+        applyMerge(sInc, "incomes",    dbInc,         localBackup.incomes,     delIds(delInc));
+        applyMerge(sTr,  "transfers",  dbTr,          localBackup.transfers,   delIds(delTr));
+        applyMerge(sStl, "settlements", dbStl,        localBackup.settlements, undefined);
+        applyMerge(sSp,  "splits",     dbSp,          localBackup.splits,      delIds(delSp));
+        applyMerge(sRec, "recurring",  dbRec,         localBackup.recurring,   delIds(delRec));
+        applyMerge(sEvs, "events",     normalizedEvs, localBackup.events,      delIds(delEvs));
         // Self-heal: rows in local but missing from BOTH remote and the
         // offline queue were almost certainly lost to a silently-rejected
         // upsert (4xx, dead-letter exhaustion, etc.). Re-queue them so they
@@ -1580,7 +1600,10 @@ export default function Nomad() {
         heal("recurring", COLS.recurring, recM.orphans);
         heal("events",    COLS.events,    evsM.orphans);
         heal("settlements", COLS.settlements, stlM.orphans);
-        if (dbWsb?.length) { const wb = {}; wallets.forEach(w => { wb[w.id] = 0; }); dbWsb.forEach(r => { wb[r.wallet_id] = r.balance; }); sWsb(wb); }
+        // Same race guard for wallet start balances: a recalibration whose
+        // wallet_balances upsert is still queued (offline / 5xx-retry) must not
+        // be reverted by the stale remote read — keep the local value for those.
+        if (dbWsb?.length) { sWsb(prev => { const wb = {}; wallets.forEach(w => { wb[w.id] = 0; }); dbWsb.forEach(r => { wb[r.wallet_id] = r.balance; }); Object.keys(prev || {}).forEach(wid => { if (hasPendingDedupeKey(`wallet_balances:${wid}`)) wb[wid] = prev[wid]; }); return wb; }); }
         try {
           const lp = JSON.parse(localStorage.getItem("nomad-v5") || "{}");
           if (lp.darkMode !== undefined) sDm(lp.darkMode);
@@ -1607,12 +1630,12 @@ export default function Nomad() {
   useEffect(() => { try { localStorage.setItem("nomad-auto-rules", JSON.stringify(autoRules)); } catch { /* quota */ } }, [autoRules]);
 
   const allM = useMemo(() => { const s = new Set(); ex.forEach(e => s.add(mk(e.date))); inc.forEach(i => s.add(mk(i.date))); return [...s].sort() }, [ex, inc]);
-  const quickPatterns = useMemo(() => { const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60); const cutStr = localDateKey(cutoff); const counts = {}; ex.filter(e => !e.deleted_at && (e.date || "") >= cutStr).forEach(e => { const k = `${e.amount}|${e.categoryId || ""}|${e.walletId || "upi_lite"}|${(e.note || "").slice(0, 30)}`; if (!counts[k]) counts[k] = { count: 0, amount: e.amount, categoryId: e.categoryId || "", walletId: e.walletId || "upi_lite", note: e.note || "" }; counts[k].count++; }); return Object.values(counts).filter(p => p.count >= 2).sort((a, b) => b.count - a.count).slice(0, 5); }, [ex]);
+  const quickPatterns = useMemo(() => { const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60); const cutStr = localDateKey(cutoff); const counts = {}; ex.filter(e => !e.deleted_at && !isTrackedExp(e) && (e.date || "") >= cutStr).forEach(e => { const k = `${e.amount}|${e.categoryId || ""}|${e.walletId || "upi_lite"}|${(e.note || "").slice(0, 30)}`; if (!counts[k]) counts[k] = { count: 0, amount: e.amount, categoryId: e.categoryId || "", walletId: e.walletId || "upi_lite", note: e.note || "" }; counts[k].count++; }); return Object.values(counts).filter(p => p.count >= 2).sort((a, b) => b.count - a.count).slice(0, 5); }, [ex]);
   const finStreak = useMemo(() => { const allDays = new Set([...ex, ...inc].map(t => String(t.date || "").slice(0, 10))); let s = 0; const d = new Date(); while (true) { const k = localDateKey(d); if (!allDays.has(k)) break; s++; d.setDate(d.getDate() - 1); } return s; }, [ex, inc]);
-  const finScore = useMemo(() => computeFinanceScore({ expenses: ex, incomes: inc, recurring: rec }), [ex, inc, rec]);
-  const subSuggestions = useMemo(() => { const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90); const cutStr = localDateKey(cutoff); const recNames = new Set(rec.map(r => r.name.toLowerCase().trim())); const groups = {}; ex.filter(e => !e.deleted_at && (e.date || "") >= cutStr).forEach(e => { const k = (e.note || "").toLowerCase().trim(); if (!k || k.length < 3) return; if (!groups[k]) groups[k] = []; groups[k].push(e); }); return Object.values(groups).filter(g => g.length >= 2).map(g => { const amounts = g.map(e => e.amount); const avgAmt = roundMoney(amounts.reduce((s, a) => s + a, 0) / amounts.length); const name = g[0].note || ""; if (recNames.has(name.toLowerCase().trim())) return null; return { name, categoryId: g[0].categoryId, walletId: g[0].walletId || "bank", count: g.length, avgAmt }; }).filter(Boolean).sort((a, b) => b.count - a.count).slice(0, 5); }, [ex, rec]);
+  const finScore = useMemo(() => computeFinanceScore({ expenses: ex.filter(e => !isTrackedExp(e)), incomes: inc, recurring: rec }), [ex, inc, rec]);
+  const subSuggestions = useMemo(() => { const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90); const cutStr = localDateKey(cutoff); const recNames = new Set(rec.map(r => r.name.toLowerCase().trim())); const groups = {}; ex.filter(e => !e.deleted_at && !isTrackedExp(e) && (e.date || "") >= cutStr).forEach(e => { const k = (e.note || "").toLowerCase().trim(); if (!k || k.length < 3) return; if (!groups[k]) groups[k] = []; groups[k].push(e); }); return Object.values(groups).filter(g => g.length >= 2).map(g => { const amounts = g.map(e => e.amount); const avgAmt = roundMoney(amounts.reduce((s, a) => s + a, 0) / amounts.length); const name = g[0].note || ""; if (recNames.has(name.toLowerCase().trim())) return null; return { name, categoryId: g[0].categoryId, walletId: g[0].walletId || "bank", count: g.length, avgAmt }; }).filter(Boolean).sort((a, b) => b.count - a.count).slice(0, 5); }, [ex, rec]);
   const flt = useMemo(() => fm === "all" ? { expenses: ex, incomes: inc, settlements: stl } : { expenses: ex.filter(e => mk(e.date) === fm), incomes: inc.filter(i => mk(i.date) === fm), settlements: stl.filter(s => mk(s.date) === fm) }, [ex, inc, stl, fm]);
-  const tI = flt.incomes.reduce((s, i) => s + i.amount, 0), tE = Math.max(0, flt.expenses.reduce((s, e) => s + e.amount, 0) + flt.settlements.filter(s => s.direction === "owe").reduce((s, x) => s + x.amount, 0) - flt.settlements.filter(s => s.direction === "owed").reduce((s, x) => s + x.amount, 0));
+  const tI = flt.incomes.reduce((s, i) => s + i.amount, 0), tE = Math.max(0, flt.expenses.filter(e => !isTrackedExp(e)).reduce((s, e) => s + e.amount, 0) + flt.settlements.filter(s => s.direction === "owe").reduce((s, x) => s + x.amount, 0) - flt.settlements.filter(s => s.direction === "owed").reduce((s, x) => s + x.amount, 0));
   const historyItems = useMemo(() => {
     const searching = hSearch.trim() !== "";
     let items = searching
@@ -1656,7 +1679,7 @@ export default function Nomad() {
     return map;
   }, [ex, inc, tr, stl, wsb, wallets, calLog]);
 
-  const budgetStatus = useMemo(() => { const cm = localDateKey().slice(0, 7); const splitCat = (id) => sp.find(x => x.id === id)?.categoryId; const mEx = ex.filter(e => mk(e.date) === cm); const mStl = (stl || []).filter(s => s.direction === "owe" && mk(s.date) === cm); return Object.entries(budgets).filter(entry => entry[1] > 0).map(([cid, lim]) => { const exSum = mEx.filter(e => e.categoryId === cid).reduce((s, e) => s + e.amount, 0); const stlSum = mStl.filter(s => (s.categoryId || splitCat(s.splitId)) === cid).reduce((s, x) => s + x.amount, 0); const spent = roundMoney(exSum + stlSum); const cat = cats.find(c => c.id === cid) || { id: cid, name: cid, color: "#999", neon: "#999" }; const pct = Math.min(100, Math.round(spent / lim * 100)); return { cid, cat, spent, lim, pct }; }); }, [budgets, ex, stl, sp, cats]);
+  const budgetStatus = useMemo(() => { const cm = localDateKey().slice(0, 7); const splitCat = (id) => sp.find(x => x.id === id)?.categoryId; const mEx = ex.filter(e => mk(e.date) === cm && !isTrackedExp(e)); const mStl = (stl || []).filter(s => s.direction === "owe" && mk(s.date) === cm); return Object.entries(budgets).filter(entry => entry[1] > 0).map(([cid, lim]) => { const exSum = mEx.filter(e => e.categoryId === cid).reduce((s, e) => s + e.amount, 0); const stlSum = mStl.filter(s => (s.categoryId || splitCat(s.splitId)) === cid).reduce((s, x) => s + x.amount, 0); const spent = roundMoney(exSum + stlSum); const cat = cats.find(c => c.id === cid) || { id: cid, name: cid, color: "#999", neon: "#999" }; const pct = Math.min(100, Math.round(spent / lim * 100)); return { cid, cat, spent, lim, pct }; }); }, [budgets, ex, stl, sp, cats]);
 
   // Settlements that the user PAID OUT count as real spending, categorized by
   // the linked split's categoryId (snapshot on the settlement, or fetched from
@@ -1675,7 +1698,7 @@ export default function Nomad() {
       __settlement: true,
     }));
   }, [stl, sp]);
-  const exAll = useMemo(() => [...ex, ...settlementsAsExpenses], [ex, settlementsAsExpenses]);
+  const exAll = useMemo(() => [...ex.filter(e => !isTrackedExp(e)), ...settlementsAsExpenses], [ex, settlementsAsExpenses]);
   const fltExAll = useMemo(() => fm === "all" ? exAll : exAll.filter(e => mk(e.date) === fm), [exAll, fm]);
 
   // Keep the first-seen map in sync with active splits: backfill new ids, prune
@@ -1849,7 +1872,7 @@ export default function Nomad() {
     sEx(p => [rec, ...p]);
     sbUpsert("expenses", [toSB(rec, COLS.expenses)]);
     dance();
-    if (budgets[data.categoryId] > 0) { const cm = localDateKey().slice(0, 7); const prev = ex.filter(e => e.categoryId === data.categoryId && mk(e.date) === cm).reduce((s, e) => s + e.amount, 0); const tot = prev + amt; const lim = budgets[data.categoryId]; const cn = cats.find(c => c.id === data.categoryId)?.name || data.categoryId; if (tot >= lim) showT(`${cn} budget exceeded! ${fmt(tot)} / ${fmt(lim)}`, "error"); else if (tot >= lim * 0.8) showT(`${cn} at ${Math.round(tot / lim * 100)}% of budget (${fmt(lim)})`, "info"); }
+    if (budgets[data.categoryId] > 0) { const cm = localDateKey().slice(0, 7); const prev = ex.filter(e => e.categoryId === data.categoryId && mk(e.date) === cm && !isTrackedExp(e)).reduce((s, e) => s + e.amount, 0); const tot = prev + amt; const lim = budgets[data.categoryId]; const cn = cats.find(c => c.id === data.categoryId)?.name || data.categoryId; if (tot >= lim) showT(`${cn} budget exceeded! ${fmt(tot)} / ${fmt(lim)}`, "error"); else if (tot >= lim * 0.8) showT(`${cn} at ${Math.round(tot / lim * 100)}% of budget (${fmt(lim)})`, "info"); }
     showT(online ? "Expense added" : "Expense saved offline", "success");
     return true;
   };
