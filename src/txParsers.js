@@ -19,9 +19,17 @@ export const parseAmount = (s) => {
 // wallets/categories let the caller resolve names to ids; everything is matched case-insensitively.
 export function parseVoiceTx(transcript, { wallets = [], categories = [] } = {}) {
   if (!transcript) return {};
-  const txt = String(transcript).toLowerCase().replace(/[,.!?]/g, " ").replace(/\s+/g, " ").trim();
-  const amtMatch = txt.match(/(?:rs\.?|rupees?|₹)?\s*(\d+(?:\.\d+)?)\s*(?:rs\.?|rupees?|₹|bucks?)?/);
-  const amount = amtMatch ? parseFloat(amtMatch[1]) : null;
+  const lower = String(transcript).toLowerCase();
+  // Capture the amount BEFORE stripping punctuation so thousands separators
+  // ("1,500") and decimals ("3.50") survive. The old code replaced "," and "."
+  // with spaces first, which truncated "1,500" → 1 and "3.50" → 3. The capture
+  // group keeps grouping/decimal chars; parseAmount normalises EU/US/Indian forms.
+  const amtMatch = lower.match(/(?:rs\.?|rupees?|₹)?\s*(\d[\d,]*(?:\.\d+)?)\s*(?:rs\.?|rupees?|₹|bucks?)?/);
+  const parsedAmt = amtMatch ? parseAmount(amtMatch[1]) : NaN;
+  const amount = Number.isFinite(parsedAmt) ? parsedAmt : null;
+  // Drop the matched amount span first, THEN normalise punctuation/whitespace for
+  // wallet/category/note matching.
+  const txt = (amtMatch ? lower.replace(amtMatch[0], " ") : lower).replace(/[,.!?]/g, " ").replace(/\s+/g, " ").trim();
   let wid = null;
   const walletAliases = { upi_lite: ["upi lite", "upi", "lite"], bank: ["bank", "account", "debit"], cash: ["cash"] };
   for (const w of wallets) {
@@ -32,9 +40,7 @@ export function parseVoiceTx(transcript, { wallets = [], categories = [] } = {})
   for (const c of categories) {
     if (txt.includes(c.name.toLowerCase())) { cid = c.id; break; }
   }
-  let note = txt;
-  if (amtMatch) note = note.replace(amtMatch[0], " ");
-  note = note.replace(/\b(rs|rupees?|bucks?|paid|spent|got|received|added)\b/g, " ");
+  let note = txt.replace(/\b(rs|rupees?|bucks?|paid|spent|got|received|added)\b/g, " ");
   if (wid) (walletAliases[wid] || []).forEach(a => { note = note.replace(new RegExp("\\b" + a + "\\b", "g"), " "); });
   note = note.replace(/\s+/g, " ").trim();
   return { amount, walletId: wid, categoryId: cid, note: note || null };
