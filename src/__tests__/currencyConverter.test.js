@@ -30,10 +30,10 @@ describe('getExchangeRate', () => {
     expect(rate).toBe(83.5);
   });
 
-  it('ignores cached rate older than 24h', async () => {
+  it('ignores a cached rate past its TTL', async () => {
     const cache = { USD: { rate: 83.5, fetchedAt: Date.now() - 25 * 60 * 60 * 1000 } };
     localStorage.setItem(RATE_CACHE_KEY, JSON.stringify(cache));
-    global.fetch = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ usd: { inr: 90 } }) });
+    global.fetch = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ rates: { INR: 90 } }) });
     const rate = await getExchangeRate('USD');
     expect(rate).toBe(90);
   });
@@ -42,7 +42,7 @@ describe('getExchangeRate', () => {
     const mockRate = 83.12;
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ usd: { inr: mockRate } }),
+      json: async () => ({ rates: { INR: mockRate } }),
     });
 
     const rate = await getExchangeRate('USD');
@@ -75,10 +75,10 @@ describe('getExchangeRate', () => {
     expect(rate).toBeNull();
   });
 
-  it('falls back to secondary CDN when primary fails', async () => {
+  it('falls through to the next source when the first fails', async () => {
     global.fetch = vi.fn()
       .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ gbp: { inr: 105 } }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ rates: { INR: 105 } }) });
     const rate = await getExchangeRate('GBP');
     expect(rate).toBe(105);
     expect(global.fetch).toHaveBeenCalledTimes(2);
@@ -94,7 +94,7 @@ describe('getExchangeRate', () => {
   it('does not hit the API on a second call for the same currency', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ usd: { inr: 83 } }),
+      json: async () => ({ rates: { INR: 83 } }),
     });
     await getExchangeRate('USD');
     await getExchangeRate('USD');
@@ -105,7 +105,7 @@ describe('getExchangeRate', () => {
     let resolveFetch;
     global.fetch = vi.fn().mockReturnValueOnce(
       new Promise(res => {
-        resolveFetch = () => res({ ok: true, json: async () => ({ eur: { inr: 90 } }) });
+        resolveFetch = () => res({ ok: true, json: async () => ({ rates: { INR: 90 } }) });
       })
     );
 
@@ -127,7 +127,7 @@ describe('getExchangeRate', () => {
   it('a call after in-flight resolves uses cache, not another fetch', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ jpy: { inr: 0.55 } }),
+      json: async () => ({ rates: { INR: 0.55 } }),
     });
 
     await getExchangeRate('JPY');         // fetches + caches
@@ -139,10 +139,11 @@ describe('getExchangeRate', () => {
 
   it('in-flight dedup cleans up on failure so retry is possible', async () => {
     global.fetch = vi.fn()
-      .mockRejectedValueOnce(new Error('network down')) // first call fails
-      .mockRejectedValueOnce(new Error('network down')) // fallback also fails
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ chf: { inr: 95 } }) }) // primary succeeds on retry
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ chf: { inr: 95 } }) }); // fallback (unused)
+      .mockRejectedValueOnce(new Error('network down')) // first call: every one of
+      .mockRejectedValueOnce(new Error('network down')) // the four sources fails
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ rates: { INR: 95 } }) }); // retry: primary succeeds
 
     const r1 = await getExchangeRate('CHF');  // fails → null, map entry removed
     expect(r1).toBeNull();

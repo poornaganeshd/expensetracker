@@ -1,18 +1,39 @@
 const RATE_CACHE_KEY = "nomad-fx-rates";
 const META_KEY = "nomad-currency-meta";
-// 12h (not 24h): @fawazahmed0/currency-api publishes once per day, so a 12h
-// TTL guarantees we pick up each day's update within half a day instead of
-// potentially showing a rate that's ~2 days stale (yesterday's number cached
-// for a full 24h).
-const RATE_TTL_MS = 12 * 60 * 60 * 1000;
+// 1h TTL: the primary source (fxratesapi) is real-time, so re-poll hourly to
+// reflect intraday moves while still cushioning rapid re-entry of the add form
+// with a cache. The daily fallbacks change at most once a day, so 1h never
+// misses an update from them either.
+const RATE_TTL_MS = 60 * 60 * 1000;
 
-// PRIMARY is the Cloudflare-hosted mirror, which serves the CURRENT day's rate.
-// jsdelivr's `@latest` npm tag is cached aggressively by its CDN and routinely
-// lags ~1 day behind, so it's the FALLBACK (used only when the primary is
-// unreachable) — querying it first was the root cause of "rates don't match
-// today's value". Both are official endpoints of the same dataset.
-const PRIMARY_CDN  = "https://latest.currency-api.pages.dev/v1/currencies";
-const FALLBACK_CDN = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies";
+// Rate sources, FRESHEST FIRST — tried in order until one returns a usable INR
+// rate, so a flaky/rate-limited primary degrades gracefully to the next:
+//   1. fxratesapi  — real-time mid-market (intraday, closest to Google), no key
+//   2. open.er-api — current-DAY rate, very reliable, no key
+//   3/4. fawazahmed0 mirrors — daily reference dataset, last-resort fallback
+// The earlier setup queried only the fawazahmed0 mirrors, which publish once a
+// day and lagged ~1 day behind ("yesterday's rate"). `parse(json, lower)` returns
+// { rate, date } or null; `date` is a YYYY-MM-DD stamp for the "as of" label.
+// NOTE: any new host here must ALSO be added to connect-src in vercel.json (CSP),
+// or the production build will block the request.
+const SOURCES = [
+  {
+    url: (lower, upper) => `https://api.fxratesapi.com/latest?base=${upper}&currencies=INR`,
+    parse: (d) => { const r = d?.rates?.INR; if (typeof r !== "number") return null; return { rate: r, date: d.timestamp ? new Date(d.timestamp * 1000).toISOString().slice(0, 10) : (d.date || null) }; },
+  },
+  {
+    url: (lower, upper) => `https://open.er-api.com/v6/latest/${upper}`,
+    parse: (d) => { const r = d?.rates?.INR; if (typeof r !== "number") return null; return { rate: r, date: d.time_last_update_unix ? new Date(d.time_last_update_unix * 1000).toISOString().slice(0, 10) : null }; },
+  },
+  {
+    url: (lower) => `https://latest.currency-api.pages.dev/v1/currencies/${lower}.json`,
+    parse: (d, lower) => { const r = d?.[lower]?.inr; return typeof r === "number" ? { rate: r, date: d?.date || null } : null; },
+  },
+  {
+    url: (lower) => `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${lower}.json`,
+    parse: (d, lower) => { const r = d?.[lower]?.inr; return typeof r === "number" ? { rate: r, date: d?.date || null } : null; },
+  },
+];
 
 function getCachedRate(currency) {
   try {
@@ -35,15 +56,19 @@ function saveRateCache(currency, rate, date) {
   } catch { /* quota or serialization failure — non-fatal */ }
 }
 
-// Returns { rate, date } on success (date is the dataset's publish date, e.g.
-// "2026-06-13"; may be undefined for mocked/minimal responses), or null on any
-// failure so the caller can fall through to the backup CDN.
-async function fetchRateFrom(baseUrl, lower) {
-  const res = await fetch(`${baseUrl}/${lower}.json`);
-  if (!res.ok) return null;
-  const data = await res.json();
-  const rate = data?.[lower]?.inr;
-  return typeof rate === "number" ? { rate, date: data?.date } : null;
+// Try each source in order; the first usable { rate, date } wins. Returns null
+// only if EVERY source fails (network error, non-OK response, or missing INR).
+async function fetchRate(lower, upper) {
+  for (const src of SOURCES) {
+    try {
+      const res = await fetch(src.url(lower, upper));
+      if (!res || !res.ok) continue;
+      const data = await res.json();
+      const parsed = src.parse(data, lower);
+      if (parsed && typeof parsed.rate === "number") return parsed;
+    } catch { /* network/parse failure — fall through to the next source */ }
+  }
+  return null;
 }
 
 const inFlight = new Map();
@@ -56,11 +81,7 @@ export async function getExchangeRate(fromCurrency) {
   if (inFlight.has(c)) return inFlight.get(c);
   const lower = c.toLowerCase();
   const promise = (async () => {
-    let result = null;
-    try { result = await fetchRateFrom(PRIMARY_CDN, lower); } catch { result = null; }
-    if (result === null) {
-      try { result = await fetchRateFrom(FALLBACK_CDN, lower); } catch { result = null; }
-    }
+    const result = await fetchRate(lower, c);
     inFlight.delete(c);
     if (result !== null) saveRateCache(c, result.rate, result.date);
     return result === null ? null : result.rate;
@@ -69,10 +90,10 @@ export async function getExchangeRate(fromCurrency) {
   return promise;
 }
 
-// Read-only accessor for the cached rate's publish date + freshness, so the UI
-// can show "rates as of <date>" and set the right expectation (this is a daily
-// reference feed, not a live market quote — it won't tick to match Google's
-// mid-market rate intraday). Returns null when nothing is cached yet.
+// Read-only accessor for the cached rate's source date + freshness, so the UI
+// can show "rate as of <date>". The primary source is real-time mid-market, but
+// it falls back to daily feeds when unavailable, so the date may be today (live)
+// or the last published day. Returns null when nothing is cached yet.
 export function getRateMeta(currency) {
   try {
     const c = String(currency || "").trim().toUpperCase();
