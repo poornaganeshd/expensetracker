@@ -80,6 +80,21 @@ describe("parseVoiceTx", () => {
     expect(parseVoiceTx("spent rs 250 cash", { wallets: WALLETS }).amount).toBe(250);
     expect(parseVoiceTx("₹99 cash", { wallets: WALLETS }).amount).toBe(99);
   });
+
+  it("keeps thousands separators in the amount (regression: '1,500' was parsed as 1)", () => {
+    const r = parseVoiceTx("paid 1,500 for dinner from bank", { wallets: WALLETS, categories: CATS });
+    expect(r.amount).toBe(1500);
+    expect(r.walletId).toBe("bank");
+    expect(r.note).toBe("for dinner from");
+  });
+
+  it("keeps decimals in the amount (regression: '3.50' was parsed as 3)", () => {
+    expect(parseVoiceTx("spent 3.50 cash", { wallets: WALLETS }).amount).toBe(3.5);
+  });
+
+  it("parses Indian-grouped amounts", () => {
+    expect(parseVoiceTx("got 1,23,456 bank", { wallets: WALLETS }).amount).toBe(123456);
+  });
 });
 
 // ---------------------------------------------------------------------------
