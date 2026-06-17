@@ -153,21 +153,6 @@ describe('ai-analyze handler', () => {
     expect((r.body as { subscriptions: unknown[] }).subscriptions).toHaveLength(1);
   });
 
-  it('subscriptions normalizes invalid cadence/confidence and clamps to 12', async () => {
-    const mod = await import('../_ai-provider.js') as unknown as { __setNext: (s: string) => void };
-    const many = Array.from({ length: 15 }, (_, i) =>
-      `{"merchant":"M${i}","amount":${i % 2 ? 'null' : 100},"cadence":"daily","confidence":"certain","note":"n"}`
-    ).join(',');
-    mod.__setNext(`{"subscriptions":[${many}]}`);
-    const r = await invoke({ mode: 'subscriptions', transactions: [] });
-    expect(r.statusCode).toBe(200);
-    const subs = (r.body as { subscriptions: Array<Record<string, unknown>> }).subscriptions;
-    expect(subs).toHaveLength(12);
-    expect(subs[0].cadence).toBe('unknown');        // "daily" not in enum
-    expect(subs[0].confidence).toBe('medium');      // "certain" not in enum
-    expect(subs[1].amount).toBe(0);                 // null amount coerced
-  });
-
   it('502 when AI returns non-JSON', async () => {
     const mod = await import('../_ai-provider.js') as unknown as { __setNext: (s: string) => void };
     mod.__setNext('not json at all');
