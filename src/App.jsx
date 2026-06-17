@@ -9,7 +9,7 @@ import { getExchangeRate, saveCurrencyMeta, getCurrencyMeta, getRateMeta } from 
 import { hapticForToast, hapticLight, hapticMedium, hapticSelection, hapticsEnabled, setHapticsEnabled } from "./haptics";
 import ReceiptPicker from "./ReceiptPicker";
 import CredentialSetup from "./CredentialSetup";
-import { getCredentials } from "./credentials";
+import { getCredentials, isLocalMode } from "./credentials";
 import { uploadReceipt } from "./receiptUpload";
 import { COLS } from "./dbCols";
 import { mergeRemote, isRecentRow, unionById } from "./syncMerge";
@@ -37,7 +37,7 @@ const SB_URL = _creds.sbUrl || import.meta.env.VITE_SUPABASE_URL || "";
 const SB_KEY = _creds.sbKey || import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const SB_ENABLED = Boolean(_creds.sbUrl && _creds.sbKey);
 const sbH = SB_ENABLED ? { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` } : {};
-const localMode = !_creds.sbUrl;
+const localMode = isLocalMode(_creds);
 const FETCH_TIMEOUT_MS = 8000;
 const fetchWithTimeout = async (url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) => {
   const ctrl = new AbortController();
