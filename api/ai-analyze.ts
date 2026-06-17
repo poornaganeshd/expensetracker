@@ -525,6 +525,23 @@ function sanitize(mode: Mode, parsed: Record<string, unknown>, body: Record<stri
       anomaly:  Boolean(parsed.anomaly),
     };
   }
+  if (mode === "subscriptions") {
+    const validCadence = new Set(["weekly", "monthly", "yearly", "unknown"]);
+    const validConf    = new Set(["high", "medium", "low"]);
+    const raw = Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [];
+    const subscriptions = raw
+      .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
+      .slice(0, 12)
+      .map((s) => ({
+        merchant:   String(s.merchant || "Unknown").slice(0, 60),
+        amount:     typeof s.amount === "number" ? s.amount : 0,
+        cadence:    validCadence.has(String(s.cadence)) ? s.cadence : "unknown",
+        lastDate:   typeof s.lastDate === "string" ? s.lastDate : null,
+        confidence: validConf.has(String(s.confidence)) ? s.confidence : "medium",
+        note:       String(s.note || "").slice(0, 200),
+      }));
+    return { ...parsed, subscriptions };
+  }
   if (mode === "tax") {
     const items = Array.isArray(parsed.items) ? parsed.items : [];
     const totalDeductible = typeof parsed.totalDeductible === "number"
