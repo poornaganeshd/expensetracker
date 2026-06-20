@@ -77,6 +77,31 @@ const writeQueue = (queue) => {
 
 export const getPendingSyncCount = () => readQueue().length;
 
+// Human-readable summary of what's waiting in the queue, so the sync banner can
+// say "Syncing 1 expense" instead of an opaque "Syncing 1 change". Derives the
+// noun from the REST path of each queued write.
+const SYNC_LABELS = [
+  ["/expenses", "expense"], ["/incomes", "income"], ["/transfers", "transfer"],
+  ["/settlements", "settlement"], ["/splits", "IOU"], ["/recurring", "bill"],
+  ["/events", "event"], ["/wallet_balances", "balance"], ["/user_prefs", "settings"],
+];
+export const getPendingSyncSummary = () => {
+  const q = readQueue();
+  if (!q.length) return { count: 0, label: "" };
+  const kinds = new Set();
+  for (const item of q) {
+    const path = item.path || "";
+    const match = SYNC_LABELS.find(([frag]) => path.includes(frag));
+    kinds.add(match ? match[1] : "change");
+  }
+  if (kinds.size === 1) {
+    const kind = [...kinds][0];
+    if (kind === "settings") return { count: q.length, label: "settings" }; // mass noun
+    return { count: q.length, label: q.length === 1 ? `1 ${kind}` : `${q.length} ${kind}s` };
+  }
+  return { count: q.length, label: q.length === 1 ? "1 change" : `${q.length} changes` };
+};
+
 const readDeadLetter = () => {
   if (!canUseStorage()) return [];
   return safeJsonParse(localStorage.getItem(DEAD_LETTER_KEY) || "[]", []);
