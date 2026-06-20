@@ -3,7 +3,7 @@ import { FilmSlate, ForkKnife, Airplane, GameController, ShoppingCart, MusicNote
 import { IconCheck, IconTrash, IconHistory, IconChevronRight, IconChevronLeft, IconSend, IconAlertTriangle, IconX, IconClock, IconArrowDown, IconArrowUp, IconPlus, IconPlayerSkipForward, IconPencil } from "@tabler/icons-react";
 import { ComposedChart, Bar, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from "recharts";
 import RoutineApp from "./Routine";
-import { flushSyncQueue, getPendingSyncCount, getDeadLetterCount, clearDeadLetter, sendSupabaseRequest, subscribePendingSync, subscribeSyncDrops, isPendingDelete, isPendingUpsert, hasPendingDedupeKey } from "./offlineSync";
+import { flushSyncQueue, getPendingSyncCount, getPendingSyncSummary, getDeadLetterCount, clearDeadLetter, sendSupabaseRequest, subscribePendingSync, subscribeSyncDrops, isPendingDelete, isPendingUpsert, hasPendingDedupeKey } from "./offlineSync";
 import { checkBillReminders } from "./billReminders";
 import { getExchangeRate, saveCurrencyMeta, getCurrencyMeta, getRateMeta } from "./currencyConverter";
 import { hapticForToast, hapticLight, hapticMedium, hapticSelection, hapticsEnabled, setHapticsEnabled } from "./haptics";
@@ -1419,13 +1419,22 @@ export default function Nomad() {
   // localStorage-only, never attempt writes so un-migrated users see no errors).
   const [prefsSync, sPrefsSync] = useState("unknown");
   const prefsSaveRef = useRef(null);
-  // Push categories / income sources to user_prefs (debounced) whenever they
-  // change. Gated on prefsSync==="on" so it's a no-op until the table is
-  // confirmed present. A single JSONB row keyed "nomad".
+  // Snapshot of the prefs blob we last loaded-from / pushed-to the server. The
+  // save effect pushes ONLY when the current blob differs from this — otherwise
+  // it would re-upload categories on EVERY load (prefsSync flips unknown→on each
+  // refresh), perpetually showing "Syncing 1 change" for a no-op. load() seeds
+  // this ref with the remote/seeded baseline so the on-load run is a no-op.
+  const lastPrefsRef = useRef(null);
+  // Push categories / income sources to user_prefs (debounced) ONLY when they
+  // actually changed. Gated on prefsSync==="on" so it's a no-op until the table
+  // is confirmed present. A single JSONB row keyed "nomad".
   useEffect(() => {
     if (!loaded || prefsSync !== "on" || !SB_ENABLED) return;
+    const blob = JSON.stringify({ categories: cats, incomeSources: isrc });
+    if (blob === lastPrefsRef.current) return; // nothing changed since last sync — don't re-queue
     if (prefsSaveRef.current) clearTimeout(prefsSaveRef.current);
     prefsSaveRef.current = setTimeout(() => {
+      lastPrefsRef.current = blob;
       sbUpsert("user_prefs", [{ key: "nomad", value: { categories: cats, incomeSources: isrc }, updated_at: new Date().toISOString() }], "user_prefs:nomad");
     }, 1200);
     return () => { if (prefsSaveRef.current) clearTimeout(prefsSaveRef.current); };
@@ -1720,6 +1729,9 @@ export default function Nomad() {
             // First connect with no prefs row yet: seed it from local setup so the
             // other devices can pull it.
             if (!pv) { const lp0 = (() => { try { return JSON.parse(localStorage.getItem("nomad-v5") || "{}"); } catch { return {}; } })(); sbUpsert("user_prefs", [{ key: "nomad", value: { categories: lp0.categories || cats, incomeSources: lp0.incomeSources || isrc }, updated_at: new Date().toISOString() }], "user_prefs:nomad"); }
+            // Baseline the save-effect guard to the synced blob so the post-load
+            // render doesn't re-push identical prefs (the phantom "Syncing 1 change").
+            { const wasPending = hasPendingDedupeKey("user_prefs:nomad"); const baseCats = (pv && !wasPending && Array.isArray(pv.categories) && pv.categories.length) ? pv.categories : cats; const baseSrc = (pv && !wasPending && Array.isArray(pv.incomeSources) && pv.incomeSources.length) ? pv.incomeSources : isrc; lastPrefsRef.current = JSON.stringify({ categories: baseCats, incomeSources: baseSrc }); }
           } else if (rp.status === 400 || rp.status === 404) {
             sPrefsSync("off");
           }
@@ -2675,7 +2687,7 @@ button{transition:transform 0.1s ease,opacity 0.15s ease}button:active{transform
 .card-hover:hover{box-shadow:0 4px 24px rgba(0,0,0,0.08);transform:translateY(-1px)}
 `}</style>
 
-    {(!online || pendingSync > 0) && <div style={{ position: "sticky", top: 0, zIndex: 120, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: online ? "#FFF3D6" : "#FDE7E4", border: `1px solid ${online ? "#F1C96B" : "#E7A39B"}`, color: online ? "#7A5600" : "#9F3E33", fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, letterSpacing: "0.01em", textAlign: "center" }}>{!online ? "Offline. Changes sync later." : `Syncing ${pendingSync} change${pendingSync === 1 ? "" : "s"}.`}</div>}
+    {(!online || pendingSync > 0) && <div style={{ position: "sticky", top: 0, zIndex: 120, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: online ? "#FFF3D6" : "#FDE7E4", border: `1px solid ${online ? "#F1C96B" : "#E7A39B"}`, color: online ? "#7A5600" : "#9F3E33", fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, letterSpacing: "0.01em", textAlign: "center" }}>{!online ? "Offline. Changes sync later." : `Saving ${getPendingSyncSummary().label || (pendingSync + " change" + (pendingSync === 1 ? "" : "s"))}…`}</div>}
     {localMode && localBanner && <div style={{ position: "sticky", top: 0, zIndex: 120, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: "#FFF3D6", border: "1px solid #F1C96B", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}><span style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, color: "#7A5600" }}>📦 Local-only mode. Add credentials for cloud sync + AI.</span><div style={{ display: "flex", gap: 6, flexShrink: 0 }}><button onClick={() => setShowSetup(true)} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 700, background: "#7C4A2A", border: "none", color: "#fff", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Setup</button><button onClick={() => sLocalBanner(false)} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, background: "none", border: "none", color: "#7A5600", cursor: "pointer", opacity: 0.6 }}>✕</button></div></div>}
     {staleData && <div style={{ position: "sticky", top: 0, zIndex: 120, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: "#EDE9FE", border: "1px solid #A78BFA50", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}><span style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, color: "#4C1D95" }}>Another tab updated data.</span><div style={{ display: "flex", gap: 6, flexShrink: 0 }}><button onClick={() => window.location.reload()} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 700, background: "#7C3AED", border: "none", color: "#fff", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Reload</button><button onClick={() => sStaleData(false)} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, background: "none", border: "none", color: "#4C1D95", cursor: "pointer", opacity: 0.6 }}>✕</button></div></div>}
     {swUpdate && <div style={{ position: "sticky", top: 0, zIndex: 121, margin: "0 12px 10px", padding: "8px 12px", borderRadius: 14, background: "#ECFDF5", border: "1px solid #6BAA7550", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}><span style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, color: "#065F46", display: "flex", alignItems: "center", gap: 6 }}><Confetti size={16} weight="fill" />App updated — reload to see changes.</span><div style={{ display: "flex", gap: 6, flexShrink: 0 }}><button onClick={() => window.location.reload()} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 700, background: "#6BAA75", border: "none", color: "#fff", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Reload</button><button onClick={() => sSwUpdate(false)} style={{ fontSize: 11, fontFamily: "var(--font-h)", fontWeight: 600, background: "none", border: "none", color: "#065F46", cursor: "pointer", opacity: 0.6 }}>✕</button></div></div>}

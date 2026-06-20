@@ -45,6 +45,38 @@ describe('getPendingSyncCount', () => {
   });
 });
 
+describe('getPendingSyncSummary', () => {
+  beforeEach(() => { localStorage.clear(); vi.resetModules(); });
+
+  it('returns empty label for an empty queue', async () => {
+    const { getPendingSyncSummary } = await import('../offlineSync.js');
+    expect(getPendingSyncSummary()).toEqual({ count: 0, label: '' });
+  });
+
+  it('names a single homogeneous kind, pluralizing by count', async () => {
+    const { getPendingSyncSummary } = await import('../offlineSync.js');
+    localStorage.setItem(QUEUE_KEY, JSON.stringify([makeItem()]));
+    expect(getPendingSyncSummary()).toEqual({ count: 1, label: '1 expense' });
+    localStorage.setItem(QUEUE_KEY, JSON.stringify([makeItem(), makeItem()]));
+    expect(getPendingSyncSummary()).toEqual({ count: 2, label: '2 expenses' });
+  });
+
+  it('treats settings (user_prefs) as a mass noun', async () => {
+    const { getPendingSyncSummary } = await import('../offlineSync.js');
+    localStorage.setItem(QUEUE_KEY, JSON.stringify([makeItem({ path: 'https://x.supabase.co/rest/v1/user_prefs' })]));
+    expect(getPendingSyncSummary().label).toBe('settings');
+  });
+
+  it('falls back to "changes" for a mixed queue', async () => {
+    const { getPendingSyncSummary } = await import('../offlineSync.js');
+    localStorage.setItem(QUEUE_KEY, JSON.stringify([
+      makeItem({ path: 'https://x.supabase.co/rest/v1/expenses' }),
+      makeItem({ path: 'https://x.supabase.co/rest/v1/incomes' }),
+    ]));
+    expect(getPendingSyncSummary()).toEqual({ count: 2, label: '2 changes' });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // subscribePendingSync
 // ---------------------------------------------------------------------------
