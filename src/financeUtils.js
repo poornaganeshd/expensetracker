@@ -124,6 +124,35 @@ export const groupShareTotals = (amounts, headCount) => {
   return totals;
 };
 
+// Per-person share map for a list of group expenses, honouring each expense's
+// optional `splitWith` breakdown — a { name -> share } object ("You" for the
+// logger, absent/0 = excluded from that expense). Expenses WITHOUT `splitWith`
+// fall back to an equal split across `allParts`, identical to groupShareTotals,
+// so legacy events reconcile unchanged. `allParts` is the canonical participant
+// list INCLUDING "You" (index 0), and its order decides who absorbs the
+// remainder paisa on equal splits — keep "You" first to match netSpent. Returns
+// { name -> roundMoney total }.
+export const expenseShareMap = (expenses, allParts) => {
+  const parts = (allParts || []).filter(Boolean);
+  const totals = Object.fromEntries(parts.map((p) => [p, 0]));
+  (expenses || []).forEach((e) => {
+    if (!e) return;
+    const sw = e.splitWith;
+    if (sw && typeof sw === "object") {
+      parts.forEach((p) => {
+        const v = Number(sw[p]);
+        if (Number.isFinite(v) && v > 0) totals[p] = roundMoney(totals[p] + v);
+      });
+    } else {
+      distributeAmount(e.amount, parts.length).forEach((share, i) => {
+        const p = parts[i];
+        if (p != null) totals[p] = roundMoney(totals[p] + share);
+      });
+    }
+  });
+  return totals;
+};
+
 // Stable, descending comparator for history rows.
 // Order: date desc → creation timestamp desc → id desc.
 //
@@ -166,72 +195,44 @@ export const historySortCompare = (a, b) => {
   return String(b?.id || "").localeCompare(String(a?.id || ""));
 };
 
-// "Net across everything" — aggregates every still-open IOU per counterparty
-// across BOTH personal splits (no eventId) and event splits, nets owe vs owed,
-// and counts the distinct "places" (contexts) a person appears in.
+// ---------------------------------------------------------------------------
+// Shared decision helpers — the "single source of truth" wall.
 //
-// Correctness guards — these ARE the feature:
-//   1. skipped splits never count (explicitly waived).
-//   2. settled splits never count, and amount is the REMAINING balance
-//      (original − settlements applied) so a fully-paid split contributes 0 and
-//      drops out — settlements actually cancel the debt here.
-//   3. a split inside a COMPLETED event never counts. Once an event is wrapped
-//      up its balances are closed; it must not keep nagging the global net.
-//      (This was the reported bug: settled/finished events still showed here.)
-export const netAcrossPeople = (splits = [], settlements = [], events = []) => {
-  const paidBySplit = {};
-  (settlements || []).forEach((s) => {
-    if (s && s.splitId != null) paidBySplit[s.splitId] = (paidBySplit[s.splitId] || 0) + (Number(s.amount) || 0);
-  });
-  const doneEvents = new Set((events || []).filter((e) => e && e.status === "completed").map((e) => e.id));
+// Each function below replaces logic that used to be inlined (and silently
+// drifted) in more than one place in App.jsx. They are pure and unit-tested, so
+// every call site stays in agreement and a regression shows up as a test
+// failure rather than a user-visible bug. Don't re-inline these.
+// ---------------------------------------------------------------------------
 
-  const byName = new Map();
-  (splits || []).forEach((sp) => {
-    if (!sp || sp.deleted_at || sp.skipped || sp.settled) return;          // guard 1 + 2
-    if (sp.eventId && doneEvents.has(sp.eventId)) return;                   // guard 3
-    const remaining = roundMoney((Number(sp.amount) || 0) - (paidBySplit[sp.id] || 0)); // guard 2
-    if (remaining <= 0.005) return;
-    const name = String(sp.name || "").trim();
-    if (!name) return;
-    let entry = byName.get(name);
-    if (!entry) { entry = { name, owe: 0, owed: 0, places: new Set() }; byName.set(name, entry); }
-    if (sp.direction === "owed") entry.owed = roundMoney(entry.owed + remaining);
-    else entry.owe = roundMoney(entry.owe + remaining);
-    entry.places.add(sp.eventId || "personal");
-  });
+// RBI cap: a UPI Lite wallet may never hold more than ₹5000.
+export const UPI_LITE_MAX_BALANCE = 5000;
 
-  const people = [...byName.values()]
-    .map((e) => ({ name: e.name, owe: e.owe, owed: e.owed, net: roundMoney(e.owed - e.owe), placeCount: e.places.size }))
-    .filter((e) => e.owe > 0.005 || e.owed > 0.005)
-    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || (b.owed + b.owe) - (a.owed + a.owe));
+// True when topping a UPI Lite wallet (current balance) up by `incoming` would
+// breach the ₹5000 ceiling. Used by every path that can credit UPI Lite
+// (calibration AND transfers — transfers used to skip the check entirely).
+export const exceedsUpiLiteBalance = (currentBalance, incoming = 0) =>
+  roundMoney((Number(currentBalance) || 0) + (Number(incoming) || 0)) > UPI_LITE_MAX_BALANCE;
 
-  const totalOwed = roundMoney(people.reduce((t, p) => t + Math.max(0, p.net), 0));
-  const totalOwe = roundMoney(people.reduce((t, p) => t + Math.max(0, -p.net), 0));
-  return { people, totalOwed, totalOwe };
+// Default wallet for a settle / record-payment action. direction "owed" means
+// YOU receive the money, and UPI Lite cannot receive — so it must never be the
+// default for a receive. (The modal used to default to UPI Lite and the save
+// then rejected it, so a no-tap confirm always errored.) `isUpiLiteFn` is the
+// app's isUpiLite predicate, passed in to keep this module React/wallet-free.
+export const defaultSettleWalletId = (direction, wallets, isUpiLiteFn) => {
+  const list = wallets || [];
+  const usable = direction === "owed" ? list.filter(w => !isUpiLiteFn(w)) : list;
+  return (usable[0] || list[0])?.id;
 };
 
-// Write-offs summary. `writeOffMap` is { splitId: "written" | "forgiven" } —
-// kept in its OWN localStorage key (nomad-writeoffs-v1), NOT on the synced split
-// row, so a background Supabase pull can never wipe the tag and it needs no DB
-// column. "written" = a debt owed TO YOU you gave up collecting; "forgiven" = a
-// debt YOU owed that the other side waived. Both are non-cash (no settlement, no
-// wallet movement) — purely a record of what fell off the books. Sums the
-// REMAINING balance (original − prior settlements). netLoss = written − forgiven.
-export const writeOffTotals = (splits = [], settlements = [], writeOffMap = {}) => {
-  const map = writeOffMap || {};
-  const paid = {};
-  (settlements || []).forEach((s) => {
-    if (s && s.splitId != null) paid[s.splitId] = (paid[s.splitId] || 0) + (Number(s.amount) || 0);
-  });
-  let written = 0, forgiven = 0;
-  (splits || []).forEach((s) => {
-    if (!s || s.deleted_at) return;
-    const kind = map[s.id];
-    if (!kind) return;
-    const rem = roundMoney((Number(s.amount) || 0) - (paid[s.id] || 0));
-    if (rem <= 0.005) return;
-    if (kind === "written") written = roundMoney(written + rem);
-    else if (kind === "forgiven") forgiven = roundMoney(forgiven + rem);
-  });
-  return { written, forgiven, netLoss: roundMoney(written - forgiven) };
+// Resolve a recurring bill's category to a display object. Recurring bills use
+// the recurring category lists (built-in defaults + the user's custom ones), NOT
+// the expense categories — looking them up against expense categories showed a
+// raw id like "ott"/"other_rec". Pass the lists in priority order. Single source
+// of truth for every place that renders a recurring category.
+export const resolveRecCategory = (categoryId, lists = [], categoryName) => {
+  for (const list of lists) {
+    const hit = (list || []).find(c => c && c.id === categoryId);
+    if (hit) return hit;
+  }
+  return { id: categoryId, name: categoryName || categoryId, color: "#8A8A9A", neon: "#A0A0B0" };
 };

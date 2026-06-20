@@ -10,97 +10,10 @@ import {
   recurringDaysOverdue,
   distributeAmount,
   groupShareTotals,
+  expenseShareMap,
   historySortCompare,
   itemTimestamp,
-  netAcrossPeople,
-  writeOffTotals,
 } from '../financeUtils.js';
-
-describe('writeOffTotals', () => {
-  it('sums written-off and forgiven separately and nets the loss', () => {
-    const splits = [
-      { id: 'a', amount: 53.31, direction: 'owed' },
-      { id: 'b', amount: 8.2, direction: 'owe' },
-      { id: 'c', amount: 999, direction: 'owe' }, // not in map → ignored
-    ];
-    const r = writeOffTotals(splits, [], { a: 'written', b: 'forgiven' });
-    expect(r.written).toBe(53.31);
-    expect(r.forgiven).toBe(8.2);
-    expect(r.netLoss).toBe(45.11);
-  });
-
-  it('counts only the remaining balance after prior settlements', () => {
-    const splits = [{ id: 'a', amount: 100, direction: 'owed' }];
-    const r = writeOffTotals(splits, [{ splitId: 'a', amount: 40 }], { a: 'written' });
-    expect(r.written).toBe(60); // 100 paid 40 → 60 written off
-  });
-
-  it('ignores fully-settled or untagged splits and bad input', () => {
-    expect(writeOffTotals([{ id: 'a', amount: 50 }], [{ splitId: 'a', amount: 50 }], { a: 'written' }).written).toBe(0);
-    expect(writeOffTotals().netLoss).toBe(0);
-    expect(writeOffTotals(null, null, null)).toEqual({ written: 0, forgiven: 0, netLoss: 0 });
-  });
-});
-
-describe('netAcrossPeople', () => {
-  it('nets owe vs owed per person across personal + event splits', () => {
-    const splits = [
-      { id: 's1', name: 'Rakesh', amount: 125, direction: 'owe' },                 // personal, you owe
-      { id: 's2', name: 'Rakesh', amount: 147, direction: 'owed', eventId: 'e1' }, // event, owes you
-    ];
-    const events = [{ id: 'e1', status: 'active' }];
-    const { people } = netAcrossPeople(splits, [], events);
-    expect(people).toHaveLength(1);
-    expect(people[0]).toMatchObject({ name: 'Rakesh', owe: 125, owed: 147, net: 22, placeCount: 2 });
-  });
-
-  it('excludes splits belonging to a COMPLETED event (the reported bug)', () => {
-    const splits = [
-      { id: 's1', name: 'Asha', amount: 200, direction: 'owed', eventId: 'done' },
-      { id: 's2', name: 'Asha', amount: 50, direction: 'owed' }, // personal, still open
-    ];
-    const events = [{ id: 'done', status: 'completed' }];
-    const { people } = netAcrossPeople(splits, [], events);
-    expect(people).toHaveLength(1);
-    expect(people[0].owed).toBe(50);       // the completed-event 200 is gone
-    expect(people[0].placeCount).toBe(1);
-  });
-
-  it('subtracts settlements and drops fully-settled splits', () => {
-    const splits = [{ id: 's1', name: 'Vik', amount: 300, direction: 'owed' }];
-    const settlements = [{ splitId: 's1', amount: 300 }];
-    expect(netAcrossPeople(splits, settlements, []).people).toHaveLength(0);
-
-    const partial = netAcrossPeople(splits, [{ splitId: 's1', amount: 100 }], []);
-    expect(partial.people[0].owed).toBe(200); // 300 - 100 remaining
-  });
-
-  it('ignores skipped and settled splits', () => {
-    const splits = [
-      { id: 's1', name: 'Mara', amount: 80, direction: 'owe', skipped: true },
-      { id: 's2', name: 'Mara', amount: 90, direction: 'owe', settled: true },
-      { id: 's3', name: 'Mara', amount: 40, direction: 'owe' },
-    ];
-    const { people } = netAcrossPeople(splits, [], []);
-    expect(people[0].owe).toBe(40);
-  });
-
-  it('rolls top-line totals from per-person nets', () => {
-    const splits = [
-      { id: 'a', name: 'P1', amount: 100, direction: 'owed' }, // they owe you 100
-      { id: 'b', name: 'P2', amount: 60, direction: 'owe' },   // you owe 60
-    ];
-    const { totalOwed, totalOwe } = netAcrossPeople(splits, [], []);
-    expect(totalOwed).toBe(100);
-    expect(totalOwe).toBe(60);
-  });
-
-  it('handles empty / malformed input safely', () => {
-    expect(netAcrossPeople().people).toEqual([]);
-    expect(netAcrossPeople(null, null, null).people).toEqual([]);
-    expect(netAcrossPeople([{ id: 'x', amount: 10, direction: 'owe' }], [], []).people).toEqual([]); // no name → skipped
-  });
-});
 
 // ---------------------------------------------------------------------------
 // roundMoney
@@ -456,6 +369,46 @@ describe('groupShareTotals', () => {
     expect(groupShareTotals([100], 0)).toEqual([]);
     expect(groupShareTotals(null, 2)).toEqual([0, 0]);
     expect(groupShareTotals([12.34, 5], 1)).toEqual([17.34]);
+  });
+});
+
+describe('expenseShareMap', () => {
+  const parts = ['You', 'Rahul', 'Priya'];
+
+  it('falls back to an equal split when an expense has no splitWith (legacy)', () => {
+    // Matches groupShareTotals: ₹100 among 3 → You gets the extra paisa.
+    expect(expenseShareMap([{ amount: 100 }], parts)).toEqual({ You: 33.34, Rahul: 33.33, Priya: 33.33 });
+  });
+
+  it('agrees with groupShareTotals for a series of equal-split expenses', () => {
+    const exps = [{ amount: 100 }, { amount: 100 }];
+    const totals = groupShareTotals([100, 100], 3);
+    expect(expenseShareMap(exps, parts)).toEqual({ You: totals[0], Rahul: totals[1], Priya: totals[2] });
+  });
+
+  it('honours an explicit unequal splitWith breakdown', () => {
+    const exps = [{ amount: 100, splitWith: { You: 50, Rahul: 30, Priya: 20 } }];
+    expect(expenseShareMap(exps, parts)).toEqual({ You: 50, Rahul: 30, Priya: 20 });
+  });
+
+  it('excludes people omitted from splitWith (subset split)', () => {
+    // Only You + Rahul share this one; Priya was excluded.
+    const exps = [{ amount: 80, splitWith: { You: 40, Rahul: 40 } }];
+    expect(expenseShareMap(exps, parts)).toEqual({ You: 40, Rahul: 40, Priya: 0 });
+  });
+
+  it('mixes legacy equal and explicit splitWith expenses', () => {
+    const exps = [
+      { amount: 90 },                                        // equal: 30 each
+      { amount: 100, splitWith: { You: 100 } },              // you covered it alone
+    ];
+    expect(expenseShareMap(exps, parts)).toEqual({ You: 130, Rahul: 30, Priya: 30 });
+  });
+
+  it('per-person shares sum to the grand total', () => {
+    const exps = [{ amount: 100, splitWith: { You: 33.34, Rahul: 33.33, Priya: 33.33 } }, { amount: 50, splitWith: { You: 25, Priya: 25 } }];
+    const totals = expenseShareMap(exps, parts);
+    expect(roundMoney(Object.values(totals).reduce((s, v) => s + v, 0))).toBe(150);
   });
 });
 
