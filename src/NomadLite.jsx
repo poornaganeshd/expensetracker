@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { IconChevronLeft, IconRefresh, IconPlus, IconX, IconTrash, IconCircleCheck, IconAlertTriangle, IconCopy, IconBrandWhatsapp, IconPrinter, IconHome, IconBolt, IconAirConditioning, IconDroplet, IconFlame, IconBulb, IconWind, IconWashMachine, IconFridge, IconDeviceTv, IconToolsKitchen2 } from "@tabler/icons-react";
 import { LS_KEY, DEFAULT_STATE, loadState, computeSplit, uid, avatarColor, groupColor, initials, fmt, pctFmt } from "./nomadLiteSplit";
 
 /*
@@ -12,7 +13,9 @@ import { LS_KEY, DEFAULT_STATE, loadState, computeSplit, uid, avatarColor, group
  *
  * Persistence is localStorage-only (key `nomad-lite-v1`) — Lite data is never
  * written to Supabase. It is a calculator, not synced finance state. Pure split
- * logic + helpers live in ./nomadLiteSplit.js.
+ * logic + helpers live in ./nomadLiteSplit.js — that module is UNCHANGED by this
+ * redesign; the per-group optional `icon` field added here just rides along on the
+ * group object (computeSplit spreads it through untouched).
  */
 
 // App-consistent accent palette (terracotta family) — intentional brand colours,
@@ -20,18 +23,37 @@ import { LS_KEY, DEFAULT_STATE, loadState, computeSplit, uid, avatarColor, group
 const ACCENT = "#E07A5F";
 const ACCENT_DEEP = "#C4603A";
 const AMBER = "#C9882B";
+const GREEN = "#1D9E75";
 
 // ── small style helpers ──
 const card = { background: "var(--card)", borderRadius: 18, padding: 16, marginBottom: 14, border: "1px solid var(--border)", boxShadow: "0 2px 10px rgba(44,36,22,0.05)" };
 const inputS = { width: "100%", background: "var(--bg)", border: "1.5px solid var(--border)", color: "var(--text)", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 15, padding: "11px 12px", borderRadius: 12, outline: "none", boxSizing: "border-box" };
 const labelS = { display: "block", fontSize: 12, fontWeight: 700, color: "var(--ts)", marginBottom: 6, fontFamily: "var(--font-h)" };
 const hintS = { fontSize: 11, color: "var(--muted)", marginTop: 6, fontWeight: 600, fontFamily: "var(--font-b)" };
-const sectionLabel = { fontSize: 11, fontWeight: 800, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--muted)", margin: "18px 0 10px", fontFamily: "var(--font-h)" };
 
-function Donut({ segments, total }) {
-  const size = 168, stroke = 24, r = (size - stroke) / 2, c = 2 * Math.PI * r;
+// ── appliance icons (optional, additive — auto-guessed from the group name) ──
+const APPLIANCE_ICONS = { bolt: IconBolt, ac: IconAirConditioning, water: IconDroplet, flame: IconFlame, bulb: IconBulb, fan: IconWind, wash: IconWashMachine, fridge: IconFridge, tv: IconDeviceTv, kitchen: IconToolsKitchen2 };
+const ICON_KEYS = Object.keys(APPLIANCE_ICONS);
+function guessIcon(name) {
+  const n = String(name || "").toLowerCase();
+  if (/\bac\b|air ?cond|cooler/.test(n)) return "ac";
+  if (/geyser|water|shower|heater/.test(n)) return "water";
+  if (/induction|stove|gas|cook|burner/.test(n)) return "flame";
+  if (/\bfan\b/.test(n)) return "fan";
+  if (/light|bulb|lamp|tube|\bled\b/.test(n)) return "bulb";
+  if (/wash|laundry|machine/.test(n)) return "wash";
+  if (/fridge|refriger|freezer/.test(n)) return "fridge";
+  if (/\btv\b|telly|television|screen/.test(n)) return "tv";
+  if (/kitchen|micro|oven|mixer|grinder/.test(n)) return "kitchen";
+  return "bolt";
+}
+const GroupIcon = ({ g, size = 18, color }) => { const I = APPLIANCE_ICONS[g.icon] || APPLIANCE_ICONS[guessIcon(g.name)] || IconBolt; return <I size={size} color={color} stroke={2} />; };
+
+// Allocation ring. `size`/`stroke` let the same component serve the hero (compact)
+// and any larger use. Center content is supplied by the caller via overlay.
+function Donut({ segments, total, size = 168, stroke = 24 }) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r;
   const segs = segments.filter(s => s.amount > 0.001);
-  // arc lengths + prefix offsets, computed without mutating render-scope state
   const lens = segs.map(s => (total > 0 ? s.amount / total : 0) * c);
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -45,21 +67,20 @@ function Donut({ segments, total }) {
   );
 }
 
-// ── The Current Split preset ──
+// ── The Current Split preset (redesigned: segmented live flow) ──
 function CurrentSplit({ onToast }) {
   const [st, setSt] = useState(loadState);
-  const [tab, setTab] = useState("calc"); // calc | setup
-  const [view, setView] = useState("cards"); // cards | table (results)
-  const [calc, setCalc] = useState(null); // { evenSplit:boolean } once a result is shown
+  const [seg, setSeg] = useState("bill");          // bill | people | extras | split
+  const [evenSplit, setEvenSplit] = useState(false);
+  const [view, setView] = useState("cards");       // cards | table (Split panel)
   const [editingPersonId, setEditingPersonId] = useState(null);
+  const [expandedGroup, setExpandedGroup] = useState(null);
+  const [iconPickGroup, setIconPickGroup] = useState(null);
   const [newPerson, setNewPerson] = useState("");
-  const [newGroupName, setNewGroupName] = useState("");
-  const [newGroupPct, setNewGroupPct] = useState("");
+  const [addingPerson, setAddingPerson] = useState(false);
 
   // persist
-  useEffect(() => {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(st)); } catch { /* quota */ }
-  }, [st]);
+  useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(st)); } catch { /* quota */ } }, [st]);
 
   const set = (patch) => setSt(s => ({ ...s, ...(typeof patch === "function" ? patch(s) : patch) }));
 
@@ -73,248 +94,267 @@ function CurrentSplit({ onToast }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [st.baseRate, st.baseMembers, st.people, st.baseTouched]);
 
-  const result = useMemo(() => (calc ? computeSplit(st, { evenSplit: calc.evenSplit }) : null), [calc, st]);
+  // results are always live now (no Calculate gate)
+  const result = useMemo(() => computeSplit(st, { evenSplit }), [st, evenSplit]);
 
   // people ops
-  const addPerson = (name) => {
-    name = name.trim();
-    if (!name) return;
-    const p = { id: uid("P"), name };
-    set(s => ({ people: [...s.people, p], baseMembers: [...s.baseMembers, p.id] }));
-  };
-  const removePerson = (id) => set(s => ({
-    people: s.people.filter(p => p.id !== id),
-    baseMembers: s.baseMembers.filter(x => x !== id),
-    groups: s.groups.map(g => ({ ...g, members: g.members.filter(x => x !== id) })),
-  }));
+  const addPerson = (name) => { name = name.trim(); if (!name) return; const p = { id: uid("P"), name }; set(s => ({ people: [...s.people, p], baseMembers: [...s.baseMembers, p.id] })); };
+  const removePerson = (id) => set(s => ({ people: s.people.filter(p => p.id !== id), baseMembers: s.baseMembers.filter(x => x !== id), groups: s.groups.map(g => ({ ...g, members: g.members.filter(x => x !== id) })) }));
   const renamePerson = (id, name) => set(s => ({ people: s.people.map(p => p.id === id ? { ...p, name: name.trim() || p.name } : p) }));
   const toggleBase = (id) => set(s => ({ baseMembers: s.baseMembers.includes(id) ? s.baseMembers.filter(x => x !== id) : [...s.baseMembers, id] }));
 
-  // group ops
-  const addGroup = (name, pct) => {
-    name = name.trim();
-    if (!name) return;
-    set(s => ({ groups: [...s.groups, { id: uid("G"), name, pct: Math.max(0, Math.min(100, Number(pct) || 0)), members: [], note: "" }] }));
-  };
+  // group ops (icon defaults to an auto-guess from the name; user can re-pick)
+  const addGroup = () => set(s => ({ groups: [...s.groups, { id: uid("G"), name: "New appliance", pct: 0, members: [], note: "", icon: "" }] }));
   const removeGroup = (id) => set(s => ({ groups: s.groups.filter(g => g.id !== id) }));
   const updateGroup = (id, patch) => set(s => ({ groups: s.groups.map(g => g.id === id ? { ...g, ...patch } : g) }));
   const toggleGroupMember = (gId, pId) => set(s => ({ groups: s.groups.map(g => g.id === gId ? { ...g, members: g.members.includes(pId) ? g.members.filter(x => x !== pId) : [...g.members, pId] } : g) }));
 
-  const doCalc = (even) => {
-    if (!st.people.length) { onToast?.("Add people in Setup first", "error"); setTab("setup"); return; }
-    setCalc({ evenSplit: !!even });
-  };
-  const reset = () => {
-    setSt(s => ({ ...DEFAULT_STATE, baseRate: s.baseRate, people: s.people, baseMembers: s.baseMembers, groups: s.groups }));
-    setCalc(null);
-    onToast?.("Started a new bill", "info");
-  };
+  const reset = () => { setSt(s => ({ ...DEFAULT_STATE, baseRate: s.baseRate, people: s.people, baseMembers: s.baseMembers, groups: s.groups.map(g => ({ ...g })) })); setEvenSplit(false); setSeg("bill"); onToast?.("Started a new bill", "info"); };
 
+  const grand = st.people.reduce((s, p) => s + (result.perPersonTotal[p.id] || 0), 0);
   const shareText = useCallback(() => {
-    if (!result) return "";
     const name = st.scenarioName.trim() || "Current split";
     let txt = name + "\n";
     st.people.forEach(p => { txt += `${p.name}: ${fmt(result.perPersonTotal[p.id])}\n`; });
     txt += `Total collected: ${fmt(st.people.reduce((s, p) => s + (result.perPersonTotal[p.id] || 0), 0))}`;
     return txt;
   }, [result, st.scenarioName, st.people]);
-
   const copy = () => { navigator.clipboard?.writeText(shareText()).then(() => onToast?.("Copied to clipboard", "success")).catch(() => onToast?.("Could not copy", "error")); };
   const whatsapp = () => { window.open(`https://wa.me/?text=${encodeURIComponent(shareText())}`, "_blank"); };
 
   const totalNum = Number(st.totalBill) || 0;
   const baseNum = Number(st.baseBill) || 0;
 
-  // ── Setup tab ──
-  if (tab === "setup") {
-    return (
-      <div>
-        <div style={{ display: "flex", gap: 6, background: "var(--bg)", borderRadius: 12, padding: 4, marginBottom: 14 }}>
-          {[["calc", "Calculate"], ["setup", "Setup"]].map(([t, l]) => (
-            <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: "9px 6px", borderRadius: 9, border: "none", background: tab === t ? "var(--text)" : "transparent", color: tab === t ? "var(--bg)" : "var(--ts)", fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}>{l}</button>
-          ))}
-        </div>
+  // ── donut / bar segments (shared by hero ring + Split bar) ──
+  let donutSegments = [], donutTotal = 0, banners = [];
+  if (evenSplit) {
+    donutSegments = [{ label: "Equal split", amount: result.total, color: ACCENT }];
+    donutTotal = result.total;
+    banners.push({ kind: "warn", text: `Splitting ${fmt(result.total)} evenly across ${st.people.length} people — base load and appliance groups aren't used here.`, action: "detailed" });
+  } else {
+    donutSegments = [{ label: "Base load", amount: result.base, color: "var(--muted)" }, ...result.groupBreak.map(g => ({ label: g.name, amount: g.amt, color: g.color }))];
+    if (result.unallocated > 0.5) donutSegments.push({ label: "Not yet assigned", amount: result.unallocated, color: "var(--border)" });
+    donutTotal = result.base + result.extra;
+    if (result.normalized) banners.push({ kind: "warn", text: `Group shares added up to ${pctFmt(result.rawTotalPct)}, so they were auto-scaled to fit 100% of the extra.` });
+    if (result.unallocated > 0.5 && st.groups.length === 0) banners.push({ kind: "warn", text: `No appliance groups yet, so ${fmt(result.unallocated)} of extra isn't assigned to anyone. Add one under Extras.` });
+    if (st.mode === "manual" && totalNum > 0) { const diff = totalNum - (result.base + result.extra); if (Math.abs(diff) > 0.5) banners.push({ kind: "warn", text: `Total bill (${fmt(totalNum)}) doesn't match base + extra (${fmt(result.base + result.extra)}) — off by ${fmt(Math.abs(diff))}.` }); }
+  }
+  const visSegs = donutSegments.filter(s => s.amount > 0.001);
+  const balanced = !evenSplit ? result.unallocated <= 0.5 && st.groups.length > 0 : st.people.length > 0;
+  const perHead = st.people.length ? grand / st.people.length : 0;
 
-        <div style={sectionLabel}>Household</div>
-        <div style={card}>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input value={newPerson} onChange={e => setNewPerson(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { addPerson(newPerson); setNewPerson(""); } }} placeholder="Add a person" style={{ ...inputS, flex: 1 }} />
-            <button onClick={() => { addPerson(newPerson); setNewPerson(""); }} style={{ width: 44, borderRadius: 12, border: "none", background: ACCENT, color: "#fff", cursor: "pointer", fontSize: 22, fontWeight: 700, flexShrink: 0 }}>+</button>
+  // ── status badge for the hero ──
+  const badge = (() => {
+    if (st.people.length === 0) return { c: AMBER, bg: AMBER + "1f", icon: <IconAlertTriangle size={14} />, t: "Add people to start" };
+    if (evenSplit) return { c: GREEN, bg: GREEN + "1f", icon: <IconCircleCheck size={14} />, t: `Even · ${fmt(perHead)}/head` };
+    if (result.unallocated > 0.5) return { c: AMBER, bg: AMBER + "1f", icon: <IconAlertTriangle size={14} />, t: `${fmt(result.unallocated)} unassigned` };
+    return { c: GREEN, bg: GREEN + "1f", icon: <IconCircleCheck size={14} />, t: "Balanced" };
+  })();
+
+  const segTab = (id, label) => (
+    <button key={id} onClick={() => setSeg(id)} style={{ flex: 1, border: "none", background: seg === id ? "var(--card)" : "transparent", color: seg === id ? "var(--text)" : "var(--muted)", fontFamily: "var(--font-h)", fontWeight: seg === id ? 800 : 700, fontSize: 12.5, padding: "8px 2px", borderRadius: 9, cursor: "pointer", boxShadow: seg === id ? "0 0 0 1px var(--border)" : "none" }}>{label}</button>
+  );
+
+  return (
+    <div>
+      {/* ── anchored summary hero ── */}
+      <div style={{ ...card, display: "flex", alignItems: "center", gap: 14, padding: 16 }}>
+        <div style={{ position: "relative", width: 84, height: 84, flexShrink: 0 }}>
+          <Donut segments={donutSegments} total={donutTotal} size={84} stroke={11} />
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: "var(--text)", fontFamily: "var(--font-h)" }}>{fmt(donutTotal).replace(".00", "")}</span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-            {st.people.length === 0 && <div style={{ textAlign: "center", padding: "18px 0", color: "var(--muted)", fontSize: 13, fontWeight: 600 }}>No one here yet — add your housemates above</div>}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700, fontFamily: "var(--font-b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(st.scenarioName.trim() || "This bill")} · total</div>
+          <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.1, margin: "2px 0", color: "var(--text)", fontFamily: "var(--font-h)", fontVariantNumeric: "tabular-nums" }}>{fmt(donutTotal)}</div>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, color: badge.c, background: badge.bg, padding: "3px 9px", borderRadius: 8 }}>{badge.icon}{badge.t}</span>
+        </div>
+        <button onClick={reset} title="Start new bill" style={{ width: 34, height: 34, borderRadius: 11, border: "none", background: "var(--bg)", color: "var(--ts)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><IconRefresh size={17} /></button>
+      </div>
+
+      {/* ── segmented nav ── */}
+      <div style={{ display: "flex", gap: 4, background: "var(--bg)", borderRadius: 12, padding: 4, marginBottom: 14 }}>
+        {segTab("bill", "Bill")}{segTab("people", "People")}{segTab("extras", "Extras")}{segTab("split", "Split")}
+      </div>
+
+      {/* ── BILL ── */}
+      {seg === "bill" && (
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+            <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: 12 }}>
+              <div style={labelS}>Total bill</div>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 2, top: "50%", transform: "translateY(-50%)", fontWeight: 800, color: "var(--muted)" }}>₹</span>
+                <input type="number" min="0" inputMode="decimal" value={st.totalBill} onChange={e => set({ totalBill: e.target.value })} placeholder="0" style={{ ...inputS, padding: "4px 0 4px 16px", fontSize: 22, border: "none", background: "transparent", borderRadius: 0 }} />
+              </div>
+            </div>
+            <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: 12 }}>
+              <div style={labelS}>Base load</div>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 2, top: "50%", transform: "translateY(-50%)", fontWeight: 800, color: "var(--muted)" }}>₹</span>
+                <input type="number" min="0" inputMode="decimal" value={st.baseBill} onChange={e => set({ baseBill: e.target.value, baseTouched: true })} placeholder="0" style={{ ...inputS, padding: "4px 0 4px 16px", fontSize: 22, border: "none", background: "transparent", borderRadius: 0 }} />
+              </div>
+            </div>
+          </div>
+
+          <div style={card}>
+            <label style={labelS}>Name this bill</label>
+            <input value={st.scenarioName} onChange={e => set({ scenarioName: e.target.value })} placeholder="e.g. June 2026" style={{ ...inputS, marginBottom: 14 }} />
+
+            <label style={labelS}>How is the bill divided?</label>
+            <div style={{ display: "flex", gap: 4, background: "var(--bg)", borderRadius: 12, padding: 4, marginBottom: 12 }}>
+              {[[false, "Detailed split"], [true, "Split evenly"]].map(([v, l]) => (
+                <button key={String(v)} onClick={() => setEvenSplit(v)} style={{ flex: 1, padding: "8px 4px", borderRadius: 9, border: "none", background: evenSplit === v ? "var(--text)" : "transparent", color: evenSplit === v ? "var(--bg)" : "var(--ts)", fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{l}</button>
+              ))}
+            </div>
+
+            {!evenSplit && <>
+              <p style={hintS}>≈ ₹{st.baseRate || 105} × {st.baseMembers.length || 0} people sharing base · base set under People.</p>
+              <label style={{ ...labelS, marginTop: 14 }}>How should the extra be worked out?</label>
+              <div style={{ display: "flex", background: "var(--bg)", borderRadius: 12, padding: 4, gap: 4 }}>
+                {[["auto", "Auto = Total − Base"], ["manual", "Enter extra myself"]].map(([m, l]) => (
+                  <button key={m} onClick={() => set({ mode: m })} style={{ flex: 1, padding: "10px 6px", borderRadius: 10, border: "none", background: st.mode === m ? "var(--text)" : "transparent", color: st.mode === m ? "var(--bg)" : "var(--ts)", fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{l}</button>
+                ))}
+              </div>
+              {st.mode === "manual" && (
+                <div style={{ marginTop: 14 }}>
+                  <label style={labelS}>Extra amount (₹)</label>
+                  <div style={{ position: "relative" }}>
+                    <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontWeight: 800, color: "var(--muted)" }}>₹</span>
+                    <input type="number" min="0" inputMode="decimal" value={st.manualExtra} onChange={e => set({ manualExtra: e.target.value })} placeholder="0" style={{ ...inputS, paddingLeft: 30 }} />
+                  </div>
+                </div>
+              )}
+              {st.mode === "auto" && <p style={hintS}>Extra above base = <b style={{ color: "var(--text)" }}>₹{Math.max(0, totalNum - baseNum).toLocaleString("en-IN")}</b>, shared by appliance use. Each rupee lands somewhere — the ring stays full.</p>}
+            </>}
+            {evenSplit && <p style={hintS}>Whole bill split equally across everyone in People — base load and appliance groups are ignored.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ── PEOPLE ── */}
+      {seg === "people" && (
+        <div>
+          <div style={{ fontSize: 12, color: "var(--ts)", fontWeight: 700, marginBottom: 9, fontFamily: "var(--font-h)" }}>Who's splitting</div>
+          <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8, marginBottom: 6, scrollbarWidth: "none" }}>
             {st.people.map(p => (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg)", borderRadius: 14, padding: "8px 10px" }}>
-                <div style={{ width: 34, height: 34, borderRadius: "50%", background: avatarColor(p.id), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 12, flexShrink: 0, fontFamily: "var(--font-h)" }}>{initials(p.name)}</div>
-                {editingPersonId === p.id ? (
-                  <input autoFocus defaultValue={p.name} onBlur={e => { renamePerson(p.id, e.target.value); setEditingPersonId(null); }} onKeyDown={e => { if (e.key === "Enter") { renamePerson(p.id, e.target.value); setEditingPersonId(null); } if (e.key === "Escape") setEditingPersonId(null); }} style={{ ...inputS, flex: 1, padding: "7px 10px", border: `1.5px solid ${ACCENT}` }} />
-                ) : (
-                  <div onClick={() => setEditingPersonId(p.id)} style={{ flex: 1, fontWeight: 700, fontSize: 14.5, color: "var(--text)", cursor: "pointer", fontFamily: "var(--font-h)" }}>{p.name}</div>
-                )}
-                <button onClick={() => removePerson(p.id)} style={{ width: 30, height: 30, borderRadius: 10, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", flexShrink: 0, fontSize: 16 }}>✕</button>
+              <div key={p.id} style={{ textAlign: "center", flexShrink: 0, width: 54 }}>
+                <div onClick={() => setEditingPersonId(editingPersonId === p.id ? null : p.id)} style={{ width: 46, height: 46, borderRadius: "50%", background: avatarColor(p.id), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, margin: "0 auto", cursor: "pointer", fontFamily: "var(--font-h)", outline: editingPersonId === p.id ? `2px solid var(--text)` : "none", outlineOffset: 2 }}>{initials(p.name)}</div>
+                <div style={{ fontSize: 12, marginTop: 5, color: "var(--text)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
               </div>
             ))}
+            <div style={{ textAlign: "center", flexShrink: 0, width: 54 }}>
+              <div onClick={() => setAddingPerson(a => !a)} style={{ width: 46, height: 46, borderRadius: "50%", background: "transparent", border: "1px dashed var(--border)", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", cursor: "pointer" }}><IconPlus size={18} /></div>
+              <div style={{ fontSize: 12, marginTop: 5, color: "var(--muted)", fontWeight: 600 }}>Add</div>
+            </div>
           </div>
-        </div>
 
-        <div style={sectionLabel}>Base load split</div>
-        <div style={card}>
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelS}>Default base rate per person (₹)</label>
-            <input type="number" inputMode="decimal" min="0" value={st.baseRate} onChange={e => set({ baseRate: e.target.value })} style={inputS} />
-            <p style={hintS}>Suggests the base-load total on the Calculate tab. Edit anytime.</p>
-          </div>
-          <label style={labelS}>Who shares the base load?</label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {st.people.length === 0 && !addingPerson && <div style={{ textAlign: "center", padding: "14px 0", color: "var(--muted)", fontSize: 13, fontWeight: 600 }}>Tap Add to start your household</div>}
+
+          {addingPerson && (
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <input autoFocus value={newPerson} onChange={e => setNewPerson(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { addPerson(newPerson); setNewPerson(""); } }} placeholder="Add a person" style={{ ...inputS, flex: 1 }} />
+              <button onClick={() => { addPerson(newPerson); setNewPerson(""); }} style={{ width: 44, borderRadius: 12, border: "none", background: ACCENT, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><IconPlus size={20} /></button>
+            </div>
+          )}
+
+          {editingPersonId && st.people.find(p => p.id === editingPersonId) && (
+            <div style={{ ...card, padding: 12, display: "flex", alignItems: "center", gap: 8 }}>
+              <input autoFocus defaultValue={st.people.find(p => p.id === editingPersonId).name} onBlur={e => renamePerson(editingPersonId, e.target.value)} onKeyDown={e => { if (e.key === "Enter") { renamePerson(editingPersonId, e.target.value); setEditingPersonId(null); } if (e.key === "Escape") setEditingPersonId(null); }} style={{ ...inputS, flex: 1, border: `1.5px solid ${ACCENT}` }} />
+              <button onClick={() => { removePerson(editingPersonId); setEditingPersonId(null); }} style={{ width: 38, height: 38, borderRadius: 11, border: "none", background: "var(--bg)", color: "#c0524a", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><IconTrash size={16} /></button>
+              <button onClick={() => setEditingPersonId(null)} style={{ width: 38, height: 38, borderRadius: 11, border: "none", background: "var(--bg)", color: "var(--muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><IconX size={16} /></button>
+            </div>
+          )}
+
+          <div style={{ fontSize: 12, color: "var(--ts)", fontWeight: 700, margin: "8px 0 8px", fontFamily: "var(--font-h)", display: "flex", alignItems: "center", gap: 6 }}><IconHome size={14} />Shares base load · {fmt(result.basePerPerson)} each</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
             {st.people.length === 0 && <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 700 }}>Add people first</span>}
             {st.people.map(p => {
               const on = st.baseMembers.includes(p.id);
               return (
                 <button key={p.id} onClick={() => toggleBase(p.id)} style={{ display: "flex", alignItems: "center", gap: 7, background: on ? ACCENT + "1f" : "var(--bg)", border: `1.5px solid ${on ? ACCENT : "transparent"}`, borderRadius: 22, padding: "4px 12px 4px 4px", cursor: "pointer" }}>
-                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: avatarColor(p.id), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 11, fontFamily: "var(--font-h)" }}>{initials(p.name)}</div>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? ACCENT_DEEP : "var(--ts)" }}>{p.name}</span>
+                  <div style={{ width: 26, height: 26, borderRadius: "50%", background: avatarColor(p.id), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 10, fontFamily: "var(--font-h)" }}>{initials(p.name)}</div>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? ACCENT_DEEP : "var(--ts)" }}>{on ? "✓ " : ""}{p.name}</span>
                 </button>
               );
             })}
           </div>
         </div>
+      )}
 
-        <div style={sectionLabel}>Appliance &amp; extra groups</div>
-        <div style={card}>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="Group name, e.g. Induction" style={{ ...inputS, flex: 1 }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--bg)", borderRadius: 12, padding: "0 8px", border: "1.5px solid var(--border)" }}>
-              <input type="number" min="0" max="100" value={newGroupPct} onChange={e => setNewGroupPct(e.target.value)} placeholder="0" style={{ width: 40, background: "transparent", border: "none", textAlign: "right", fontWeight: 800, fontSize: 14, color: "var(--text)", outline: "none", fontFamily: "var(--font-h)" }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>%</span>
-            </div>
-            <button onClick={() => { addGroup(newGroupName, newGroupPct); setNewGroupName(""); setNewGroupPct(""); }} style={{ width: 44, borderRadius: 12, border: "none", background: ACCENT, color: "#fff", cursor: "pointer", fontSize: 22, fontWeight: 700, flexShrink: 0 }}>+</button>
-          </div>
-          <div style={{ marginTop: 14 }}>
-            {st.groups.length === 0 && <div style={{ textAlign: "center", padding: "18px 0", color: "var(--muted)", fontSize: 13, fontWeight: 600, lineHeight: 1.5 }}>No extra groups yet — add induction, washing machine, or anything else that adds to the bill</div>}
-            {st.groups.map((g, idx) => (
-              <div key={g.id} style={{ background: "var(--bg)", borderRadius: 16, padding: 14, marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 9, background: groupColor(idx), flexShrink: 0 }} />
-                  <input value={g.name} onChange={e => updateGroup(g.id, { name: e.target.value })} style={{ flex: 1, background: "transparent", border: "none", fontWeight: 800, fontSize: 14.5, color: "var(--text)", outline: "none", minWidth: 0, fontFamily: "var(--font-h)" }} />
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--card)", borderRadius: 11, padding: "5px 8px" }}>
-                    <input type="number" min="0" max="100" value={g.pct} onChange={e => updateGroup(g.id, { pct: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} style={{ width: 36, background: "transparent", border: "none", textAlign: "right", fontWeight: 800, fontSize: 13, color: "var(--text)", outline: "none", fontFamily: "var(--font-h)" }} />
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>%</span>
+      {/* ── EXTRAS ── */}
+      {seg === "extras" && (
+        <div>
+          {st.groups.length === 0 && <div style={{ textAlign: "center", padding: "18px 0", color: "var(--muted)", fontSize: 13, fontWeight: 600, lineHeight: 1.5 }}>No appliance / extra groups yet — add induction, AC, washing machine, or anything that adds to the bill.</div>}
+          {st.groups.map((g, idx) => {
+            const gb = result.groupBreak.find(x => x.id === g.id);
+            const memberNames = st.people.filter(p => g.members.includes(p.id)).map(p => p.name).join(", ") || "no one yet";
+            const open = expandedGroup === g.id;
+            return (
+              <div key={g.id} style={{ borderBottom: "0.5px solid var(--border)" }}>
+                <div onClick={() => { setExpandedGroup(open ? null : g.id); setIconPickGroup(null); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 0", cursor: "pointer" }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 9, background: groupColor(idx) + "22", color: groupColor(idx), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><GroupIcon g={g} size={18} color={groupColor(idx)} /></div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", fontFamily: "var(--font-h)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{memberNames} · {pctFmt(Number(g.pct) || 0)}</div>
                   </div>
-                  <button onClick={() => removeGroup(g.id)} style={{ width: 30, height: 30, borderRadius: 10, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", fontSize: 15 }}>✕</button>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: groupColor(idx), fontFamily: "var(--font-h)", flexShrink: 0 }}>{fmt(gb ? gb.amt : 0)}</div>
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-                  {st.people.length === 0 && <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 700 }}>Add people in Household first</span>}
-                  {st.people.map(p => {
-                    const on = g.members.includes(p.id);
-                    return (
-                      <button key={p.id} onClick={() => toggleGroupMember(g.id, p.id)} style={{ display: "flex", alignItems: "center", gap: 7, background: on ? ACCENT + "1f" : "var(--card)", border: `1.5px solid ${on ? ACCENT : "transparent"}`, borderRadius: 22, padding: "4px 12px 4px 4px", cursor: "pointer" }}>
-                        <div style={{ width: 26, height: 26, borderRadius: "50%", background: avatarColor(p.id), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 10, fontFamily: "var(--font-h)" }}>{initials(p.name)}</div>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: on ? ACCENT_DEEP : "var(--ts)" }}>{p.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <input value={g.note || ""} onChange={e => updateGroup(g.id, { note: e.target.value })} placeholder="Add a note (optional) — e.g. used after 8pm" style={{ width: "100%", background: "transparent", border: "none", borderTop: "1px dashed var(--border)", marginTop: 10, padding: "10px 0 0", fontSize: 12, fontWeight: 600, color: "var(--ts)", outline: "none", boxSizing: "border-box" }} />
+
+                {open && (
+                  <div style={{ ...card, marginTop: 0, marginBottom: 12, background: "var(--bg)", boxShadow: "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <button onClick={() => setIconPickGroup(iconPickGroup === g.id ? null : g.id)} title="Pick icon" style={{ width: 38, height: 38, borderRadius: 10, background: groupColor(idx) + "22", color: groupColor(idx), border: "none", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}><GroupIcon g={g} size={19} color={groupColor(idx)} /></button>
+                      <input value={g.name} onChange={e => updateGroup(g.id, { name: e.target.value })} style={{ ...inputS, flex: 1 }} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--card)", borderRadius: 11, padding: "0 8px", border: "1.5px solid var(--border)" }}>
+                        <input type="number" min="0" max="100" value={g.pct} onChange={e => updateGroup(g.id, { pct: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} style={{ width: 38, background: "transparent", border: "none", textAlign: "right", fontWeight: 800, fontSize: 14, color: "var(--text)", outline: "none", fontFamily: "var(--font-h)", padding: "10px 0" }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>%</span>
+                      </div>
+                    </div>
+
+                    {iconPickGroup === g.id && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
+                        {ICON_KEYS.map(k => { const I = APPLIANCE_ICONS[k]; const on = (g.icon || guessIcon(g.name)) === k; return <button key={k} onClick={() => { updateGroup(g.id, { icon: k }); setIconPickGroup(null); }} style={{ width: 38, height: 38, borderRadius: 10, background: on ? groupColor(idx) + "22" : "var(--card)", color: on ? groupColor(idx) : "var(--ts)", border: `1.5px solid ${on ? groupColor(idx) : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><I size={18} stroke={2} /></button>; })}
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                      {st.people.length === 0 && <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 700 }}>Add people under People first</span>}
+                      {st.people.map(p => {
+                        const on = g.members.includes(p.id);
+                        return (
+                          <button key={p.id} onClick={() => toggleGroupMember(g.id, p.id)} style={{ display: "flex", alignItems: "center", gap: 7, background: on ? ACCENT + "1f" : "var(--card)", border: `1.5px solid ${on ? ACCENT : "transparent"}`, borderRadius: 22, padding: "4px 12px 4px 4px", cursor: "pointer" }}>
+                            <div style={{ width: 26, height: 26, borderRadius: "50%", background: avatarColor(p.id), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 10, fontFamily: "var(--font-h)" }}>{initials(p.name)}</div>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: on ? ACCENT_DEEP : "var(--ts)" }}>{on ? "✓ " : ""}{p.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <input value={g.note || ""} onChange={e => updateGroup(g.id, { note: e.target.value })} placeholder="Add a note (optional) — e.g. used after 8pm" style={{ width: "100%", background: "transparent", border: "none", borderTop: "1px dashed var(--border)", marginTop: 12, padding: "10px 0 0", fontSize: 12, fontWeight: 600, color: "var(--ts)", outline: "none", boxSizing: "border-box", fontFamily: "var(--font-b)" }} />
+                    <button onClick={() => { removeGroup(g.id); setExpandedGroup(null); }} style={{ marginTop: 10, border: "none", background: "transparent", color: "#c0524a", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, padding: 0, fontFamily: "var(--font-h)" }}><IconTrash size={14} />Remove appliance</button>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })}
+          <button onClick={() => { addGroup(); }} style={{ width: "100%", marginTop: 14, border: "1px dashed var(--border)", background: "transparent", fontSize: 12.5, fontWeight: 700, padding: 12, borderRadius: 12, color: "var(--ts)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "var(--font-h)" }}><IconPlus size={15} />Add appliance / extra</button>
         </div>
-      </div>
-    );
-  }
+      )}
 
-  // ── Calculate tab ──
-  const billLabel = st.scenarioName.trim() || "This bill";
-  let donutSegments = [], donutTotal = 0, banners = [];
-  if (result) {
-    if (result.evenSplit) {
-      donutSegments = [{ label: "Equal split", amount: result.total, color: ACCENT }];
-      donutTotal = result.total;
-      banners.push({ kind: "warn", text: `Splitting ${fmt(result.total)} evenly across ${st.people.length} people — base load and appliance groups aren't used here.`, action: "detailed" });
-    } else {
-      donutSegments = [{ label: "Base load", amount: result.base, color: "var(--muted)" }, ...result.groupBreak.map(g => ({ label: g.name, amount: g.amt, color: g.color }))];
-      if (result.unallocated > 0.5) donutSegments.push({ label: "Not yet assigned", amount: result.unallocated, color: "var(--border)" });
-      donutTotal = result.base + result.extra;
-      if (result.normalized) banners.push({ kind: "warn", text: `Group weights added up to ${pctFmt(result.rawTotalPct)}, so they were auto-scaled to fit 100% of the extra.` });
-      if (result.unallocated > 0.5 && st.groups.length === 0) banners.push({ kind: "warn", text: `No appliance groups yet, so ${fmt(result.unallocated)} of extra isn't assigned to anyone. Add a group in Setup.` });
-      if (st.mode === "manual" && totalNum > 0) {
-        const diff = totalNum - (result.base + result.extra);
-        if (Math.abs(diff) > 0.5) banners.push({ kind: "warn", text: `Total bill (${fmt(totalNum)}) doesn't match base + extra (${fmt(result.base + result.extra)}) — off by ${fmt(Math.abs(diff))}. Worth double-checking.` });
-      }
-    }
-  }
-  const grand = result ? st.people.reduce((s, p) => s + (result.perPersonTotal[p.id] || 0), 0) : 0;
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 6, background: "var(--bg)", borderRadius: 12, padding: 4, marginBottom: 14 }}>
-        {[["calc", "Calculate"], ["setup", "Setup"]].map(([t, l]) => (
-          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: "9px 6px", borderRadius: 9, border: "none", background: tab === t ? "var(--text)" : "transparent", color: tab === t ? "var(--bg)" : "var(--ts)", fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}>{l}</button>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-        <input value={st.scenarioName} onChange={e => set({ scenarioName: e.target.value })} placeholder="Name this bill — e.g. June 2026" style={{ flex: 1, background: "transparent", border: "none", fontSize: 21, fontWeight: 800, padding: "8px 2px", color: "var(--text)", outline: "none", fontFamily: "var(--font-h)", minWidth: 0 }} />
-        <button onClick={reset} title="Start new bill" style={{ width: 38, height: 38, borderRadius: 12, border: "none", background: "var(--bg)", color: "var(--ts)", cursor: "pointer", fontSize: 16, flexShrink: 0 }}>↻</button>
-      </div>
-
-      <div style={card}>
-        <label style={labelS}>Total bill</label>
-        <div style={{ position: "relative", marginBottom: 14 }}>
-          <span style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", fontWeight: 800, color: "var(--muted)", fontSize: 18 }}>₹</span>
-          <input type="number" min="0" inputMode="decimal" value={st.totalBill} onChange={e => set({ totalBill: e.target.value })} placeholder="0" style={{ ...inputS, fontSize: 28, fontWeight: 800, textAlign: "center", padding: "16px 13px", fontVariantNumeric: "tabular-nums" }} />
-        </div>
-        <label style={labelS}>Base load (₹) — lights, fans, fridge</label>
-        <div style={{ position: "relative", marginBottom: 6 }}>
-          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontWeight: 800, color: "var(--muted)" }}>₹</span>
-          <input type="number" min="0" inputMode="decimal" value={st.baseBill} onChange={e => set({ baseBill: e.target.value, baseTouched: true })} placeholder="0" style={{ ...inputS, paddingLeft: 30 }} />
-        </div>
-        <p style={hintS}>≈ ₹{st.baseRate || 105} × {st.baseMembers.length || 0} people sharing base</p>
-
-        <label style={{ ...labelS, marginTop: 14 }}>How should the extra be worked out?</label>
-        <div style={{ display: "flex", background: "var(--bg)", borderRadius: 12, padding: 4, gap: 4 }}>
-          {[["auto", "Auto = Total − Base"], ["manual", "Enter extra myself"]].map(([m, l]) => (
-            <button key={m} onClick={() => set({ mode: m })} style={{ flex: 1, padding: "10px 6px", borderRadius: 10, border: "none", background: st.mode === m ? "var(--text)" : "transparent", color: st.mode === m ? "var(--bg)" : "var(--ts)", fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{l}</button>
-          ))}
-        </div>
-        {st.mode === "manual" && (
-          <div style={{ marginTop: 14 }}>
-            <label style={labelS}>Extra amount (₹)</label>
-            <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontWeight: 800, color: "var(--muted)" }}>₹</span>
-              <input type="number" min="0" inputMode="decimal" value={st.manualExtra} onChange={e => set({ manualExtra: e.target.value })} placeholder="0" style={{ ...inputS, paddingLeft: 30 }} />
+      {/* ── SPLIT ── */}
+      {seg === "split" && (
+        <div>
+          {visSegs.length > 0 && (
+            <div style={{ display: "flex", height: 10, borderRadius: 6, overflow: "hidden", marginBottom: 10 }}>
+              {visSegs.map((s, i) => <div key={i} style={{ width: `${donutTotal > 0 ? (s.amount / donutTotal) * 100 : 0}%`, background: s.color, transition: "width 0.5s ease" }} />)}
             </div>
-          </div>
-        )}
-        {st.mode === "auto" && <p style={hintS}>Extra will be ₹{Math.max(0, totalNum - baseNum).toLocaleString("en-IN")}</p>}
-      </div>
-
-      <button onClick={() => doCalc(false)} style={{ width: "100%", border: "none", background: ACCENT, color: "#fff", fontWeight: 800, fontSize: 16, padding: 15, borderRadius: 16, cursor: "pointer", boxShadow: "0 8px 20px rgba(224,122,95,0.28)" }}>Calculate split</button>
-      <button onClick={() => doCalc(true)} style={{ width: "100%", marginTop: 10, border: "1.5px solid var(--border)", background: "var(--card)", color: "var(--text)", fontWeight: 800, fontSize: 13, padding: 12, borderRadius: 14, cursor: "pointer" }}>Or just split the total evenly</button>
-
-      {result && (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ ...card, display: "flex", flexDirection: "column", alignItems: "center", padding: 20 }}>
-            <div style={{ position: "relative", width: 168, height: 168 }}>
-              <Donut segments={donutSegments} total={donutTotal} />
-              <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: "var(--text)", fontFamily: "var(--font-h)" }}>{fmt(donutTotal)}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginTop: 2, maxWidth: 110, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{billLabel}</span>
-              </div>
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px", justifyContent: "center", marginTop: 14, width: "100%" }}>
-              {donutSegments.filter(s => s.amount > 0.001).map((s, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>
-                  <span style={{ width: 9, height: 9, borderRadius: "50%", background: s.color, flexShrink: 0 }} />{s.label}<span style={{ color: "var(--muted)" }}>{fmt(s.amount)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
 
           {banners.map((b, i) => (
             <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", padding: "12px 13px", borderRadius: 12, fontSize: 12.5, fontWeight: 700, lineHeight: 1.45, marginBottom: 12, background: AMBER + "1f", color: AMBER }}>
-              <span style={{ flexShrink: 0 }}>⚠</span>
-              <span>{b.text}{b.action === "detailed" && <button onClick={() => setCalc({ evenSplit: false })} style={{ background: "none", border: "none", color: AMBER, fontWeight: 800, textDecoration: "underline", cursor: "pointer", marginLeft: 4, fontSize: 12.5 }}>Use detailed split instead</button>}</span>
+              <IconAlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>{b.text}{b.action === "detailed" && <button onClick={() => setEvenSplit(false)} style={{ background: "none", border: "none", color: AMBER, fontWeight: 800, textDecoration: "underline", cursor: "pointer", marginLeft: 4, fontSize: 12.5 }}>Use detailed split instead</button>}</span>
             </div>
           ))}
 
@@ -324,13 +364,14 @@ function CurrentSplit({ onToast }) {
             ))}
           </div>
 
-          <div style={sectionLabel}>Per person</div>
-          {view === "cards" ? (
+          {st.people.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "26px 0", color: "var(--muted)", fontSize: 13, fontWeight: 600 }}>Add people to see the split</div>
+          ) : view === "cards" ? (
             <div>
               {st.people.map(p => {
-                const lines = result.evenSplit ? [] : result.groupBreak.filter(g => g.members.includes(p.id));
-                const baseAmt = result.evenSplit ? 0 : (st.baseMembers.includes(p.id) ? result.basePerPerson : 0);
-                const tags = result.evenSplit ? "Equal share" : ([st.baseMembers.includes(p.id) ? "Base" : null, ...lines.map(g => g.name)].filter(Boolean).join(" · ") || "No charges");
+                const lines = evenSplit ? [] : result.groupBreak.filter(g => g.members.includes(p.id));
+                const baseAmt = evenSplit ? 0 : (st.baseMembers.includes(p.id) ? result.basePerPerson : 0);
+                const tags = evenSplit ? "Equal share" : ([st.baseMembers.includes(p.id) ? "Base" : null, ...lines.map(g => g.name)].filter(Boolean).join(" · ") || "No charges");
                 return (
                   <div key={p.id} style={{ ...card, padding: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
@@ -341,7 +382,7 @@ function CurrentSplit({ onToast }) {
                       </div>
                       <span style={{ fontWeight: 800, fontSize: 16.5, fontVariantNumeric: "tabular-nums", color: "var(--text)", fontFamily: "var(--font-h)" }}>{fmt(result.perPersonTotal[p.id])}</span>
                     </div>
-                    {!result.evenSplit && (
+                    {!evenSplit && (
                       <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed var(--border)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0", color: "var(--ts)", fontWeight: 700 }}><span>Base load</span><span>{fmt(baseAmt)}</span></div>
                         {lines.map(g => <div key={g.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0", color: "var(--ts)", fontWeight: 700 }}><span>{g.name}</span><span>{fmt(g.share)}</span></div>)}
@@ -357,27 +398,27 @@ function CurrentSplit({ onToast }) {
                 <thead>
                   <tr>
                     <th style={{ padding: "11px 13px", textAlign: "left", fontSize: 10.5, textTransform: "uppercase", color: "var(--muted)", fontWeight: 800, background: "var(--bg)" }}>Person</th>
-                    {!result.evenSplit && <th style={{ padding: "11px 13px", textAlign: "right", fontSize: 10.5, textTransform: "uppercase", color: "var(--muted)", fontWeight: 800, background: "var(--bg)" }}>Base</th>}
-                    {!result.evenSplit && result.groupBreak.map(g => <th key={g.id} style={{ padding: "11px 13px", textAlign: "right", fontSize: 10.5, textTransform: "uppercase", color: "var(--muted)", fontWeight: 800, background: "var(--bg)" }}>{g.name}</th>)}
+                    {!evenSplit && <th style={{ padding: "11px 13px", textAlign: "right", fontSize: 10.5, textTransform: "uppercase", color: "var(--muted)", fontWeight: 800, background: "var(--bg)" }}>Base</th>}
+                    {!evenSplit && result.groupBreak.map(g => <th key={g.id} style={{ padding: "11px 13px", textAlign: "right", fontSize: 10.5, textTransform: "uppercase", color: "var(--muted)", fontWeight: 800, background: "var(--bg)" }}>{g.name}</th>)}
                     <th style={{ padding: "11px 13px", textAlign: "right", fontSize: 10.5, textTransform: "uppercase", color: "var(--muted)", fontWeight: 800, background: "var(--bg)" }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {st.people.map(p => {
-                    const baseAmt = result.evenSplit ? 0 : (st.baseMembers.includes(p.id) ? result.basePerPerson : 0);
+                    const baseAmt = evenSplit ? 0 : (st.baseMembers.includes(p.id) ? result.basePerPerson : 0);
                     return (
                       <tr key={p.id}>
                         <td style={{ padding: "11px 13px", fontWeight: 700, borderTop: "1px solid var(--border)", color: "var(--text)" }}>{p.name}</td>
-                        {!result.evenSplit && <td style={{ padding: "11px 13px", textAlign: "right", fontWeight: 700, borderTop: "1px solid var(--border)", color: "var(--text)" }}>{fmt(baseAmt)}</td>}
-                        {!result.evenSplit && result.groupBreak.map(g => <td key={g.id} style={{ padding: "11px 13px", textAlign: "right", fontWeight: 700, borderTop: "1px solid var(--border)", color: "var(--text)" }}>{g.members.includes(p.id) ? fmt(g.share) : "—"}</td>)}
+                        {!evenSplit && <td style={{ padding: "11px 13px", textAlign: "right", fontWeight: 700, borderTop: "1px solid var(--border)", color: "var(--text)" }}>{fmt(baseAmt)}</td>}
+                        {!evenSplit && result.groupBreak.map(g => <td key={g.id} style={{ padding: "11px 13px", textAlign: "right", fontWeight: 700, borderTop: "1px solid var(--border)", color: "var(--text)" }}>{g.members.includes(p.id) ? fmt(g.share) : "—"}</td>)}
                         <td style={{ padding: "11px 13px", textAlign: "right", fontWeight: 700, borderTop: "1px solid var(--border)", color: "var(--text)" }}>{fmt(result.perPersonTotal[p.id])}</td>
                       </tr>
                     );
                   })}
                   <tr>
                     <td style={{ padding: "11px 13px", fontWeight: 800, borderTop: "1px solid var(--border)", color: ACCENT_DEEP }}>Collected</td>
-                    {!result.evenSplit && <td style={{ padding: "11px 13px", textAlign: "right", fontWeight: 800, borderTop: "1px solid var(--border)", color: ACCENT_DEEP }}>{fmt(result.base)}</td>}
-                    {!result.evenSplit && result.groupBreak.map(g => <td key={g.id} style={{ padding: "11px 13px", textAlign: "right", fontWeight: 800, borderTop: "1px solid var(--border)", color: ACCENT_DEEP }}>{fmt(g.amt)}</td>)}
+                    {!evenSplit && <td style={{ padding: "11px 13px", textAlign: "right", fontWeight: 800, borderTop: "1px solid var(--border)", color: ACCENT_DEEP }}>{fmt(result.base)}</td>}
+                    {!evenSplit && result.groupBreak.map(g => <td key={g.id} style={{ padding: "11px 13px", textAlign: "right", fontWeight: 800, borderTop: "1px solid var(--border)", color: ACCENT_DEEP }}>{fmt(g.amt)}</td>)}
                     <td style={{ padding: "11px 13px", textAlign: "right", fontWeight: 800, borderTop: "1px solid var(--border)", color: ACCENT_DEEP }}>{fmt(grand)}</td>
                   </tr>
                 </tbody>
@@ -386,12 +427,21 @@ function CurrentSplit({ onToast }) {
           )}
 
           <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-            <button onClick={copy} style={{ flex: "1 1 calc(50% - 4px)", justifyContent: "center", display: "flex", alignItems: "center", gap: 7, border: "1.5px solid var(--border)", background: "var(--card)", color: "var(--text)", fontWeight: 800, fontSize: 13, padding: "11px 14px", borderRadius: 12, cursor: "pointer" }}>Copy text</button>
-            <button onClick={whatsapp} style={{ flex: "1 1 calc(50% - 4px)", justifyContent: "center", display: "flex", alignItems: "center", gap: 7, border: "1.5px solid var(--border)", background: "var(--card)", color: "var(--text)", fontWeight: 800, fontSize: 13, padding: "11px 14px", borderRadius: 12, cursor: "pointer" }}>WhatsApp</button>
-            <button onClick={() => window.print()} style={{ flex: "1 1 calc(50% - 4px)", justifyContent: "center", display: "flex", alignItems: "center", gap: 7, border: "1.5px solid var(--border)", background: "var(--card)", color: "var(--text)", fontWeight: 800, fontSize: 13, padding: "11px 14px", borderRadius: 12, cursor: "pointer" }}>Print / PDF</button>
+            <button onClick={copy} style={{ flex: "1 1 calc(33% - 6px)", justifyContent: "center", display: "flex", alignItems: "center", gap: 6, border: "1.5px solid var(--border)", background: "var(--card)", color: "var(--text)", fontWeight: 800, fontSize: 12.5, padding: "11px 10px", borderRadius: 12, cursor: "pointer" }}><IconCopy size={15} />Copy</button>
+            <button onClick={whatsapp} style={{ flex: "1 1 calc(33% - 6px)", justifyContent: "center", display: "flex", alignItems: "center", gap: 6, border: "1.5px solid var(--border)", background: "var(--card)", color: "var(--text)", fontWeight: 800, fontSize: 12.5, padding: "11px 10px", borderRadius: 12, cursor: "pointer" }}><IconBrandWhatsapp size={15} />Share</button>
+            <button onClick={() => window.print()} style={{ flex: "1 1 calc(33% - 6px)", justifyContent: "center", display: "flex", alignItems: "center", gap: 6, border: "1.5px solid var(--border)", background: "var(--card)", color: "var(--text)", fontWeight: 800, fontSize: 12.5, padding: "11px 10px", borderRadius: 12, cursor: "pointer" }}><IconPrinter size={15} />Print</button>
           </div>
         </div>
       )}
+
+      {/* ── anchored share bar ── */}
+      <div style={{ position: "sticky", bottom: 0, display: "flex", alignItems: "center", gap: 10, marginTop: 16, padding: "12px 4px", borderTop: "0.5px solid var(--border)", background: "var(--bg)" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>Collected</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", fontFamily: "var(--font-h)", fontVariantNumeric: "tabular-nums" }}>{fmt(grand)} <span style={{ fontSize: 11, fontWeight: 700, color: balanced ? GREEN : AMBER }}>· {balanced ? "balanced" : "check totals"}</span></div>
+        </div>
+        <button onClick={() => { if (st.people.length === 0) { onToast?.("Add people first", "error"); setSeg("people"); return; } setSeg("split"); copy(); }} style={{ border: "none", background: ACCENT, color: "#fff", fontSize: 13, fontWeight: 800, padding: "11px 18px", borderRadius: 12, cursor: "pointer", flexShrink: 0, fontFamily: "var(--font-h)" }}>Share split</button>
+      </div>
     </div>
   );
 }
@@ -408,7 +458,7 @@ export default function NomadLite({ onBack, onToast = () => {} }) {
   return (
     <div style={{ position: "relative", background: "var(--bg)", minHeight: "calc(100vh - 90px)", display: "flex", flexDirection: "column" }}>
       <div style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg)", padding: "max(18px, calc(env(safe-area-inset-top, 0px) + 12px)) 20px 12px", display: "flex", alignItems: "center", gap: 12 }}>
-        <button onClick={() => (preset ? setActive(null) : onBack())} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 13, letterSpacing: "0.5px", padding: 0, fontFamily: "var(--font-h)" }}>‹ {preset ? "Presets" : "Events"}</button>
+        <button onClick={() => (preset ? setActive(null) : onBack())} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 13, letterSpacing: "0.5px", padding: 0, fontFamily: "var(--font-h)" }}><IconChevronLeft size={15} /> {preset ? "Presets" : "Events"}</button>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontFamily: "var(--font-h)", fontSize: 16, fontWeight: 800, color: "var(--text)", letterSpacing: "-0.3px" }}>NOMAD <span style={{ color: ACCENT }}>Lite</span></span>
