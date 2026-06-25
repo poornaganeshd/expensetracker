@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { computeSplit, loadState, DEFAULT_STATE, initials, fmt, LS_KEY } from "../nomadLiteSplit";
+import { computeSplit, computeTipSplit, loadState, DEFAULT_STATE, initials, fmt, LS_KEY, guessIcon, ICON_KEYS } from "../nomadLiteSplit";
 
 const P = [{ id: "P1", name: "Aarav" }, { id: "P2", name: "Diya" }, { id: "P3", name: "Kiran" }];
 const round = (n) => Math.round(n * 100) / 100;
@@ -83,6 +83,25 @@ describe("computeSplit — detailed (base + groups)", () => {
     const r = computeSplit(st);
     expect(r.extra).toBe(0);
   });
+
+  it("leaves extra unallocated when groups exist but all shares are 0", () => {
+    const st = { ...DEFAULT_STATE, people: [P[0], P[1]], baseMembers: ["P1"], baseBill: "100", totalBill: "400", mode: "auto", groups: [{ id: "G1", name: "AC", pct: 0, members: ["P1"] }] };
+    const r = computeSplit(st);
+    expect(round(r.extra)).toBe(300);
+    expect(round(r.allocatedExtra)).toBe(0);
+    expect(round(r.unallocated)).toBe(300); // surfaces the "give groups a share" banner
+    expect(r.normalized).toBe(false);
+    expect(round(r.perPersonTotal.P1)).toBe(100); // base only
+  });
+
+  it("charges a non-base member only their group share", () => {
+    const st = { ...DEFAULT_STATE, people: [P[0], P[1]], baseMembers: ["P1"], baseBill: "100", totalBill: "300", mode: "auto", groups: [{ id: "G1", name: "AC", pct: 100, members: ["P2"] }] };
+    const r = computeSplit(st);
+    expect(round(r.basePerPerson)).toBe(100); // base split among the 1 base member
+    expect(round(r.perPersonTotal.P1)).toBe(100); // base only
+    expect(round(r.perPersonTotal.P2)).toBe(200); // extra only, no base
+    expect(round(r.perPersonTotal.P1 + r.perPersonTotal.P2)).toBe(300);
+  });
 });
 
 describe("loadState", () => {
@@ -112,5 +131,51 @@ describe("helpers", () => {
   it("fmt renders INR with 2 decimals", () => {
     expect(fmt(1234.5)).toBe("₹1,234.50");
     expect(fmt(Infinity)).toBe("₹0.00");
+  });
+});
+
+describe("computeTipSplit", () => {
+  it("adds tip + tax on the pre-tax bill and splits equally", () => {
+    const r = computeTipSplit({ bill: "1000", tipPct: "10", taxPct: "5", people: 4 });
+    expect(round(r.tax)).toBe(50);   // 5% of 1000
+    expect(round(r.tip)).toBe(100);  // 10% of 1000
+    expect(round(r.grand)).toBe(1150);
+    expect(round(r.perHead)).toBe(287.5);
+  });
+  it("handles zero people without dividing by zero", () => {
+    const r = computeTipSplit({ bill: "500", tipPct: "10", taxPct: "0", people: 0 });
+    expect(r.perHead).toBe(0);
+    expect(round(r.grand)).toBe(550);
+  });
+  it("clamps negative / NaN inputs to zero", () => {
+    const r = computeTipSplit({ bill: "-100", tipPct: "abc", taxPct: "-5", people: -3 });
+    expect(r.bill).toBe(0); expect(r.tip).toBe(0); expect(r.tax).toBe(0); expect(r.grand).toBe(0); expect(r.people).toBe(0);
+  });
+});
+
+describe("guessIcon", () => {
+  it("maps common appliance names to icon keys", () => {
+    expect(guessIcon("Air Conditioner")).toBe("ac");
+    expect(guessIcon("AC")).toBe("ac");
+    expect(guessIcon("Geyser")).toBe("water");
+    expect(guessIcon("Water heater")).toBe("water");
+    expect(guessIcon("Induction")).toBe("flame");
+    expect(guessIcon("Ceiling fan")).toBe("fan");
+    expect(guessIcon("Tube light")).toBe("bulb");
+    expect(guessIcon("Washing machine")).toBe("wash");
+    expect(guessIcon("Fridge")).toBe("fridge");
+    expect(guessIcon("Smart TV")).toBe("tv");
+    expect(guessIcon("Microwave")).toBe("kitchen");
+  });
+  it("falls back to bolt for unknown / empty input", () => {
+    expect(guessIcon("New appliance")).toBe("bolt");
+    expect(guessIcon("")).toBe("bolt");
+    expect(guessIcon(undefined)).toBe("bolt");
+    expect(guessIcon(null)).toBe("bolt");
+  });
+  it("only ever returns a key that the UI can render", () => {
+    ["AC", "Geyser", "Induction", "Fan", "Light", "Washer", "Fridge", "TV", "Oven", "random thing"].forEach(n => {
+      expect(ICON_KEYS).toContain(guessIcon(n));
+    });
   });
 });

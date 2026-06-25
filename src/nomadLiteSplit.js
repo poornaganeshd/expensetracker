@@ -30,6 +30,23 @@ export function fmt(n) {
 }
 export function pctFmt(n) { return (Math.round(n * 10) / 10) + "%"; }
 
+// Appliance icon keys (the UI maps each key → a Tabler component). Kept here so
+// the name→key guesser is pure + unit-tested; NomadLite.jsx owns the key→glyph map.
+export const ICON_KEYS = ["bolt", "ac", "water", "flame", "bulb", "fan", "wash", "fridge", "tv", "kitchen"];
+export function guessIcon(name) {
+  const n = String(name || "").toLowerCase();
+  if (/\bac\b|air ?cond|cooler/.test(n)) return "ac";
+  if (/geyser|water|shower|heater/.test(n)) return "water";
+  if (/induction|stove|gas|cook|burner/.test(n)) return "flame";
+  if (/\bfan\b/.test(n)) return "fan";
+  if (/light|bulb|lamp|tube|\bled\b/.test(n)) return "bulb";
+  if (/wash|laundry|machine/.test(n)) return "wash";
+  if (/fridge|refriger|freezer/.test(n)) return "fridge";
+  if (/\btv\b|telly|television|screen/.test(n)) return "tv";
+  if (/kitchen|micro|oven|mixer|grinder/.test(n)) return "kitchen";
+  return "bolt";
+}
+
 export const DEFAULT_STATE = {
   scenarioName: "",
   totalBill: "",
@@ -58,6 +75,21 @@ export function loadState() {
   } catch {
     return { ...DEFAULT_STATE };
   }
+}
+
+// Pure tip/tax split (second Lite preset). Tip and tax are each a % of the
+// pre-tax bill; grand = bill + tax + tip, divided equally. Raw numbers (round at
+// display, like computeSplit). Negative / NaN inputs clamp to 0.
+export function computeTipSplit(s) {
+  const bill = Math.max(0, Number(s.bill) || 0);
+  const tipPct = Math.max(0, Number(s.tipPct) || 0);
+  const taxPct = Math.max(0, Number(s.taxPct) || 0);
+  const people = Math.max(0, Math.floor(Number(s.people) || 0));
+  const tax = bill * taxPct / 100;
+  const tip = bill * tipPct / 100;
+  const grand = bill + tax + tip;
+  const perHead = people > 0 ? grand / people : 0;
+  return { bill, tax, tip, grand, perHead, people };
 }
 
 // Pure split computation. `s` is the persisted state shape above.
