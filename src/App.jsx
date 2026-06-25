@@ -2236,7 +2236,6 @@ export default function Nomad() {
       sSp(p => p.filter(s => s.id !== id)); sbDelete("splits", id);
       showT("IOU deleted", "success");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ex, sp, stl, inc, tr]);
   const addRec = r => { sRec(p => [...p, r]); sbUpsert("recurring", [toSB(r, COLS.recurring)]); showT(r.name + " added as recurring", "success"); };
   const addCust = () => { if (!nn.trim()) return; const id = nn.trim().toLowerCase().replace(/\s+/g, "_") + "_" + uid(), item = { id, name: nn.trim(), emoji: ne2, color: nc }; if (mt === "expense") sCats(p => [...p, item]); else sIsrc(p => [...p, item]); sNN(""); sNE2("📁"); sNC("#E07A5F") };
