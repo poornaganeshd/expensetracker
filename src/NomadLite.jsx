@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { IconChevronLeft, IconRefresh, IconPlus, IconX, IconTrash, IconCircleCheck, IconAlertTriangle, IconCopy, IconBrandWhatsapp, IconPrinter, IconHome, IconBolt, IconAirConditioning, IconDroplet, IconFlame, IconBulb, IconWind, IconWashMachine, IconFridge, IconDeviceTv, IconToolsKitchen2 } from "@tabler/icons-react";
-import { LS_KEY, DEFAULT_STATE, loadState, computeSplit, uid, avatarColor, groupColor, initials, fmt, pctFmt } from "./nomadLiteSplit";
+import { LS_KEY, DEFAULT_STATE, loadState, computeSplit, uid, avatarColor, groupColor, initials, fmt, pctFmt, guessIcon, ICON_KEYS } from "./nomadLiteSplit";
 
 /*
  * NOMAD Lite — standalone quick-calculator presets that live under the Events tab.
@@ -33,20 +33,6 @@ const hintS = { fontSize: 11, color: "var(--muted)", marginTop: 6, fontWeight: 6
 
 // ── appliance icons (optional, additive — auto-guessed from the group name) ──
 const APPLIANCE_ICONS = { bolt: IconBolt, ac: IconAirConditioning, water: IconDroplet, flame: IconFlame, bulb: IconBulb, fan: IconWind, wash: IconWashMachine, fridge: IconFridge, tv: IconDeviceTv, kitchen: IconToolsKitchen2 };
-const ICON_KEYS = Object.keys(APPLIANCE_ICONS);
-function guessIcon(name) {
-  const n = String(name || "").toLowerCase();
-  if (/\bac\b|air ?cond|cooler/.test(n)) return "ac";
-  if (/geyser|water|shower|heater/.test(n)) return "water";
-  if (/induction|stove|gas|cook|burner/.test(n)) return "flame";
-  if (/\bfan\b/.test(n)) return "fan";
-  if (/light|bulb|lamp|tube|\bled\b/.test(n)) return "bulb";
-  if (/wash|laundry|machine/.test(n)) return "wash";
-  if (/fridge|refriger|freezer/.test(n)) return "fridge";
-  if (/\btv\b|telly|television|screen/.test(n)) return "tv";
-  if (/kitchen|micro|oven|mixer|grinder/.test(n)) return "kitchen";
-  return "bolt";
-}
 const GroupIcon = ({ g, size = 18, color }) => { const I = APPLIANCE_ICONS[g.icon] || APPLIANCE_ICONS[guessIcon(g.name)] || IconBolt; return <I size={size} color={color} stroke={2} />; };
 
 // Allocation ring. `size`/`stroke` let the same component serve the hero (compact)
@@ -104,7 +90,7 @@ function CurrentSplit({ onToast }) {
   const toggleBase = (id) => set(s => ({ baseMembers: s.baseMembers.includes(id) ? s.baseMembers.filter(x => x !== id) : [...s.baseMembers, id] }));
 
   // group ops (icon defaults to an auto-guess from the name; user can re-pick)
-  const addGroup = () => set(s => ({ groups: [...s.groups, { id: uid("G"), name: "New appliance", pct: 0, members: [], note: "", icon: "" }] }));
+  const addGroup = () => { const id = uid("G"); set(s => ({ groups: [...s.groups, { id, name: "New appliance", pct: 0, members: [], note: "", icon: "" }] })); return id; };
   const removeGroup = (id) => set(s => ({ groups: s.groups.filter(g => g.id !== id) }));
   const updateGroup = (id, patch) => set(s => ({ groups: s.groups.map(g => g.id === id ? { ...g, ...patch } : g) }));
   const toggleGroupMember = (gId, pId) => set(s => ({ groups: s.groups.map(g => g.id === gId ? { ...g, members: g.members.includes(pId) ? g.members.filter(x => x !== pId) : [...g.members, pId] } : g) }));
@@ -136,7 +122,7 @@ function CurrentSplit({ onToast }) {
     if (result.unallocated > 0.5) donutSegments.push({ label: "Not yet assigned", amount: result.unallocated, color: "var(--border)" });
     donutTotal = result.base + result.extra;
     if (result.normalized) banners.push({ kind: "warn", text: `Group shares added up to ${pctFmt(result.rawTotalPct)}, so they were auto-scaled to fit 100% of the extra.` });
-    if (result.unallocated > 0.5 && st.groups.length === 0) banners.push({ kind: "warn", text: `No appliance groups yet, so ${fmt(result.unallocated)} of extra isn't assigned to anyone. Add one under Extras.` });
+    if (result.unallocated > 0.5) banners.push({ kind: "warn", text: st.groups.length === 0 ? `No appliance groups yet, so ${fmt(result.unallocated)} of extra isn't assigned to anyone. Add one under Extras.` : `${fmt(result.unallocated)} of extra isn't assigned — give your appliance groups a share % under Extras.` });
     if (st.mode === "manual" && totalNum > 0) { const diff = totalNum - (result.base + result.extra); if (Math.abs(diff) > 0.5) banners.push({ kind: "warn", text: `Total bill (${fmt(totalNum)}) doesn't match base + extra (${fmt(result.base + result.extra)}) — off by ${fmt(Math.abs(diff))}.` }); }
   }
   const visSegs = donutSegments.filter(s => s.amount > 0.001);
@@ -261,25 +247,29 @@ function CurrentSplit({ onToast }) {
 
           {editingPersonId && st.people.find(p => p.id === editingPersonId) && (
             <div style={{ ...card, padding: 12, display: "flex", alignItems: "center", gap: 8 }}>
-              <input autoFocus defaultValue={st.people.find(p => p.id === editingPersonId).name} onBlur={e => renamePerson(editingPersonId, e.target.value)} onKeyDown={e => { if (e.key === "Enter") { renamePerson(editingPersonId, e.target.value); setEditingPersonId(null); } if (e.key === "Escape") setEditingPersonId(null); }} style={{ ...inputS, flex: 1, border: `1.5px solid ${ACCENT}` }} />
+              <input key={editingPersonId} autoFocus defaultValue={st.people.find(p => p.id === editingPersonId).name} onBlur={e => renamePerson(editingPersonId, e.target.value)} onKeyDown={e => { if (e.key === "Enter") { renamePerson(editingPersonId, e.target.value); setEditingPersonId(null); } if (e.key === "Escape") setEditingPersonId(null); }} style={{ ...inputS, flex: 1, border: `1.5px solid ${ACCENT}` }} />
               <button onClick={() => { removePerson(editingPersonId); setEditingPersonId(null); }} style={{ width: 38, height: 38, borderRadius: 11, border: "none", background: "var(--bg)", color: "#c0524a", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><IconTrash size={16} /></button>
               <button onClick={() => setEditingPersonId(null)} style={{ width: 38, height: 38, borderRadius: 11, border: "none", background: "var(--bg)", color: "var(--muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><IconX size={16} /></button>
             </div>
           )}
 
-          <div style={{ fontSize: 12, color: "var(--ts)", fontWeight: 700, margin: "8px 0 8px", fontFamily: "var(--font-h)", display: "flex", alignItems: "center", gap: 6 }}><IconHome size={14} />Shares base load · {fmt(result.basePerPerson)} each</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-            {st.people.length === 0 && <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 700 }}>Add people first</span>}
-            {st.people.map(p => {
-              const on = st.baseMembers.includes(p.id);
-              return (
-                <button key={p.id} onClick={() => toggleBase(p.id)} style={{ display: "flex", alignItems: "center", gap: 7, background: on ? ACCENT + "1f" : "var(--bg)", border: `1.5px solid ${on ? ACCENT : "transparent"}`, borderRadius: 22, padding: "4px 12px 4px 4px", cursor: "pointer" }}>
-                  <div style={{ width: 26, height: 26, borderRadius: "50%", background: avatarColor(p.id), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 10, fontFamily: "var(--font-h)" }}>{initials(p.name)}</div>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? ACCENT_DEEP : "var(--ts)" }}>{on ? "✓ " : ""}{p.name}</span>
-                </button>
-              );
-            })}
-          </div>
+          {evenSplit ? (
+            <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, margin: "8px 0", fontFamily: "var(--font-b)", lineHeight: 1.5 }}>Even split is on — base load &amp; appliances are ignored. Everyone pays {fmt(perHead)}. Switch to <b style={{ color: "var(--text)" }}>Detailed split</b> under Bill to use base &amp; appliances.</div>
+          ) : (<>
+            <div style={{ fontSize: 12, color: "var(--ts)", fontWeight: 700, margin: "8px 0 8px", fontFamily: "var(--font-h)", display: "flex", alignItems: "center", gap: 6 }}><IconHome size={14} />Shares base load · {fmt(result.basePerPerson)} each</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {st.people.length === 0 && <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 700 }}>Add people first</span>}
+              {st.people.map(p => {
+                const on = st.baseMembers.includes(p.id);
+                return (
+                  <button key={p.id} onClick={() => toggleBase(p.id)} style={{ display: "flex", alignItems: "center", gap: 7, background: on ? ACCENT + "1f" : "var(--bg)", border: `1.5px solid ${on ? ACCENT : "transparent"}`, borderRadius: 22, padding: "4px 12px 4px 4px", cursor: "pointer" }}>
+                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: avatarColor(p.id), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 10, fontFamily: "var(--font-h)" }}>{initials(p.name)}</div>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? ACCENT_DEEP : "var(--ts)" }}>{on ? "✓ " : ""}{p.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>)}
         </div>
       )}
 
@@ -297,7 +287,7 @@ function CurrentSplit({ onToast }) {
                   <div style={{ width: 34, height: 34, borderRadius: 9, background: groupColor(idx) + "22", color: groupColor(idx), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><GroupIcon g={g} size={18} color={groupColor(idx)} /></div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", fontFamily: "var(--font-h)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{memberNames} · {pctFmt(Number(g.pct) || 0)}</div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{memberNames} · {pctFmt(gb ? gb.effPct : (Number(g.pct) || 0))} of extra</div>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 800, color: groupColor(idx), fontFamily: "var(--font-h)", flexShrink: 0 }}>{fmt(gb ? gb.amt : 0)}</div>
                 </div>
@@ -338,7 +328,7 @@ function CurrentSplit({ onToast }) {
               </div>
             );
           })}
-          <button onClick={() => { addGroup(); }} style={{ width: "100%", marginTop: 14, border: "1px dashed var(--border)", background: "transparent", fontSize: 12.5, fontWeight: 700, padding: 12, borderRadius: 12, color: "var(--ts)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "var(--font-h)" }}><IconPlus size={15} />Add appliance / extra</button>
+          <button onClick={() => { const id = addGroup(); setExpandedGroup(id); setIconPickGroup(null); }} style={{ width: "100%", marginTop: 14, border: "1px dashed var(--border)", background: "transparent", fontSize: 12.5, fontWeight: 700, padding: 12, borderRadius: 12, color: "var(--ts)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "var(--font-h)" }}><IconPlus size={15} />Add appliance / extra</button>
         </div>
       )}
 
@@ -434,8 +424,8 @@ function CurrentSplit({ onToast }) {
         </div>
       )}
 
-      {/* ── anchored share bar ── */}
-      <div style={{ position: "sticky", bottom: 0, display: "flex", alignItems: "center", gap: 10, marginTop: 16, padding: "12px 4px", borderTop: "0.5px solid var(--border)", background: "var(--bg)" }}>
+      {/* ── share bar (footer) ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, padding: "12px 4px", borderTop: "0.5px solid var(--border)", background: "var(--bg)" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>Collected</div>
           <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", fontFamily: "var(--font-h)", fontVariantNumeric: "tabular-nums" }}>{fmt(grand)} <span style={{ fontSize: 11, fontWeight: 700, color: balanced ? GREEN : AMBER }}>· {balanced ? "balanced" : "check totals"}</span></div>
@@ -465,7 +455,7 @@ export default function NomadLite({ onBack, onToast = () => {} }) {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "6px 20px 24px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "6px 20px 100px" }}>
         {!preset ? (
           <div>
             <p style={{ fontSize: 13, color: "var(--muted)", fontWeight: 600, margin: "2px 0 16px", lineHeight: 1.5 }}>Quick calculators, no logging needed. Pick a preset.</p>
