@@ -69,6 +69,9 @@ function CurrentSplit({ onToast }) {
   useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(st)); } catch { /* quota */ } }, [st]);
 
   const set = (patch) => setSt(s => ({ ...s, ...(typeof patch === "function" ? patch(s) : patch) }));
+  // Bill amounts are free-text strings; strip anything that isn't a digit/dot so
+  // a stray "-" or "e" can't make computeSplit/donut math go weird.
+  const numOnly = (v) => String(v).replace(/[^0-9.]/g, "");
 
   // auto-suggest base load = baseRate × (#base members), unless user typed their own
   useEffect(() => {
@@ -172,14 +175,14 @@ function CurrentSplit({ onToast }) {
               <div style={labelS}>Total bill</div>
               <div style={{ position: "relative" }}>
                 <span style={{ position: "absolute", left: 2, top: "50%", transform: "translateY(-50%)", fontWeight: 800, color: "var(--muted)" }}>₹</span>
-                <input type="number" min="0" inputMode="decimal" value={st.totalBill} onChange={e => set({ totalBill: e.target.value })} placeholder="0" style={{ ...inputS, padding: "4px 0 4px 16px", fontSize: 22, border: "none", background: "transparent", borderRadius: 0 }} />
+                <input type="number" min="0" inputMode="decimal" value={st.totalBill} onChange={e => set({ totalBill: numOnly(e.target.value) })} placeholder="0" style={{ ...inputS, padding: "4px 0 4px 16px", fontSize: 22, border: "none", background: "transparent", borderRadius: 0 }} />
               </div>
             </div>
             <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: 12 }}>
               <div style={labelS}>Base load</div>
               <div style={{ position: "relative" }}>
                 <span style={{ position: "absolute", left: 2, top: "50%", transform: "translateY(-50%)", fontWeight: 800, color: "var(--muted)" }}>₹</span>
-                <input type="number" min="0" inputMode="decimal" value={st.baseBill} onChange={e => set({ baseBill: e.target.value, baseTouched: true })} placeholder="0" style={{ ...inputS, padding: "4px 0 4px 16px", fontSize: 22, border: "none", background: "transparent", borderRadius: 0 }} />
+                <input type="number" min="0" inputMode="decimal" value={st.baseBill} onChange={e => set({ baseBill: numOnly(e.target.value), baseTouched: true })} placeholder="0" style={{ ...inputS, padding: "4px 0 4px 16px", fontSize: 22, border: "none", background: "transparent", borderRadius: 0 }} />
               </div>
             </div>
           </div>
@@ -208,7 +211,7 @@ function CurrentSplit({ onToast }) {
                   <label style={labelS}>Extra amount (₹)</label>
                   <div style={{ position: "relative" }}>
                     <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontWeight: 800, color: "var(--muted)" }}>₹</span>
-                    <input type="number" min="0" inputMode="decimal" value={st.manualExtra} onChange={e => set({ manualExtra: e.target.value })} placeholder="0" style={{ ...inputS, paddingLeft: 30 }} />
+                    <input type="number" min="0" inputMode="decimal" value={st.manualExtra} onChange={e => set({ manualExtra: numOnly(e.target.value) })} placeholder="0" style={{ ...inputS, paddingLeft: 30 }} />
                   </div>
                 </div>
               )}
@@ -416,11 +419,11 @@ function CurrentSplit({ onToast }) {
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+          {st.people.length > 0 && <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
             <button onClick={copy} style={{ flex: "1 1 calc(33% - 6px)", justifyContent: "center", display: "flex", alignItems: "center", gap: 6, border: "1.5px solid var(--border)", background: "var(--card)", color: "var(--text)", fontWeight: 800, fontSize: 12.5, padding: "11px 10px", borderRadius: 12, cursor: "pointer" }}><IconCopy size={15} />Copy</button>
             <button onClick={whatsapp} style={{ flex: "1 1 calc(33% - 6px)", justifyContent: "center", display: "flex", alignItems: "center", gap: 6, border: "1.5px solid var(--border)", background: "var(--card)", color: "var(--text)", fontWeight: 800, fontSize: 12.5, padding: "11px 10px", borderRadius: 12, cursor: "pointer" }}><IconBrandWhatsapp size={15} />Share</button>
             <button onClick={() => window.print()} style={{ flex: "1 1 calc(33% - 6px)", justifyContent: "center", display: "flex", alignItems: "center", gap: 6, border: "1.5px solid var(--border)", background: "var(--card)", color: "var(--text)", fontWeight: 800, fontSize: 12.5, padding: "11px 10px", borderRadius: 12, cursor: "pointer" }}><IconPrinter size={15} />Print</button>
-          </div>
+          </div>}
         </div>
       )}
 
