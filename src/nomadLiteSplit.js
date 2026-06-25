@@ -77,6 +77,21 @@ export function loadState() {
   }
 }
 
+// Pure tip/tax split (second Lite preset). Tip and tax are each a % of the
+// pre-tax bill; grand = bill + tax + tip, divided equally. Raw numbers (round at
+// display, like computeSplit). Negative / NaN inputs clamp to 0.
+export function computeTipSplit(s) {
+  const bill = Math.max(0, Number(s.bill) || 0);
+  const tipPct = Math.max(0, Number(s.tipPct) || 0);
+  const taxPct = Math.max(0, Number(s.taxPct) || 0);
+  const people = Math.max(0, Math.floor(Number(s.people) || 0));
+  const tax = bill * taxPct / 100;
+  const tip = bill * tipPct / 100;
+  const grand = bill + tax + tip;
+  const perHead = people > 0 ? grand / people : 0;
+  return { bill, tax, tip, grand, perHead, people };
+}
+
 // Pure split computation. `s` is the persisted state shape above.
 export function computeSplit(s, { evenSplit = false } = {}) {
   const people = s.people || [];

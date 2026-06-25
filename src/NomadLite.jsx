@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { IconChevronLeft, IconRefresh, IconPlus, IconX, IconTrash, IconCircleCheck, IconAlertTriangle, IconCopy, IconBrandWhatsapp, IconPrinter, IconHome, IconBolt, IconAirConditioning, IconDroplet, IconFlame, IconBulb, IconWind, IconWashMachine, IconFridge, IconDeviceTv, IconToolsKitchen2 } from "@tabler/icons-react";
-import { LS_KEY, DEFAULT_STATE, loadState, computeSplit, uid, avatarColor, groupColor, initials, fmt, pctFmt, guessIcon, ICON_KEYS } from "./nomadLiteSplit";
+import { LS_KEY, DEFAULT_STATE, loadState, computeSplit, computeTipSplit, uid, avatarColor, groupColor, initials, fmt, pctFmt, guessIcon, ICON_KEYS } from "./nomadLiteSplit";
 
 /*
  * NOMAD Lite — standalone quick-calculator presets that live under the Events tab.
@@ -25,11 +25,15 @@ const ACCENT_DEEP = "#C4603A";
 const AMBER = "#C9882B";
 const GREEN = "#1D9E75";
 
+// keyboard activation for clickable non-button elements (Enter / Space)
+const kbd = fn => e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } };
+
 // ── small style helpers ──
 const card = { background: "var(--card)", borderRadius: 18, padding: 16, marginBottom: 14, border: "1px solid var(--border)", boxShadow: "0 2px 10px rgba(44,36,22,0.05)" };
 const inputS = { width: "100%", background: "var(--bg)", border: "1.5px solid var(--border)", color: "var(--text)", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 15, padding: "11px 12px", borderRadius: 12, outline: "none", boxSizing: "border-box" };
 const labelS = { display: "block", fontSize: 12, fontWeight: 700, color: "var(--ts)", marginBottom: 6, fontFamily: "var(--font-h)" };
 const hintS = { fontSize: 11, color: "var(--muted)", marginTop: 6, fontWeight: 600, fontFamily: "var(--font-b)" };
+const stepBtn = { width: 46, height: 46, borderRadius: 12, border: "1.5px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 22, fontWeight: 700, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" };
 
 // ── appliance icons (optional, additive — auto-guessed from the group name) ──
 const APPLIANCE_ICONS = { bolt: IconBolt, ac: IconAirConditioning, water: IconDroplet, flame: IconFlame, bulb: IconBulb, fan: IconWind, wash: IconWashMachine, fridge: IconFridge, tv: IconDeviceTv, kitchen: IconToolsKitchen2 };
@@ -229,12 +233,12 @@ function CurrentSplit({ onToast }) {
           <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8, marginBottom: 6, scrollbarWidth: "none" }}>
             {st.people.map(p => (
               <div key={p.id} style={{ textAlign: "center", flexShrink: 0, width: 54 }}>
-                <div onClick={() => setEditingPersonId(editingPersonId === p.id ? null : p.id)} style={{ width: 46, height: 46, borderRadius: "50%", background: avatarColor(p.id), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, margin: "0 auto", cursor: "pointer", fontFamily: "var(--font-h)", outline: editingPersonId === p.id ? `2px solid var(--text)` : "none", outlineOffset: 2 }}>{initials(p.name)}</div>
+                <div onClick={() => setEditingPersonId(editingPersonId === p.id ? null : p.id)} role="button" tabIndex={0} onKeyDown={kbd(() => setEditingPersonId(editingPersonId === p.id ? null : p.id))} aria-label={`Edit ${p.name}`} style={{ width: 46, height: 46, borderRadius: "50%", background: avatarColor(p.id), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, margin: "0 auto", cursor: "pointer", fontFamily: "var(--font-h)", outline: editingPersonId === p.id ? `2px solid var(--text)` : "none", outlineOffset: 2 }}>{initials(p.name)}</div>
                 <div style={{ fontSize: 12, marginTop: 5, color: "var(--text)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
               </div>
             ))}
             <div style={{ textAlign: "center", flexShrink: 0, width: 54 }}>
-              <div onClick={() => setAddingPerson(a => !a)} style={{ width: 46, height: 46, borderRadius: "50%", background: "transparent", border: "1px dashed var(--border)", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", cursor: "pointer" }}><IconPlus size={18} /></div>
+              <div onClick={() => setAddingPerson(a => !a)} role="button" tabIndex={0} onKeyDown={kbd(() => setAddingPerson(a => !a))} aria-label="Add a person" style={{ width: 46, height: 46, borderRadius: "50%", background: "transparent", border: "1px dashed var(--border)", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", cursor: "pointer" }}><IconPlus size={18} /></div>
               <div style={{ fontSize: 12, marginTop: 5, color: "var(--muted)", fontWeight: 600 }}>Add</div>
             </div>
           </div>
@@ -286,7 +290,7 @@ function CurrentSplit({ onToast }) {
             const open = expandedGroup === g.id;
             return (
               <div key={g.id} style={{ borderBottom: "0.5px solid var(--border)" }}>
-                <div onClick={() => { setExpandedGroup(open ? null : g.id); setIconPickGroup(null); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 0", cursor: "pointer" }}>
+                <div onClick={() => { setExpandedGroup(open ? null : g.id); setIconPickGroup(null); }} role="button" tabIndex={0} aria-expanded={open} aria-label={`Edit ${g.name}`} onKeyDown={kbd(() => { setExpandedGroup(open ? null : g.id); setIconPickGroup(null); })} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 0", cursor: "pointer" }}>
                   <div style={{ width: 34, height: 34, borderRadius: 9, background: groupColor(idx) + "22", color: groupColor(idx), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><GroupIcon g={g} size={18} color={groupColor(idx)} /></div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", fontFamily: "var(--font-h)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</div>
@@ -439,9 +443,52 @@ function CurrentSplit({ onToast }) {
   );
 }
 
+// ── Tip & Tax Split preset (ephemeral calculator; no persistence needed) ──
+function TipSplit() {
+  const [bill, setBill] = useState("");
+  const [tipPct, setTipPct] = useState("10");
+  const [taxPct, setTaxPct] = useState("5");
+  const [people, setPeople] = useState(2);
+  const num = (v) => String(v).replace(/[^0-9.]/g, "");
+  const r = computeTipSplit({ bill, tipPct, taxPct, people });
+  return (
+    <div>
+      <div style={card}>
+        <label style={labelS}>Bill amount (pre-tax)</label>
+        <div style={{ position: "relative", marginBottom: 16 }}>
+          <span style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", fontWeight: 800, color: "var(--muted)", fontSize: 18 }}>₹</span>
+          <input type="number" min="0" inputMode="decimal" value={bill} onChange={e => setBill(num(e.target.value))} placeholder="0" style={{ ...inputS, fontSize: 28, fontWeight: 800, textAlign: "center", padding: "16px 13px", fontVariantNumeric: "tabular-nums" }} />
+        </div>
+        <label style={labelS}>Tip</label>
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          {["5", "10", "15", "18", "20"].map(p => { const on = tipPct === p; return <button key={p} onClick={() => setTipPct(p)} style={{ flex: 1, padding: "9px 4px", borderRadius: 10, border: `1.5px solid ${on ? ACCENT : "var(--border)"}`, background: on ? ACCENT + "1f" : "var(--bg)", color: on ? ACCENT_DEEP : "var(--ts)", fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}>{p}%</button>; })}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <div style={{ flex: 1 }}><label style={{ ...labelS, fontSize: 11 }}>Custom tip %</label><input type="number" min="0" inputMode="decimal" value={tipPct} onChange={e => setTipPct(num(e.target.value))} style={inputS} /></div>
+          <div style={{ flex: 1 }}><label style={{ ...labelS, fontSize: 11 }}>Tax %</label><input type="number" min="0" inputMode="decimal" value={taxPct} onChange={e => setTaxPct(num(e.target.value))} style={inputS} /></div>
+        </div>
+        <label style={labelS}>Split between</label>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button aria-label="Fewer people" onClick={() => setPeople(p => Math.max(1, p - 1))} style={stepBtn}>−</button>
+          <div style={{ flex: 1, textAlign: "center", fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 20, color: "var(--text)" }}>{people} <span style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)" }}>{people === 1 ? "person" : "people"}</span></div>
+          <button aria-label="More people" onClick={() => setPeople(p => Math.min(99, p + 1))} style={stepBtn}>+</button>
+        </div>
+      </div>
+      <div style={{ ...card, textAlign: "center", padding: 20 }}>
+        <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700, fontFamily: "var(--font-h)", letterSpacing: "0.5px", textTransform: "uppercase" }}>Each person pays</div>
+        <div style={{ fontSize: 36, fontWeight: 800, fontFamily: "var(--font-h)", color: ACCENT, margin: "4px 0", fontVariantNumeric: "tabular-nums" }}>{fmt(r.perHead)}</div>
+        <div style={{ borderTop: "1px dashed var(--border)", marginTop: 14, paddingTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
+          {[["Bill", r.bill], ["Tax", r.tax], ["Tip", r.tip], ["Total", r.grand]].map(([lbl, v], i) => <div key={lbl} style={{ borderLeft: i ? "1px solid var(--border)" : "none" }}><div style={{ fontSize: 9, color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 700, letterSpacing: "0.5px" }}>{lbl.toUpperCase()}</div><div style={{ fontSize: 12.5, fontFamily: "var(--font-h)", fontWeight: 700, color: lbl === "Total" ? "var(--text)" : "var(--ts)", marginTop: 3 }}>{fmt(v)}</div></div>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Future presets register here — keeps NOMAD Lite a shell that grows.
 const PRESETS = [
   { id: "current-split", name: "Current Split", desc: "Split a shared electricity / utility bill by base load + appliances", icon: "⚡", color: ACCENT, Component: CurrentSplit },
+  { id: "tip-split", name: "Tip & Tax Split", desc: "Split a restaurant bill with tip and tax across the table", icon: "🍽️", color: AMBER, Component: TipSplit },
 ];
 
 export default function NomadLite({ onBack, onToast = () => {} }) {
