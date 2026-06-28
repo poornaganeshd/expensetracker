@@ -1,47 +1,67 @@
 import { useState, useRef, useEffect } from "react";
 import { roundMoney, localDateKey } from "./financeUtils";
 import { parseAmount } from "./txParsers";
+import { CaretLeft, CaretRight, CaretDown, CaretUp, CheckCircle, ArrowUp, ArrowDown, Plus, Trash, SkipForward, CurrencyInr, Wallet, X, ArrowCounterClockwise } from "@phosphor-icons/react";
 
-// ── 1:1 IOU "card wallet" ───────────────────────────────────────────────────
-// Presentational re-skin of the personal (non-event) split/IOU experience,
-// modelled on the "Settle · Card Wallet" mockup but themed to NOMAD's CSS vars
-// so it works in both light and dark. It owns ZERO data/settle logic — every
-// mutation routes back through the same App handlers the old <Splits> used
-// (onAdd / onSettle / onSettleNet / onSkip / onDelete). Group-event splits are
-// untouched (they live in the Events tab); this filters to `!eventId`.
+// ── 1:1 IOU "card wallet" — NEUMORPHIC / pastel re-skin ─────────────────────
+// Presentational re-skin of the personal (non-event) split/IOU experience.
+// Owns ZERO data/settle logic — every mutation routes back through the same App
+// handlers the old <Splits> used (onAdd / onSettle / onSettleNet / onSkip /
+// onDelete). Group-event splits are untouched (Events tab); this filters !eventId.
 //
-// Helpers injected as props because they live in App.jsx (the monolith) and are
-// not exported: `fmt` (INR formatter), `uid` (client id), `isUpiLite` (wallet
-// guard) and `SettleModal` (the existing themed per-IOU settle sheet, reused for
-// "record payment" so partial / wallet / cap validation stays identical).
+// Design language: soft neumorphism. Surfaces share the page background and gain
+// depth from paired soft shadows (light highlight top-left + soft dark shadow
+// bottom-right). Generous rounding, low contrast, pastel accents. Pressed /
+// selected controls use an INSET shadow. Theme-aware via --neu-bg/-lt/-dk vars
+// (set on the app root in App.jsx), with inline rgba fallbacks so it degrades.
 //
-// AddForm / PersonCard / NetSheet are module-level components (not defined inside
-// IOUWallet) so a parent re-render never remounts them — that would drop the add
-// form's focus/typed state mid-keystroke. They take everything they need as props.
+// Interaction (unchanged):
+//  • Home = Apple-Wallet CASCADE. Largest-balance person is the fully-shown FRONT
+//    card at the bottom; others peek their header upward. Swipe down (or tap the
+//    hint) fans them into a flat list; swipe up restacks. Pure gesture.
+//  • Quick-add = card MORPH. Tapping + on a card grows that card's rect into a
+//    full-screen soft compose panel (shared-element); close shrinks it back.
+//    +New IOU morphs from the button.
 
-// pure, file-local (mirrors avatarColor / initials in App.jsx)
-const PALS = ["#E07A5F", "#6BAA75", "#7B8CDE", "#F4A261", "#81B29A", "#A78BFA", "#F2CC8F", "#E07A5F"];
+// pastel palette (avatar / person-card fills)
+const PALS = ["#F7C8C8", "#C8E6D4", "#C8D6F0", "#EAD6F5", "#FBE3C5", "#CDEDE6", "#F5D6E8", "#DCEBC4"];
 const avatarColor = name => { let h = 0; for (const c of String(name || "")) h = (h * 31 + c.charCodeAt(0)) & 0xffff; return PALS[h % PALS.length]; };
 const initials = name => String(name || "").trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || "").join("") || "?";
-const shade = (hex, p) => { try { const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255; r = Math.round(r * (1 - p)); g = Math.round(g * (1 - p)); b = Math.round(b * (1 - p)); return `rgb(${r},${g},${b})`; } catch { return hex; } };
 const iouDateKey = it => it.date || (it.createdAt ? localDateKey(new Date(it.createdAt)) : (it.created_at ? localDateKey(new Date(it.created_at)) : ""));
 const relDate = d => { if (!d) return ""; const t = /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + "T12:00:00") : new Date(d); const diff = Math.round((Date.now() - t) / 864e5); if (Number.isNaN(diff)) return ""; if (diff <= 0) return "Today"; if (diff === 1) return "Yesterday"; if (diff < 7) return diff + "d ago"; return t.toLocaleDateString("en-IN", { day: "numeric", month: "short" }); };
 
-const EMBER = "#E07A5F", MINT = "#6BAA75", VIOLET = "#7B8CDE", AMBER = "#F4A261";
+// soft pastel semantics
+const MINT = "#7FBE9E", CORAL = "#E89B8B", VIOLET = "#A9A7E0", AMBER = "#E2B978";
+
+// neumorphic atoms (theme-aware vars + rgba fallback)
+const SURF = "var(--neu-bg, var(--card))";
+const NEU_RAISED = "6px 6px 14px var(--neu-dk,rgba(0,0,0,.16)), -6px -6px 14px var(--neu-lt,rgba(255,255,255,.7))";
+const NEU_SM = "4px 4px 9px var(--neu-dk,rgba(0,0,0,.15)), -4px -4px 9px var(--neu-lt,rgba(255,255,255,.65))";
+const NEU_INSET = "inset 4px 4px 9px var(--neu-dk,rgba(0,0,0,.18)), inset -4px -4px 9px var(--neu-lt,rgba(255,255,255,.6))";
+const RAD = 20, RAD_SM = 14;
+const EASE = "cubic-bezier(.2,.85,.25,1)";
+// soft foreground for a flat pastel block (gentle dark on light, soft light on dark)
+const lum = hex => { try { const n = parseInt(hex.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); } catch { return 0; } };
+const ink = hex => lum(hex) > 140 ? "#46435A" : "#EDEAF2";
 
 // keyboard activation for clickable non-button elements (Enter / Space)
 const kbd = fn => e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } };
 
-export default function IOUWallet({ splits = [], settlements = [], categories = [], wallets = [], fmt = n => "₹" + n, uid = () => Math.random().toString(36).slice(2), isUpiLite = () => false, SettleModal = null, onAdd = () => {}, onSettle = () => {}, onSettleNet = () => {}, onSkip = () => {}, onDelete = () => {}, onError = () => {} }) {
+// cascade geometry
+const CARD_H = 118, PEEK = 46, GAP = 18;
+
+export default function IOUWallet({ splits = [], settlements = [], categories = [], wallets = [], fmt = n => "₹" + n, uid = () => Math.random().toString(36).slice(2), isUpiLite = () => false, SettleModal = null, onAdd = () => {}, onSettle = () => {}, onSettleNet = () => {}, onSkip = () => {}, onUnskip = () => {}, onDelete = () => {}, onError = () => {} }) {
   const [view, sView] = useState("home");        // home | person
   const [cur, sCur] = useState(null);            // current person name
-  const [layout, sLayout] = useState("stack");   // stack | cards | deck
+  const [layout, sLayout] = useState("stack");   // stack (cascade) | cards (gesture: swipe down spreads, up restacks)
   const [settleTgt, sSettleTgt] = useState(null);// single split → SettleModal
   const [netSheet, sNetSheet] = useState(null);  // person name → whole-person net sheet
   const [delId, sDelId] = useState(null);
-  const [adding, sAdding] = useState(false);
-  const [deckIdx, sDeckIdx] = useState(0);       // active card in the deck carousel
+  const [adding, sAdding] = useState(false);     // person-detail add toggle
+  const [morph, sMorph] = useState(null);        // { name, rect } → card-morph quick-add
   const [burst, sBurst] = useState(0);           // confetti trigger (increments on a settle)
+  const touchY = useRef(null);                   // swipe gesture start-Y
+  const openMorph = (name, rect) => sMorph({ name, rect });
 
   // ── derived: canonical people + nets (mirrors App.jsx Splits aggregation) ──
   const paidBy = {}; settlements.filter(s => s.splitId != null && !s.eventId).forEach(s => { paidBy[s.splitId] = (paidBy[s.splitId] || 0) + s.amount; });
@@ -59,13 +79,13 @@ export default function IOUWallet({ splits = [], settlements = [], categories = 
   // person-card display data (pure over personMap + props; not a component)
   const cardInfo = name => {
     const pm = personMap[name]; const n = pm.net; const up = n > 0.5, down = n < -0.5;
-    const c1 = avatarColor(name); const c2 = shade(c1, 0.5);
+    const c1 = avatarColor(name);
     const open = pm.splits.filter(s => !s.settled && !s.skipped);
     const last = open.slice().sort((a, b) => iouDateKey(b).localeCompare(iouDateKey(a)))[0];
     const sub = open.length ? (last ? `${last.note || (categories.find(c => c.id === last.categoryId)?.name || "IOU")} · ${relDate(last.date || last.createdAt)}` : "") : "All settled";
-    return { n, up, down, c1, c2, openCount: open.length, sub, dir: up ? "OWES YOU" : down ? "YOU OWE" : "SETTLED", amt: Math.abs(n) < 0.5 ? "—" : fmt(Math.abs(n)) };
+    return { n, up, down, c1, openCount: open.length, sub, dir: up ? "Owes you" : down ? "You owe" : "Settled", amt: Math.abs(n) < 0.5 ? "—" : fmt(Math.abs(n)) };
   };
-  const openPerson = name => { sCur(name); sView("person"); sAdding(false); };
+  const openPerson = name => { sCur(name); sView("person"); sAdding(false); sMorph(null); };
   const addFormProps = { categories, uid, onAdd, onError, onDone: () => sAdding(false) };
 
   // ── PERSON DETAIL ─────────────────────────────────────────────────────────
@@ -73,72 +93,116 @@ export default function IOUWallet({ splits = [], settlements = [], categories = 
     const pm = personMap[cur]; const n = pm.net; const pos = n > 0.5; const ac = avatarColor(cur);
     const rows = pm.splits.slice().sort((a, b) => { const ra = (a.settled || a.skipped) ? 1 : 0, rb = (b.settled || b.skipped) ? 1 : 0; if (ra !== rb) return ra - rb; return iouDateKey(b).localeCompare(iouDateKey(a)); });
     return <div>
-      <div onClick={() => { sView("home"); sCur(null); }} role="button" tabIndex={0} onKeyDown={kbd(() => { sView("home"); sCur(null); })} aria-label="Back to wallet" style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--muted)", fontSize: 12.5, fontWeight: 600, fontFamily: "var(--font-h)", cursor: "pointer", padding: "6px 0", marginBottom: 4 }}>‹ Wallet</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-        <div style={{ width: 46, height: 46, borderRadius: 14, background: ac, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 16, color: "#fff" }}>{initials(cur)}</div>
-        <div><div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 18, color: "var(--text)" }}>{cur}</div><div style={{ fontSize: 12.5, fontWeight: 600, marginTop: 2, color: Math.abs(n) < 0.5 ? "var(--muted)" : pos ? MINT : EMBER }}>{Math.abs(n) < 0.5 ? "All settled up ✓" : pos ? `Owes you ${fmt(n)}` : `You owe ${fmt(-n)}`}</div></div>
+      <div onClick={() => { sView("home"); sCur(null); }} role="button" tabIndex={0} onKeyDown={kbd(() => { sView("home"); sCur(null); })} aria-label="Back to wallet" style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--muted)", fontSize: 12.5, fontWeight: 700, fontFamily: "var(--font-h)", cursor: "pointer", padding: "7px 12px", marginBottom: 8, borderRadius: 12, background: SURF, boxShadow: NEU_SM }}><CaretLeft size={14} weight="bold" /> Wallet</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 13, marginBottom: 16 }}>
+        <div style={{ width: 50, height: 50, borderRadius: 16, background: ac, color: ink(ac), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 17, boxShadow: NEU_SM }}>{initials(cur)}</div>
+        <div><div style={{ fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 19, color: "var(--text)" }}>{cur}</div><div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 2, color: Math.abs(n) < 0.5 ? "var(--muted)" : pos ? MINT : CORAL }}>{Math.abs(n) < 0.5 ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><CheckCircle size={13} weight="fill" /> All settled up</span> : pos ? `Owes you ${fmt(n)}` : `You owe ${fmt(-n)}`}</div></div>
       </div>
-      {Math.abs(n) >= 0.5 && <button onClick={() => sNetSheet(cur)} style={{ width: "100%", border: "none", borderRadius: 13, padding: 13, cursor: "pointer", color: "#fff", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 13.5, marginBottom: 14, background: pos ? MINT : EMBER }}>✓ Settle up · {pos ? `collect ${fmt(n)}` : `pay ${fmt(-n)}`}</button>}
+      {Math.abs(n) >= 0.5 && <button onClick={() => sNetSheet(cur)} style={{ width: "100%", border: "none", borderRadius: RAD_SM, boxShadow: NEU_SM, padding: 14, cursor: "pointer", color: ink(pos ? MINT : CORAL), fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 14, marginBottom: 16, background: pos ? MINT : CORAL, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><CheckCircle size={16} weight="fill" /> Settle up · {pos ? `collect ${fmt(n)}` : `pay ${fmt(-n)}`}</button>}
       {rows.map(s => {
-        const done = s.settled && !s.skipped, skip = s.skipped, owe = s.direction === "owe", col = owe ? EMBER : MINT;
+        const done = s.settled && !s.skipped, skip = s.skipped, owe = s.direction === "owe", col = owe ? CORAL : MINT;
         const rem = remOf(s), part = !done && !skip && rem < s.amount - 0.005;
         const c = categories.find(x => x.id === s.categoryId);
-        return <div key={s.id} style={{ ...card, borderRadius: 13, marginBottom: 8, overflow: "hidden", opacity: done || skip ? 0.55 : 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 13px" }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 13, background: (owe ? EMBER : MINT) + "1f" }}>{c?.emoji || (owe ? "↓" : "↑")}</div>
+        return <div key={s.id} style={{ ...neuCard, marginBottom: 12, overflow: "hidden", opacity: done || skip ? 0.6 : 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 14px" }}>
+            <div style={{ width: 32, height: 32, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 14, background: SURF, boxShadow: NEU_INSET, color: col }}>{c?.emoji || (owe ? <ArrowDown size={15} weight="bold" color={CORAL} /> : <ArrowUp size={15} weight="bold" color={MINT} />)}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 13, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>{s.note || c?.name || (owe ? "You owe" : "Owes you")}{done && <span style={tag(MINT)}>Settled</span>}{skip && <span style={tag(AMBER)}>Skipped</span>}{!done && !skip && <span style={tag(col)}>{owe ? "You owe" : "Owes you"}</span>}</div>
-              <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 3 }}>{c?.name || "IOU"} · {relDate(s.date || s.createdAt)}{part ? ` · ${fmt(rem)} left` : ""}</div>
+              <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 13, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>{s.note || c?.name || (owe ? "You owe" : "Owes you")}{done && <span style={tagS(MINT)}>Settled</span>}{skip && <span style={tagS(AMBER)}>Skipped</span>}{!done && !skip && <span style={tagS(col)}>{owe ? "You owe" : "Owes you"}</span>}</div>
+              <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 3, fontWeight: 600 }}>{c?.name || "IOU"} · {relDate(s.date || s.createdAt)}{part ? ` · ${fmt(rem)} left` : ""}</div>
             </div>
-            <div style={{ textAlign: "right", flexShrink: 0 }}><div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 15, color: done || skip ? "var(--muted)" : col, fontVariantNumeric: "tabular-nums" }}>{fmt(s.amount)}</div>{part && <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600, marginTop: 1 }}>paid {fmt(roundMoney(s.amount - rem))}</div>}</div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}><div style={{ fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 16, color: done || skip ? "var(--muted)" : col, fontVariantNumeric: "tabular-nums" }}>{fmt(s.amount)}</div>{part && <div style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 600, marginTop: 1 }}>paid {fmt(roundMoney(s.amount - rem))}</div>}</div>
           </div>
-          {delId === s.id && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 13px", background: EMBER + "12", borderTop: "1px solid var(--border)" }}><span style={{ flex: 1, fontSize: 11, fontFamily: "var(--font-h)", color: EMBER, fontWeight: 600 }}>Delete permanently?</span><button onClick={() => sDelId(null)} style={miniBtn("var(--muted)")}>Cancel</button><button onClick={() => { onDelete(s.id); sDelId(null); }} style={{ ...miniBtn("#fff"), background: EMBER, border: "none" }}>Delete</button></div>}
+          {delId === s.id && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: CORAL + "1f" }}><span style={{ flex: 1, fontSize: 11.5, fontFamily: "var(--font-h)", color: CORAL, fontWeight: 700 }}>Delete permanently?</span><button onClick={() => sDelId(null)} style={miniS("var(--muted)")}>Cancel</button><button onClick={() => { onDelete(s.id); sDelId(null); }} style={{ ...miniS(ink(CORAL)), background: CORAL }}>Delete</button></div>}
           {!done && !skip && delId !== s.id && <div style={{ display: "flex", borderTop: "1px solid var(--border)" }}>
-            <button onClick={() => sSettleTgt(s)} style={actBtn(MINT, 2)}>⤷ Record payment</button>
+            <button onClick={() => sSettleTgt(s)} style={actS(MINT, 2)}><CurrencyInr size={14} weight="bold" /> Record</button>
             <div style={{ width: 1, background: "var(--border)" }} />
-            <button onClick={() => onSkip(s.id)} style={actBtn(AMBER, 1)}>⤼ Skip</button>
+            <button onClick={() => onSkip(s.id)} style={actS(AMBER, 1)}><SkipForward size={14} weight="bold" /> Skip</button>
             <div style={{ width: 1, background: "var(--border)" }} />
-            <button onClick={() => sDelId(s.id)} style={{ ...actBtn(EMBER, 0), flex: "0 0 44px" }}>🗑</button>
+            <button onClick={() => sDelId(s.id)} style={{ ...actS(CORAL, 0), flex: "0 0 46px" }}><Trash size={15} weight="bold" /></button>
+          </div>}
+          {skip && delId !== s.id && <div style={{ display: "flex", borderTop: "1px solid var(--border)" }}>
+            <button onClick={() => onUnskip(s.id)} style={actS(MINT, 1)}><ArrowCounterClockwise size={14} weight="bold" /> Restore</button>
+            <div style={{ width: 1, background: "var(--border)" }} />
+            <button onClick={() => sDelId(s.id)} style={{ ...actS(CORAL, 0), flex: "0 0 46px" }}><Trash size={15} weight="bold" /></button>
           </div>}
         </div>;
       })}
-      {!adding ? <button onClick={() => sAdding(true)} style={dashBtn}>＋ Add IOU with {cur}</button> : <AddForm fixedName={cur} {...addFormProps} />}
+      {!adding ? <button onClick={() => sAdding(true)} style={{ width: "100%", border: "none", borderRadius: RAD_SM, padding: 13, background: SURF, boxShadow: NEU_SM, color: "var(--ts)", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 12.5, cursor: "pointer", marginTop: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Plus size={15} weight="bold" /> Add IOU with {cur}</button> : <AddForm fixedName={cur} {...addFormProps} />}
       {SettleModal && settleTgt && <SettleModal split={settleTgt} remaining={remOf(settleTgt)} wallets={wallets} onConfirm={(wid, amount, date) => { const r = onSettle(settleTgt.id, wid, amount, date); sSettleTgt(null); if (r !== false) sBurst(b => b + 1); }} onClose={() => sSettleTgt(null)} />}
       {netSheet && <NetSheet name={netSheet} pm={personMap[netSheet]} wallets={wallets} fmt={fmt} isUpiLite={isUpiLite} onSettleNet={(...a) => { const r = onSettleNet(...a); if (r !== false) sBurst(b => b + 1); return r; }} onClose={() => sNetSheet(null)} />}{burst > 0 && <Confetti key={burst} />}
     </div>;
   }
 
-  // ── HOME (card wallet) ────────────────────────────────────────────────────
+  // ── HOME (neumorphic card wallet) ─────────────────────────────────────────
   const near0 = Math.abs(net) < 0.5;
-  const switchBtn = (l, lbl) => <button onClick={() => sLayout(l)} style={{ border: 0, background: layout === l ? "var(--card)" : "transparent", color: layout === l ? "var(--text)" : "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 11.5, padding: "6px 13px", borderRadius: 8, cursor: "pointer", boxShadow: layout === l ? "inset 0 0 0 1px var(--border)" : "none" }}>{lbl}</button>;
+  const N = active.length;
+  const stackH = N > 0 ? (N - 1) * PEEK + CARD_H : 0;
+  const spreadH = N > 0 ? N * (CARD_H + GAP) - GAP : 0;
+  // cascade: front (biggest, i=0) sits fully-shown at the bottom; the rest peek their
+  // header upward. top grows with reverse-rank; z so the front covers the peeks.
+  const cardPos = i => layout === "stack"
+    ? { top: (N - 1 - i) * PEEK, zIndex: N - i }
+    : { top: i * (CARD_H + GAP), zIndex: 1 };
+
   return <div>
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-      <div style={{ display: "inline-flex", alignItems: "baseline", gap: 6, padding: "7px 13px", borderRadius: 13, border: "1px solid var(--border)", background: "var(--card)" }}><span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, letterSpacing: ".3px" }}>NET</span><b style={{ fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 18, letterSpacing: "-.5px", fontVariantNumeric: "tabular-nums", color: near0 ? "var(--muted)" : net >= 0 ? MINT : EMBER }}>{near0 ? "₹0" : (net >= 0 ? "+" : "−") + fmt(Math.abs(net)).slice(1)}</b></div>
-      <div style={{ display: "flex", gap: 14, fontSize: 11.5, fontWeight: 700, fontFamily: "var(--font-h)", fontVariantNumeric: "tabular-nums" }}><span style={{ color: MINT }}>↑ {fmt(owedTot)}</span><span style={{ color: EMBER }}>↓ {fmt(oweTot)}</span></div>
+    <div style={{ display: "flex", alignItems: "stretch", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+      <div style={{ ...neuCard, padding: "9px 15px", display: "inline-flex", flexDirection: "column", justifyContent: "center" }}><span style={{ fontSize: 9, color: "var(--muted)", fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" }}>Net</span><b style={{ fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 20, letterSpacing: "-.6px", fontVariantNumeric: "tabular-nums", color: near0 ? "var(--muted)" : net >= 0 ? MINT : CORAL }}>{near0 ? "₹0" : (net >= 0 ? "+" : "−") + fmt(Math.abs(net)).slice(1)}</b></div>
+      <div style={{ ...neuCard, padding: "9px 15px", display: "flex", alignItems: "center", gap: 14, fontSize: 12, fontWeight: 700, fontFamily: "var(--font-h)", fontVariantNumeric: "tabular-nums" }}><span style={{ color: MINT, display: "inline-flex", alignItems: "center", gap: 3 }}><ArrowUp size={14} weight="bold" /> {fmt(owedTot)}</span><span style={{ color: CORAL, display: "inline-flex", alignItems: "center", gap: 3 }}><ArrowDown size={14} weight="bold" /> {fmt(oweTot)}</span></div>
     </div>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
-      <div style={{ display: "inline-flex", gap: 3, padding: 3, borderRadius: 11, background: "var(--bg)", border: "1px solid var(--border)" }}>{switchBtn("stack", "Stack")}{switchBtn("cards", "Cards")}{switchBtn("deck", "Deck")}</div>
-      <button onClick={() => sAdding(a => !a)} style={{ border: "none", borderRadius: 11, padding: "8px 14px", cursor: "pointer", color: "#fff", background: EMBER, fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 12 }}>＋ New IOU</button>
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+      <button onClick={e => openMorph("__new__", e.currentTarget.getBoundingClientRect())} style={{ border: "none", borderRadius: RAD_SM, boxShadow: NEU_SM, padding: "10px 16px", cursor: "pointer", color: ink(CORAL), background: CORAL, fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}><Plus size={16} weight="bold" /> New IOU</button>
     </div>
-    {adding && <AddForm {...addFormProps} />}
-    {active.length === 0 && people.length === 0 && <div style={{ textAlign: "center", padding: "44px 18px", color: "var(--muted)" }}><div style={{ fontSize: 26, marginBottom: 8 }}>🪶</div><div style={{ fontFamily: "var(--font-h)", color: "var(--text)", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>No IOUs yet</div><div style={{ fontSize: 12 }}>Tap “New IOU” to add your first.</div></div>}
 
-    {active.length > 0 && layout === "cards" && <div style={{ display: "flex", flexDirection: "column", gap: 11, marginTop: adding ? 12 : 0 }}>{active.map(name => <PersonCard key={name} name={name} info={cardInfo(name)} onOpen={() => openPerson(name)} />)}</div>}
-    {active.length > 0 && layout === "stack" && <div style={{ marginTop: adding ? 12 : 0 }}>{active.map((name, i) => <div key={name} style={{ marginTop: i === 0 ? 0 : -54, position: "relative", zIndex: i }}><PersonCard name={name} info={cardInfo(name)} onOpen={() => openPerson(name)} /></div>)}</div>}
-    {active.length > 0 && layout === "deck" && <div style={{ marginTop: adding ? 12 : 0 }}>
-      <div onScroll={e => { const el = e.currentTarget; sDeckIdx(Math.max(0, Math.min(active.length - 1, Math.round(el.scrollLeft / (el.scrollWidth / active.length))))); }} style={{ display: "flex", gap: 14, overflowX: "auto", scrollSnapType: "x mandatory", padding: "4px 2px 14px", scrollbarWidth: "none" }}>{active.map(name => <div key={name} style={{ flex: "0 0 80%", scrollSnapAlign: "center" }}><PersonCard name={name} info={cardInfo(name)} onOpen={() => openPerson(name)} /></div>)}</div>
-      {active.length > 1 && <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 2 }}>{active.map((_, i) => <span key={i} style={{ width: i === deckIdx ? 16 : 6, height: 6, borderRadius: 6, background: i === deckIdx ? "var(--text)" : "var(--border)", transition: "width .2s, background .2s" }} />)}</div>}
-    </div>}
+    {active.length === 0 && people.length === 0 && <div style={{ ...neuCard, textAlign: "center", padding: "42px 18px", color: "var(--muted)" }}><div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}><div style={{ width: 58, height: 58, borderRadius: 18, background: SURF, boxShadow: NEU_INSET, display: "flex", alignItems: "center", justifyContent: "center" }}><Wallet size={28} color="var(--ts)" weight="duotone" /></div></div><div style={{ fontFamily: "var(--font-h)", color: "var(--text)", fontSize: 15, fontWeight: 800, marginBottom: 5 }}>No IOUs yet</div><div style={{ fontSize: 12.5, fontWeight: 500 }}>Tap “New IOU” to add your first.</div></div>}
 
-    {settledPeople.length > 0 && <details style={{ marginTop: 14 }}><summary style={{ fontSize: 11.5, color: "var(--muted)", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 600 }}>✓ Settled up ({settledPeople.length})</summary><div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>{settledPeople.map(name => <div key={name} onClick={() => openPerson(name)} role="button" tabIndex={0} onKeyDown={kbd(() => openPerson(name))} aria-label={`Open ${name}, settled`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", ...card, borderRadius: 12, opacity: 0.6, cursor: "pointer" }}><div style={{ width: 30, height: 30, borderRadius: 9, background: avatarColor(name), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 11, color: "#fff" }}>{initials(name)}</div><span style={{ flex: 1, fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 600, color: "var(--ts)" }}>{name}</span><span style={{ fontSize: 11, color: MINT, fontFamily: "var(--font-h)", fontWeight: 600 }}>✓ settled</span></div>)}</div></details>}
+    {active.length > 0 && <div
+      onTouchStart={e => { touchY.current = e.touches[0]?.clientY ?? null; }}
+      onTouchEnd={e => { const sY = touchY.current; touchY.current = null; if (sY == null) return; const dy = (e.changedTouches[0]?.clientY ?? sY) - sY; if (Math.abs(dy) < 28) return; if (dy > 0 && layout === "stack") sLayout("cards"); else if (dy < 0 && layout === "cards") sLayout("stack"); }}
+      style={{ position: "relative", height: layout === "stack" ? stackH : spreadH, transition: `height .42s ${EASE}` }}
+    >{active.map((name, i) => <div key={name} style={{ position: "absolute", left: 4, right: 4, height: CARD_H, ...cardPos(i), transition: `top .42s ${EASE}` }}><PersonCard name={name} info={cardInfo(name)} showAdd={layout === "cards"} onOpen={() => layout === "stack" ? sLayout("cards") : openPerson(name)} onQuickAdd={rect => openMorph(name, rect)} /></div>)}</div>}
+    {active.length > 0 && layout === "stack" && <div onClick={() => sLayout("cards")} role="button" tabIndex={0} onKeyDown={kbd(() => sLayout("cards"))} aria-label="Spread cards" style={hintStyle}><CaretDown size={15} weight="bold" /> Swipe down to spread{active.length > 1 ? ` · ${active.length} cards` : ""}</div>}
+    {active.length > 1 && layout === "cards" && <div onClick={() => sLayout("stack")} role="button" tabIndex={0} onKeyDown={kbd(() => sLayout("stack"))} aria-label="Stack cards" style={hintStyle}><CaretUp size={15} weight="bold" /> Swipe up to stack</div>}
+
+    {settledPeople.length > 0 && <details style={{ marginTop: 18 }}><summary style={{ fontSize: 11.5, color: "var(--muted)", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 700 }}><CheckCircle size={12} weight="fill" style={{ verticalAlign: "-2px", marginRight: 4 }} />Settled up ({settledPeople.length})</summary><div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 9 }}>{settledPeople.map(name => <div key={name} onClick={() => openPerson(name)} role="button" tabIndex={0} onKeyDown={kbd(() => openPerson(name))} aria-label={`Open ${name}, settled`} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 14px", ...neuCard, opacity: 0.72, cursor: "pointer" }}><div style={{ width: 32, height: 32, borderRadius: 11, background: avatarColor(name), color: ink(avatarColor(name)), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 12, boxShadow: NEU_SM }}>{initials(name)}</div><span style={{ flex: 1, fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, color: "var(--ts)" }}>{name}</span><span style={{ fontSize: 11, color: MINT, fontFamily: "var(--font-h)", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 3 }}><CheckCircle size={12} weight="fill" /> settled</span></div>)}</div></details>}
 
     {SettleModal && settleTgt && <SettleModal split={settleTgt} remaining={remOf(settleTgt)} wallets={wallets} onConfirm={(wid, amount, date) => { const r = onSettle(settleTgt.id, wid, amount, date); sSettleTgt(null); if (r !== false) sBurst(b => b + 1); }} onClose={() => sSettleTgt(null)} />}
-    {netSheet && <NetSheet name={netSheet} pm={personMap[netSheet]} wallets={wallets} fmt={fmt} isUpiLite={isUpiLite} onSettleNet={(...a) => { const r = onSettleNet(...a); if (r !== false) sBurst(b => b + 1); return r; }} onClose={() => sNetSheet(null)} />}{burst > 0 && <Confetti key={burst} />}
+    {netSheet && <NetSheet name={netSheet} pm={personMap[netSheet]} wallets={wallets} fmt={fmt} isUpiLite={isUpiLite} onSettleNet={(...a) => { const r = onSettleNet(...a); if (r !== false) sBurst(b => b + 1); return r; }} onClose={() => sNetSheet(null)} />}
+    {morph && <MorphCompose rect={morph.rect} name={morph.name} categories={categories} uid={uid} onAdd={onAdd} onError={onError} onClose={() => sMorph(null)} />}
+    {burst > 0 && <Confetti key={burst} />}
+  </div>;
+}
+
+// ── card-morph quick-add (module-level; grows from a rect to full-screen) ──
+function MorphCompose({ rect, name, categories = [], uid, onAdd, onError = () => {}, onClose }) {
+  const [open, sOpen] = useState(false);
+  useEffect(() => { const id = requestAnimationFrame(() => sOpen(true)); return () => cancelAnimationFrame(id); }, []);
+  const close = () => { sOpen(false); setTimeout(onClose, 380); };
+  const vw = typeof window !== "undefined" ? window.innerWidth : 400, vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const M = 12;
+  const isNew = name === "__new__";
+  // centered, content-sized card (not full-screen) — free-name needs the extra name field
+  const W = Math.min(vw - 2 * M, 440);
+  const H = Math.min(vh - 2 * M, isNew ? 472 : 414);
+  const r = rect || { top: vh / 2 - 60, left: (vw - W) / 2, width: W, height: 120 };
+  const pos = open ? { top: Math.max(M, (vh - H) / 2), left: (vw - W) / 2, width: W, height: H } : { top: r.top, left: r.left, width: r.width, height: r.height };
+  const accent = name === "__new__" ? CORAL : avatarColor(name);
+  const at = ink(accent);
+  return <div style={{ position: "fixed", inset: 0, zIndex: 260 }}>
+    <div onClick={close} style={{ position: "absolute", inset: 0, background: "rgba(20,18,30,.45)", backdropFilter: "blur(2px)", opacity: open ? 1 : 0, transition: "opacity .34s" }} />
+    <div style={{ position: "fixed", ...pos, background: SURF, borderRadius: open ? RAD : RAD, boxShadow: open ? NEU_RAISED : "none", overflow: "hidden", transition: `top .4s ${EASE}, left .4s ${EASE}, width .4s ${EASE}, height .4s ${EASE}, box-shadow .3s` }}>
+      <div style={{ background: accent, color: at, padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ minWidth: 0 }}><div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".8px", opacity: .8 }}>New IOU</div><div style={{ fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 23, letterSpacing: "-.3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name === "__new__" ? "Someone new" : name}</div></div>
+        <button onClick={close} aria-label="Close" style={{ width: 38, height: 38, border: "none", borderRadius: 13, background: "rgba(255,255,255,.35)", color: at, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}><X size={20} weight="bold" /></button>
+      </div>
+      <div style={{ opacity: open ? 1 : 0, transition: "opacity .25s", transitionDelay: open ? ".16s" : "0s", height: "calc(100% - 72px)", overflowY: "auto", padding: 18, boxSizing: "border-box" }}>
+        <AddForm fixedName={name === "__new__" ? undefined : name} categories={categories} uid={uid} onAdd={s => { onAdd(s); close(); }} onError={onError} onDone={() => {}} bare big />
+      </div>
+    </div>
   </div>;
 }
 
 // ── add-IOU form (module-level so it never remounts on a parent render) ──
-function AddForm({ fixedName, categories = [], uid, onAdd, onError = () => {}, onDone = () => {} }) {
+function AddForm({ fixedName, categories = [], uid, onAdd, onError = () => {}, onDone = () => {}, bare = false, big = false }) {
   const [dir, sDir] = useState("owed");
   const [nm, sNm] = useState("");
   const [amt, sAmt] = useState("");
@@ -154,42 +218,46 @@ function AddForm({ fixedName, categories = [], uid, onAdd, onError = () => {}, o
     sNm(""); sAmt(""); sNote(""); sDate(localDateKey());
     if (!fixedName) onDone();
   };
-  const accent = dir === "owe" ? EMBER : MINT;
-  return <div style={{ ...card, padding: 14, marginTop: 10 }}>
-    <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
-      {[["owe", "↓ I owe them"], ["owed", "↑ They owe me"]].map(([d, lbl]) => <button key={d} onClick={() => sDir(d)} style={{ flex: 1, padding: 9, borderRadius: 10, fontSize: 11.5, fontFamily: "var(--font-h)", fontWeight: 700, cursor: "pointer", border: `1.5px solid ${dir === d ? (d === "owe" ? EMBER : MINT) : "var(--border)"}`, background: dir === d ? (d === "owe" ? EMBER + "18" : MINT + "18") : "var(--card)", color: dir === d ? (d === "owe" ? EMBER : MINT) : "var(--muted)" }}>{lbl}</button>)}
+  const accent = dir === "owe" ? CORAL : MINT;
+  return <div style={bare ? { padding: 0 } : { ...neuCard, padding: 15, marginTop: 12 }}>
+    <div style={{ display: "flex", gap: 9, marginBottom: 13 }}>
+      {[["owe", ArrowDown, "I owe them"], ["owed", ArrowUp, "They owe me"]].map(([d, Ico, lbl]) => { const ac = d === "owe" ? CORAL : MINT; const on = dir === d; return <button key={d} onClick={() => sDir(d)} style={{ flex: 1, padding: big ? 13 : 11, borderRadius: RAD_SM, fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 700, cursor: "pointer", border: "none", boxShadow: on ? NEU_INSET : NEU_SM, background: on ? ac + "30" : SURF, color: on ? (d === "owe" ? CORAL : MINT) : "var(--muted)", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "box-shadow .15s, background .15s" }}><Ico size={15} weight="bold" /> {lbl}</button>; })}
     </div>
-    {!fixedName && <input value={nm} onChange={e => sNm(e.target.value)} placeholder="Friend's name" style={inp} />}
-    {categories.length > 0 && <div style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", marginBottom: 9, paddingBottom: 2 }}>{categories.map(c => <button key={c.id} onClick={() => sCatId(c.id)} style={{ flexShrink: 0, padding: "6px 11px", borderRadius: 9, fontSize: 11.5, fontFamily: "var(--font-h)", fontWeight: catId === c.id ? 700 : 500, cursor: "pointer", whiteSpace: "nowrap", border: `1.5px solid ${catId === c.id ? c.color : "var(--border)"}`, background: catId === c.id ? c.color + "18" : "var(--card)", color: catId === c.id ? c.color : "var(--muted)", display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 3, background: c.color, flexShrink: 0 }} />{c.emoji ? c.emoji + " " : ""}{c.name}</button>)}</div>}
-    <div style={{ display: "flex", gap: 7, marginBottom: 9 }}>
-      <input type="number" inputMode="decimal" value={amt} onChange={e => sAmt(e.target.value)} placeholder="₹ amount" style={{ ...inp, marginBottom: 0, flex: 1, fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 16 }} />
-      <input type="date" value={date} max={localDateKey()} onChange={e => sDate(e.target.value)} style={{ ...inp, marginBottom: 0, flex: "0 0 132px", colorScheme: "light dark" }} />
+    {!fixedName && <input value={nm} onChange={e => sNm(e.target.value)} placeholder="Friend's name" style={{ ...inpN, ...(big ? { fontSize: 16 } : {}) }} />}
+    {categories.length > 0 && <div style={{ display: "flex", gap: 8, overflowX: "auto", scrollbarWidth: "none", marginBottom: 11, paddingBottom: 4, paddingTop: 2 }}>{categories.map(c => { const on = catId === c.id; return <button key={c.id} onClick={() => sCatId(c.id)} style={{ flexShrink: 0, padding: "8px 12px", borderRadius: 12, fontSize: 11.5, fontFamily: "var(--font-h)", fontWeight: on ? 700 : 600, cursor: "pointer", whiteSpace: "nowrap", border: "none", boxShadow: on ? NEU_INSET : NEU_SM, background: on ? c.color + "33" : SURF, color: on ? "var(--text)" : "var(--muted)", display: "inline-flex", alignItems: "center", gap: 6, transition: "box-shadow .15s, background .15s" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: c.color, flexShrink: 0 }} />{c.emoji ? c.emoji + " " : ""}{c.name}</button>; })}</div>}
+    <div style={{ display: "flex", gap: 9, marginBottom: 11 }}>
+      <input type="number" inputMode="decimal" value={amt} onChange={e => sAmt(e.target.value)} placeholder="₹ amount" style={{ ...inpN, marginBottom: 0, flex: 1, fontFamily: "var(--font-h)", fontWeight: 800, fontSize: big ? 24 : 18 }} />
+      <input type="date" value={date} max={localDateKey()} onChange={e => sDate(e.target.value)} style={{ ...inpN, marginBottom: 0, flex: "0 0 132px", colorScheme: "light dark" }} />
     </div>
-    <input value={note} onChange={e => sNote(e.target.value)} placeholder="Note (optional)" style={inp} />
-    <button onClick={submit} style={{ width: "100%", padding: 12, border: "none", borderRadius: 11, cursor: "pointer", color: "#fff", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 13, background: accent }}>Add IOU</button>
+    <input value={note} onChange={e => sNote(e.target.value)} placeholder="Note (optional)" style={inpN} />
+    <button onClick={submit} style={{ width: "100%", padding: big ? 15 : 13, border: "none", borderRadius: RAD_SM, boxShadow: NEU_SM, cursor: "pointer", color: ink(accent), background: accent, fontFamily: "var(--font-h)", fontWeight: 800, fontSize: big ? 15 : 13.5 }}>Add IOU</button>
   </div>;
 }
 
-// ── person card (module-level; takes precomputed `info` from cardInfo) ──
-function PersonCard({ name, info, onOpen }) {
+// ── person card (module-level; pastel neumorphic block; fills its absolute wrapper) ──
+function PersonCard({ name, info, onOpen, showAdd = false, onQuickAdd = () => {} }) {
   const d = info;
-  return <div onClick={onOpen} role="button" tabIndex={0} onKeyDown={kbd(onOpen)} aria-label={`Open ${name}, ${d.dir.toLowerCase()} ${d.amt}`} style={{ position: "relative", borderRadius: 18, overflow: "hidden", cursor: "pointer", padding: "14px 16px", minHeight: 96, display: "flex", flexDirection: "column", justifyContent: "space-between", background: `linear-gradient(135deg, ${d.c1}, ${d.c2})`, boxShadow: "0 10px 24px -16px #000" }}>
-    <div style={{ position: "absolute", inset: 0, background: "linear-gradient(150deg, rgba(255,255,255,.18), transparent 45%)", pointerEvents: "none" }} />
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-        <span style={{ width: 32, height: 23, borderRadius: 6, background: "linear-gradient(135deg,#ffe7a8,#caa24e)", flexShrink: 0, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.15)" }} />
-        <div style={{ minWidth: 0 }}><div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 15, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div><div style={{ fontSize: 10.5, color: "rgba(255,255,255,.82)", fontWeight: 500, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{d.sub || "No open IOUs"}</div></div>
+  const ref = useRef(null);
+  const txt = ink(d.c1);
+  const sub = "rgba(50,48,72,.62)";
+  const glass = "rgba(255,255,255,.42)";
+  const quick = e => { e.stopPropagation(); onQuickAdd(ref.current ? ref.current.getBoundingClientRect() : null); };
+  return <div ref={ref} onClick={onOpen} role="button" tabIndex={0} onKeyDown={kbd(onOpen)} aria-label={`Open ${name}, ${d.dir.toLowerCase()} ${d.amt}`} style={{ position: "relative", height: "100%", boxSizing: "border-box", cursor: "pointer", padding: "14px 16px", display: "flex", flexDirection: "column", justifyContent: "space-between", background: d.c1, borderRadius: RAD, color: txt, overflow: "hidden", boxShadow: NEU_RAISED }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
+        <span style={{ width: 34, height: 24, borderRadius: 7, background: glass, flexShrink: 0, boxShadow: "inset 1px 1px 2px rgba(255,255,255,.6), inset -1px -1px 2px rgba(0,0,0,.08)" }} />
+        <div style={{ minWidth: 0 }}><div style={{ fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 16, letterSpacing: "-.2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: txt }}>{name}</div><div style={{ fontSize: 10.5, color: sub, fontWeight: 600, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{d.sub || "No open IOUs"}</div></div>
       </div>
-      <span style={pillStyle(d.up ? "up" : d.down ? "dn" : "flat")}>{d.dir}</span>
+      <span style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 9.5, padding: "4px 9px", borderRadius: 10, background: glass, color: txt, whiteSpace: "nowrap", flexShrink: 0, textTransform: "uppercase", letterSpacing: ".3px" }}>{d.dir}</span>
     </div>
-    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", position: "relative", marginTop: 8 }}>
-      <div><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.75)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".6px", marginBottom: 2 }}>balance{d.openCount > 1 ? ` · ${d.openCount} IOUs` : ""}</div><div style={{ fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 24, color: "#fff", fontVariantNumeric: "tabular-nums", letterSpacing: "-.6px" }}>{d.amt}</div></div>
-      <span style={{ color: "rgba(255,255,255,.7)", fontSize: 20 }}>›</span>
+    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+      <div><div style={{ fontSize: 9, color: sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".7px", marginBottom: 1 }}>balance{d.openCount > 1 ? ` · ${d.openCount} IOUs` : ""}</div><div style={{ fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 26, color: txt, fontVariantNumeric: "tabular-nums", letterSpacing: "-.8px" }}>{d.amt}</div></div>
+      {showAdd ? <button onClick={quick} aria-label={`Add IOU with ${name}`} style={{ width: 36, height: 36, border: "none", borderRadius: 12, background: glass, color: txt, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxShadow: "2px 2px 5px rgba(0,0,0,.12), -2px -2px 5px rgba(255,255,255,.45)" }}><Plus size={18} weight="bold" /></button> : <CaretRight size={20} color={txt} weight="bold" />}
     </div>
   </div>;
 }
 
-// Whole-person net settle sheet (themed) → routes to App's settleNet, which
+// Whole-person net settle sheet (neumorphic) → routes to App's settleNet, which
 // nets owe/owed and validates wallet funds against the net only. Empty amount =
 // settle the full net; a smaller amount = partial (settleNet handles the math).
 function NetSheet({ name, pm, wallets, fmt, isUpiLite, onSettleNet, onClose }) {
@@ -200,20 +268,23 @@ function NetSheet({ name, pm, wallets, fmt, isUpiLite, onSettleNet, onClose }) {
   const [amt, sAmt] = useState(String(absNet));
   const entered = parseAmount(amt); const validEntered = Number.isFinite(entered) && entered > 0;
   const partial = validEntered && roundMoney(entered) < absNet - 0.005;
-  const accent = pos ? "#6BAA75" : "#E07A5F";
-  return <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-    <div onClick={e => e.stopPropagation()} style={{ background: "var(--card)", borderRadius: "20px 20px 0 0", padding: 22, width: "100%", maxWidth: 430 }}>
-      <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--border)", margin: "0 auto 14px" }} />
-      <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 16, color: "var(--text)", marginBottom: 3 }}>Settle with {name}</div>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>Nets every open IOU — owe and owed cancel to the net.</div>
-      <div style={{ textAlign: "center", marginBottom: 14 }}><div style={{ fontSize: 12, color: "var(--muted)" }}>{pos ? `Collect from ${name}` : `Pay ${name}`}</div><div style={{ fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 34, letterSpacing: "-1px", color: accent, margin: "4px 0", fontVariantNumeric: "tabular-nums" }}>{fmt(absNet)}</div></div>
-      <div style={{ fontSize: 10, fontFamily: "var(--font-h)", color: "var(--muted)", fontWeight: 600, letterSpacing: ".5px", marginBottom: 6 }}>AMOUNT{partial ? " (PARTIAL)" : ""}</div>
-      <input type="number" inputMode="decimal" value={amt} onChange={e => sAmt(e.target.value)} style={{ ...inp, fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 17 }} />
-      <div style={{ fontSize: 10, fontFamily: "var(--font-h)", color: "var(--muted)", fontWeight: 600, letterSpacing: ".5px", marginBottom: 7 }}>{pos ? "RECEIVE INTO" : "PAY FROM"}</div>
-      <div style={{ display: "flex", gap: 7, marginBottom: 16 }}>{opts.map(w => <button key={w.id} onClick={() => sWid(w.id)} style={{ flex: 1, padding: "9px 5px", borderRadius: 11, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", border: `2px solid ${wid === w.id ? w.color : "var(--border)"}`, background: wid === w.id ? w.color + "15" : "var(--card)" }}><span style={{ width: 14, height: 14, borderRadius: 4, background: w.color }} /><span style={{ fontSize: 9.5, fontFamily: "var(--font-h)", fontWeight: wid === w.id ? 700 : 500, color: wid === w.id ? w.color : "var(--muted)" }}>{w.name}</span></button>)}</div>
-      <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={onClose} style={{ flex: 1, padding: 13, border: "1.5px solid var(--border)", borderRadius: 12, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-        <button onClick={ev => { if (ev.currentTarget.disabled) return; ev.currentTarget.disabled = true; const ok = onSettleNet(name, wid, partial ? amt : ""); if (ok !== false) onClose(); else ev.currentTarget.disabled = false; }} style={{ flex: 2, padding: 13, border: "none", borderRadius: 12, background: accent, color: "#fff", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{pos ? "Collect" : "Pay"} {fmt(partial ? roundMoney(entered) : absNet)} & settle</button>
+  const accent = pos ? MINT : CORAL;
+  return <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,18,30,.5)", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+    <div onClick={e => e.stopPropagation()} style={{ background: SURF, borderRadius: "24px 24px 0 0", width: "100%", maxWidth: 430, boxShadow: NEU_RAISED, overflow: "hidden" }}>
+      <div style={{ background: accent, color: ink(accent), padding: "16px 20px" }}>
+        <div style={{ fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 17 }}>Settle with {name}</div>
+        <div style={{ fontSize: 11.5, fontWeight: 600, opacity: .82, marginTop: 2 }}>Nets every open IOU — owe and owed cancel.</div>
+      </div>
+      <div style={{ padding: 20 }}>
+        <div style={{ textAlign: "center", marginBottom: 16 }}><div style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 700 }}>{pos ? `Collect from ${name}` : `Pay ${name}`}</div><div style={{ fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 36, letterSpacing: "-1.2px", color: accent, margin: "4px 0", fontVariantNumeric: "tabular-nums" }}>{fmt(absNet)}</div></div>
+        <div style={{ fontSize: 10, fontFamily: "var(--font-h)", color: "var(--muted)", fontWeight: 700, letterSpacing: ".5px", marginBottom: 7, textTransform: "uppercase" }}>Amount{partial ? " (partial)" : ""}</div>
+        <input type="number" inputMode="decimal" value={amt} onChange={e => sAmt(e.target.value)} style={{ ...inpN, fontFamily: "var(--font-h)", fontWeight: 800, fontSize: 18 }} />
+        <div style={{ fontSize: 10, fontFamily: "var(--font-h)", color: "var(--muted)", fontWeight: 700, letterSpacing: ".5px", marginBottom: 8, textTransform: "uppercase" }}>{pos ? "Receive into" : "Pay from"}</div>
+        <div style={{ display: "flex", gap: 9, marginBottom: 18 }}>{opts.map(w => { const on = wid === w.id; return <button key={w.id} onClick={() => sWid(w.id)} style={{ flex: 1, padding: "11px 5px", borderRadius: 14, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, cursor: "pointer", border: "none", boxShadow: on ? NEU_INSET : NEU_SM, background: on ? w.color + "30" : SURF, transition: "box-shadow .15s, background .15s" }}><span style={{ width: 14, height: 14, borderRadius: 5, background: w.color }} /><span style={{ fontSize: 9.5, fontFamily: "var(--font-h)", fontWeight: 700, color: on ? "var(--text)" : "var(--muted)" }}>{w.name}</span></button>; })}</div>
+        <div style={{ display: "flex", gap: 11 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: 13, border: "none", borderRadius: 14, background: SURF, boxShadow: NEU_SM, color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+          <button onClick={ev => { if (ev.currentTarget.disabled) return; ev.currentTarget.disabled = true; const ok = onSettleNet(name, wid, partial ? amt : ""); if (ok !== false) onClose(); else ev.currentTarget.disabled = false; }} style={{ flex: 2, padding: 13, border: "none", borderRadius: 14, boxShadow: NEU_SM, background: accent, color: ink(accent), fontFamily: "var(--font-h)", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{pos ? "Collect" : "Pay"} {fmt(partial ? roundMoney(entered) : absNet)} & settle</button>
+        </div>
       </div>
     </div>
   </div>;
@@ -228,7 +299,7 @@ function Confetti() {
   useEffect(() => {
     const root = ref.current;
     if (!root || typeof root.animate !== "function") return;
-    const colors = [EMBER, MINT, VIOLET, AMBER, "#ffffff"];
+    const colors = [CORAL, MINT, VIOLET, AMBER, "#ffffff"];
     const parts = [];
     for (let i = 0; i < 18; i++) {
       const sp = document.createElement("span");
@@ -245,11 +316,10 @@ function Confetti() {
   return <div ref={ref} aria-hidden="true" style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 300, overflow: "hidden" }} />;
 }
 
-// shared inline style atoms
-const card = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16 };
-const pillStyle = d => ({ display: "inline-flex", alignItems: "center", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 10, padding: "3px 8px", borderRadius: 8, background: d === "up" ? "rgba(255,255,255,.22)" : d === "dn" ? "rgba(0,0,0,.22)" : "rgba(255,255,255,.16)", color: "#fff" });
-const inp = { background: "var(--bg)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "10px 13px", color: "var(--text)", fontSize: 14, fontFamily: "var(--font-b)", outline: "none", width: "100%", boxSizing: "border-box", marginBottom: 9 };
-const tag = c => ({ fontSize: 9, fontFamily: "var(--font-h)", fontWeight: 700, padding: "2px 6px", borderRadius: 6, background: c + "20", color: c });
-const actBtn = (c, flex) => ({ flex: flex || 1, border: 0, background: "transparent", padding: "9px 4px", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 11, color: c, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 });
-const miniBtn = c => ({ padding: "4px 10px", border: "1px solid var(--border)", borderRadius: 6, background: "transparent", color: c, fontFamily: "var(--font-h)", fontSize: 10, fontWeight: 700, cursor: "pointer" });
-const dashBtn = { width: "100%", border: "1px dashed var(--border)", borderRadius: 13, padding: 12, background: "var(--bg)", color: "var(--muted)", fontFamily: "var(--font-h)", fontWeight: 600, fontSize: 12.5, cursor: "pointer", marginTop: 6 };
+// shared neumorphic inline style atoms
+const neuCard = { background: SURF, border: "none", borderRadius: RAD, boxShadow: NEU_RAISED };
+const inpN = { background: SURF, border: "none", borderRadius: RAD_SM, boxShadow: NEU_INSET, padding: "12px 14px", color: "var(--text)", fontSize: 14, fontFamily: "var(--font-b)", outline: "none", width: "100%", boxSizing: "border-box", marginBottom: 10 };
+const hintStyle = { display: "flex", alignItems: "center", justifyContent: "center", gap: 5, marginTop: 14, color: "var(--muted)", fontFamily: "var(--font-h)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" };
+const tagS = c => ({ fontSize: 9, fontFamily: "var(--font-h)", fontWeight: 700, padding: "2px 7px", borderRadius: 7, background: c + "26", color: c });
+const actS = (c, flex) => ({ flex: flex || 1, border: 0, background: "transparent", padding: "11px 4px", cursor: "pointer", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 11.5, color: c, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 });
+const miniS = c => ({ padding: "6px 12px", border: "none", borderRadius: 9, background: SURF, boxShadow: NEU_SM, color: c, fontFamily: "var(--font-h)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" });
