@@ -1815,12 +1815,14 @@ const prefersReducedMotion = () => {
     try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
     catch { return false; }
 };
-const haptic = (ms = 8) => {
+const haptic = (ms = 30) => {
     try {
         if (prefersReducedMotion()) return;
         const off = localStorage.getItem('form_haptic_off');
         if (off === '1') return;
-        navigator.vibrate && navigator.vibrate(ms);
+        // Floor to 30ms: sub-20ms pulses are imperceptible on most Android
+        // motors, so the old 8ms default read as "no buzz at all".
+        navigator.vibrate && navigator.vibrate(Math.max(30, ms));
     } catch { }
 };
 

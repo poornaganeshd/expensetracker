@@ -4,9 +4,12 @@
 //
 // Pattern vocabulary — follows common mobile UX conventions so the *kind* of
 // feedback matches the *kind* of event:
-//   selection 15ms  — light tick: tab/segment switch, picker, wallet select
-//   light     22ms  — a normal tap / navigation
-//   medium    38ms  — a committed action with no toast of its own
+//   selection 30ms  — light tick: tab/segment switch, picker, wallet select
+//   light     45ms  — a normal tap / navigation
+//   medium    65ms  — a committed action with no toast of its own
+// Durations are deliberately >=30ms: sub-20ms pulses are below the reliable
+// perception threshold on most Android ERM/LRA motors, so shorter ticks read as
+// "no buzz at all". iOS Safari exposes no Vibration API — every call no-ops there.
 //   success   rising double — a write succeeded
 //   warning   even double   — a soft block (cap hit, validation)
 //   error     strong double — a failure
@@ -37,12 +40,12 @@ const buzz = (pattern) => {
   try { navigator?.vibrate?.(pattern); } catch { /* unsupported */ }
 };
 
-export const hapticSelection = () => buzz(15);
-export const hapticLight = () => buzz(22);
-export const hapticMedium = () => buzz(38);
-export const hapticSuccess = () => buzz([18, 45, 32]);
-export const hapticWarning = () => buzz([26, 50, 26]);
-export const hapticError = () => buzz([45, 70, 45]);
+export const hapticSelection = () => buzz(30);
+export const hapticLight = () => buzz(45);
+export const hapticMedium = () => buzz(65);
+export const hapticSuccess = () => buzz([35, 45, 55]);
+export const hapticWarning = () => buzz([45, 55, 45]);
+export const hapticError = () => buzz([65, 70, 65]);
 
 // Toast → feedback mapping, used centrally in showT. Only user-action OUTCOMES
 // buzz: info/warn stay silent so on-load bill reminders don't vibrate the device

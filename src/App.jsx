@@ -1510,7 +1510,6 @@ export default function Nomad() {
     const todayStr = localDateKey();
     const reminders = checkBillReminders(rec, sp, todayStr, getRecurringDueDate, isRecurringDueToday);
     if (reminders.length === 0) return;
-    if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
     reminders.forEach((r, i) => {
       setTimeout(() => {
         const id = Date.now() + Math.random();
